@@ -1,0 +1,104 @@
+# ==============================================================================
+# Aegis 系统全局配置文件 (config/config.toml)
+#
+# 架构原则：
+# 1. 业务参数、物理配额、多模型降级列表放于本文件（可入 Git 版本库）
+# 2. 敏感 API Key 统一由 .env 提供，本文件仅引用环境变量名 (api_key_env)
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. 运行时物理安全守卫 (Guardrails & Budgets)
+# ------------------------------------------------------------------------------
+[runtime.guardrails]
+max_steps = 25                  # 单任务最大执行步数上限
+max_total_tokens = 200000       # 单任务累计消耗 Token 物理上限 (确定性指标，替代外部计费)
+max_wall_time_sec = 900         # 单任务总物理运行时间上限 (秒，默认 15 分钟)
+consecutive_errors_limit = 3    # 连续工具报错熔断阈值 (无论参数怎么微调，连续报错 3 次即触发重规划)
+identical_fingerprint_limit = 3 # 相同参数 MD5 哈希连续出现次数上限 (防死循环原地打转)
+
+# ------------------------------------------------------------------------------
+# 2. API 弹性重试策略 (Retry Policy)
+# ------------------------------------------------------------------------------
+[runtime.retry]
+max_retries = 3                 # 遭遇网络超时、429 限流或 5xx 时的最大指数退避重试次数
+backoff_factor = 2.0            # 指数退避倍数因子 (秒)
+
+# ------------------------------------------------------------------------------
+# 3. 三层金字塔上下文治理 (Context Trimming & Pruning)
+# ------------------------------------------------------------------------------
+[runtime.context]
+session_token_limit = 32000         # 单会话活跃对话物理 Token 预算硬上限
+compaction_high_watermark = 0.80    # 高水位触发线 (达到 80% 启动滚动压缩)
+compaction_ratio = 0.40             # 目标压缩基准线 (对齐切出最古老约 40% 对话进行提炼)
+active_window_turns = 3             # 保底保留的最少活跃对话轮数 (Atomic Pair 成对裁剪)
+compaction_trigger_turns = 8        # 轮数保底触发阈值
+max_observation_tokens = 1500       # 单次工具输出触发本地落盘截断的 Token 阈值
+observation_head_lines = 20         # 截断时保留的头部关键行数
+observation_tail_lines = 30         # 截断时保留的尾部关键行数
+
+# ------------------------------------------------------------------------------
+# 4. 本地存储与持久化路径 (Storage Paths)
+# ------------------------------------------------------------------------------
+[runtime.storage]
+checkpoint_db_path = "storage/checkpoints/aegis_state.db"
+metadata_db_path = "storage/aegis_meta.db"
+traces_dir = "storage/traces"
+artifacts_dir = "storage/artifacts"
+
+# ------------------------------------------------------------------------------
+# 5. 思考模型配置与降级列表 (Reasoning Model Fallback Chain)
+#    用于：Planner 宏观规划、阶段重规划、深度架构分析、最终技术报告撰写
+# ------------------------------------------------------------------------------
+[models.reasoning]
+temperature = 0.0               # 严谨确定性推理，温度设为 0.0
+
+[[models.reasoning.endpoints]]
+name = "deepseek-r1-primary"
+base_url = "https://api.deepseek.com/v1"
+model = "deepseek-reasoner"
+api_key_env = "DEEPSEEK_API_KEY"
+timeout_sec = 120
+
+[[models.reasoning.endpoints]]
+name = "siliconflow-r1-backup"
+base_url = "https://api.siliconflow.cn/v1"
+model = "deepseek-ai/DeepSeek-R1"
+api_key_env = "SILICONFLOW_API_KEY"
+timeout_sec = 120
+
+# ------------------------------------------------------------------------------
+# 6. 快速模型配置与降级列表 (Fast / Action Model Fallback Chain)
+#    用于：微观 ReAct 循环 (Executor 工具选择与参数生成)、中间阶段摘要压缩
+# ------------------------------------------------------------------------------
+[models.fast]
+temperature = 0.2               # 快速工具调度，保持输出格式稳定
+
+[[models.fast.endpoints]]
+name = "deepseek-v3-primary"
+base_url = "https://api.deepseek.com/v1"
+model = "deepseek-chat"
+api_key_env = "DEEPSEEK_API_KEY"
+timeout_sec = 30
+
+[[models.fast.endpoints]]
+name = "openai-4o-mini-backup"
+base_url = "https://api.openai.com/v1"
+model = "gpt-4o-mini"
+api_key_env = "OPENAI_API_KEY"
+timeout_sec = 30
+
+[[models.fast.endpoints]]
+name = "local-ollama-fallback"
+base_url = "http://localhost:11434/v1"
+model = "qwen2.5:7b"
+api_key_env = "OLLAMA_API_KEY"
+timeout_sec = 60
+
+# ------------------------------------------------------------------------------
+# 7. 基础设施独立微服务客户端寻址
+# ------------------------------------------------------------------------------
+[services]
+rag_url = "http://127.0.0.1:8001"
+shell_url = "http://127.0.0.1:8002"
+web_url = "http://127.0.0.1:8003"
+timeout_sec = 60

@@ -1,0 +1,70 @@
+# Python Bytecode & Builds
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Type Checking & Linters
+.mypy_cache/
+.ruff_cache/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Logging
+*.log
+logs/
+
+# Secrets & Environment Variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDEs & System Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Agent Runtime Storage (保留目录骨架，忽略生成数据)
+storage/checkpoints/*
+!storage/checkpoints/.gitkeep
+storage/traces/*
+!storage/traces/.gitkeep
+storage/artifacts/*
+!storage/artifacts/.gitkeep
+storage/*.db
+storage/*.db-wal
+storage/*.db-shm
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# 误生成产物：SQLite 内存库 URI ":memory:" 被当成物理文件路径落盘
+:memory:
+
+# Cache
+.cache/
+.trafilatura/

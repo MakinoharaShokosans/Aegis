@@ -1,0 +1,49 @@
+[project]
+name = "aegis-rag"
+version = "0.1.0"
+description = "Aegis RAG - Independent Code Retrieval Infrastructure, AST Parsing & Vector Search Microservice"
+readme = "README.md"
+requires-python = ">=3.11"
+# 依赖基线：版本下限与 uv.lock 实际锁定版本严格对齐（解决声明值与锁定值漂移）。
+# 升级依赖必须显式执行 `uv lock --upgrade-package <name>` 并同步修订本清单。
+dependencies = [
+    # 1. 微服务框架与异步网络
+    "fastapi>=0.141.1,<1.0.0",
+    "uvicorn[standard]>=0.53.0,<1.0.0",
+    "httpx>=0.28.1,<1.0.0",
+    "pydantic>=2.13.5,<3.0.0",
+    "pydantic-settings>=2.15.0,<3.0.0",
+
+    # 2. 向量数据库与轻量嵌入全栈
+    "qdrant-client>=1.19.0,<2.0.0",
+    "fastembed>=0.8.0,<1.0.0",
+
+    # 3. 编程语言 AST 语法树解析与分块
+    "tree-sitter>=0.26.0,<1.0.0",
+    "tree-sitter-c>=0.24.2,<1.0.0",
+    "tree-sitter-cpp>=0.23.4,<1.0.0",
+    "tree-sitter-go>=0.25.0,<1.0.0",
+    "langchain-text-splitters>=1.1.2,<2.0.0",
+
+    # 4. 可观测性日志
+    "loguru>=0.7.3,<1.0.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1,<10.0.0",
+    "pytest-asyncio>=1.4.0,<2.0.0",
+    "hatchling>=1.32.0,<2.0.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/api", "src/indexer", "src/embeddings", "src/storage"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+asyncio_mode = "auto"

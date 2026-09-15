@@ -1,0 +1,102 @@
+# Python Bytecode & Builds
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Virtual Environments (Root & Subprojects)
+.venv/
+**/.venv/
+venv/
+**/venv/
+env/
+**/env/
+
+# Type Checking & Linters
+.mypy_cache/
+**/.mypy_cache/
+.ruff_cache/
+**/.ruff_cache/
+
+# Testing & Coverage
+.pytest_cache/
+**/.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Logging
+*.log
+logs/
+**/logs/
+
+# Environment Variables & Secrets (保留 .env.example)
+.env
+**/.env
+.env.*
+**/.env.*
+!.env.example
+!**/.env.example
+*.pem
+*.key
+
+# IDEs & System Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+.directory
+
+# Cache & Downloaded Models
+.cache/
+**/.cache/
+.fastembed/
+**/.fastembed/
+.trafilatura/
+**/.trafilatura/
+
+# Subproject Runtime Storage (保留 .gitkeep，忽略数据)
+**/storage/checkpoints/*
+!**/storage/checkpoints/.gitkeep
+**/storage/traces/*
+!**/storage/traces/.gitkeep
+**/storage/artifacts/*
+!**/storage/artifacts/.gitkeep
+**/storage/qdrant_data/*
+!**/storage/qdrant_data/.gitkeep
+**/storage/cache/*
+!**/storage/cache/.gitkeep
+**/storage/*.db
+**/storage/*.db-wal
+**/storage/*.db-shm
+
+# SQLite & Databases
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+
+# 误生成产物：把 SQLite 内存库 URI ":memory:" 当成了文件路径
+# （aiosqlite/sqlite3 遇到 Path(":memory:") 会真的落盘一个名为 ":memory:" 的文件）
+:memory:
+
+# 测试与评测的临时输出
+**/.pytest_cache/
+**/.benchmarks/
+**/evaluation/**/benchmark_report.md.tmp
+
+# Node / MCP
+node_modules/
+**/node_modules/

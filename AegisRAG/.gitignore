@@ -1,0 +1,51 @@
+# Python Bytecode & Builds
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+build/
+dist/
+*.egg-info/
+
+# Virtual Environment
+.venv/
+venv/
+env/
+
+# Type Checking & Linters
+.mypy_cache/
+.ruff_cache/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+
+# Logging
+*.log
+logs/
+
+# Secrets & Environment Variables
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# IDEs & System Files
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# RAG Storage & Model Cache (保留目录骨架，忽略数据)
+storage/qdrant_data/*
+!storage/qdrant_data/.gitkeep
+storage/cache/*
+!storage/cache/.gitkeep
+.cache/
+.fastembed/

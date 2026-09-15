@@ -1,0 +1,29 @@
+# ==============================================================================
+# AegisRAG 独立检索服务配置 (AegisRAG/config/rag_config.toml)
+# ==============================================================================
+
+[server]
+host = "127.0.0.1"
+port = 8001
+workers = 1
+timeout_sec = 60
+
+[qdrant]
+mode = "local"                      # "local" (本地嵌入式存储) 或 "server" (独立服务)
+storage_path = "storage/qdrant_data"
+host = "127.0.0.1"
+port = 6333
+collection_name = "aegis_code_chunks"
+vector_size = 384                   # 对应 bge-small 向量维度
+distance = "Cosine"
+
+[embedding]
+model_name = "BAAI/bge-small-en-v1.5"
+cache_dir = "storage/cache/fastembed"
+batch_size = 32
+max_length = 512
+
+[indexer]
+chunk_size = 600
+chunk_overlap = 100
+supported_languages = ["c", "cpp", "go", "python"]

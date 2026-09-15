@@ -1,0 +1,123 @@
+# 护栏机制与弹性熔断实现规范
+
+> **责任领域**：`AegisAgent/src/agent_runtime/guardrails/` & `llm/`  
+> **核心原则**：确定性包围非确定性，物理硬熔断，双轨死循环防御，多端点弹性降级。
+
+---
+
+## 1. 双轨死循环防御机制（Dual-Track Loop Breaker）
+
+在长周期自主排错中，模型极易陷入两种不同形态的死胡同。必须通过双轨机制分别防御：
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        双轨死循环防御拓扑                              │
+│                                                                        │
+│  [调用入口] ──► 提取工具名与入参                                       │
+│                    │                                                   │
+│                    ├──► [规则 A: 相同参数哈希比对]                     │
+│                    │    计算 MD5(tool + args) ➔ 连续 3 次完全相同?     │
+│                    │    └── 是 ➔ 判定为无脑机械重复，直接拦截          │
+│                    │                                                   │
+│                    └──► [规则 B: 连续错误计数器 consecutive_errors]   │
+│                         每次工具返回 exit_code != 0 ➔ 计数器 +1         │
+│                         连续 3 次报错 (即便微调参数重试) ➔ 触发重规划  │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1.1 规则 A：参数指纹哈希（Fingerprint Hash）
+* **原理**：将 `tool_name` 与排好序的 `args` 序列化为 JSON 字符串，计算 MD5 哈希：
+  ```python
+  import hashlib
+  import json
+
+  def compute_fingerprint(tool_name: str, args: dict) -> str:
+      payload = json.dumps({"tool": tool_name, "args": args}, sort_keys=True, ensure_ascii=False)
+      return hashlib.md5(payload.encode("utf-8")).hexdigest()
+  ```
+* **触发阈值**：`identical_fingerprint_limit = 3`（来自 `config.toml`）。若最近 3 次哈希完全一致，立即阻断并警告模型切换工具。
+
+### 1.2 规则 B：连续错误状态计数器（Consecutive Error Counter）
+* **痛点**：传统哈希容易被模型“微调参数”（例如编译报错后每次换一个编译参数 `-O1`、`-O2`、`-g`）绕过，造成在同一类问题上打转 10 步。
+* **判定逻辑**：
+  * 只要底层工具执行状态为 `FAILED` 或返回非零退出码，`state["consecutive_errors"] += 1`；
+  * 一旦工具成功执行（`exit_code == 0`），立即清零；
+  * **熔断跃迁**：当 `consecutive_errors >= 3` 时，条件边强制中断当前的微观 Executor 循环，直接回退流转至 `planner`，强制启动宏观反思与动态重规划。
+
+---
+
+## 2. 确定性物理预算守卫（Physical Budget Guard）
+
+坚决不依赖外部不可靠的实时计费接口，完全基于本地可严格度量的物理指标实行确定性硬熔断：
+
+```python
+import time
+from typing import Tuple, Optional
+
+class PhysicalBudgetGuard:
+    def __init__(self, max_steps: int, max_total_tokens: int, max_wall_time_sec: float):
+        self.max_steps = max_steps
+        self.max_total_tokens = max_total_tokens
+        self.max_wall_time_sec = max_wall_time_sec
+        self.start_time = time.time()
+
+    def check(self, state: dict) -> Tuple[bool, Optional[str]]:
+        # 1. 步数硬熔断
+        if state.get("step_count", 0) >= self.max_steps:
+            return True, f"执行总步数达上限 ({self.max_steps} 步)，触发安全熔断"
+
+        # 2. 累计 Token 物理硬熔断
+        if state.get("total_tokens", 0) >= self.max_total_tokens:
+            return True, f"累计消耗 Token 达上限 ({self.max_total_tokens})，触发安全熔断"
+
+        # 3. 物理挂钟时间硬熔断
+        elapsed = time.time() - self.start_time
+        if elapsed >= self.max_wall_time_sec:
+            return True, f"单任务物理运行时间耗尽 ({elapsed:.1f}s >= {self.max_wall_time_sec}s)"
+
+        return False, None
+```
+
+---
+
+## 3. 双模型分层多端点故障转移（Dual-Tier Fallback Chain）
+
+针对云端供应商可能遭遇的 HTTP 429 限流、5xx 内部错误或网络闪断，`AegisAgent` 配置了两级模型链，并依托 `tenacity` 实施自动降级转移：
+
+```text
+[Reasoning 链: Planner 规划与报告]
+Primary: DeepSeek-R1 (api.deepseek.com) ──(失败退避重试)──► Backup: SiliconFlow-R1 ──(均不可用)──► 抛出告警
+
+[Fast 链: Executor 动作与记忆压缩]
+Primary: DeepSeek-V3 (api.deepseek.com) ──► Backup 1: OpenAI-4o-mini ──► Backup 2: Local Ollama (Qwen2.5)
+```
+
+### 3.1 指数退避与跨端点重试逻辑
+1. **端点内重试**：当单个端点遭遇网络抖动或 429 时，执行 3 次指数退避（`backoff_factor = 2.0`）；
+2. **端点间切换**：若重试 3 次后该端点仍不可用，标记该端点进入冷却期，自动将请求透明切流至 `endpoints[1]`；
+3. **参数强一致性**：切换端点时，严格保持相同的 `tools` 与 `messages` 载荷。
+
+---
+
+## 4. 观察结果离线截断与下沉（Observation Pruner）
+
+针对工具输出体积过大（如 `cat` 大型代码文件、数千行编译日志）的问题，自研 Pruner 实行“两头保留 + 离线落盘”策略：
+
+```text
+┌────────────────────────────────────────────────────────────┐
+│                    Observation Pruner                      │
+│                                                            │
+│  输入原始工具日志 (如 2500 行，50KB)                        │
+│    │                                                       │
+│    ├── 1. 完整原始内容落盘 ➔ storage/artifacts/{run_id}/   │
+│    │                                                       │
+│    └── 2. 生成 Context 紧凑摘要:                           │
+│         - 保留头部关键行 (Head 20 lines)                   │
+│         - 提取包含 error/warning/failed 的中间关键行        │
+│         - 保留尾部结论行 (Tail 30 lines)                   │
+│         - 附带物理离线句柄: "artifact://run_01/build.log"   │
+└────────────────────────────────────────────────────────────┘
+```
+
+* **Token 预算控制**：经裁剪后的工具响应，单次进入上下文严格限制在 1500 Token 以内；
+* **原子成对约束**：无论输出是否被截断，生成的 `ToolMessage` 必须携带对应的 `tool_call_id`，保持与前序 `AIMessage` 的原子关联。
