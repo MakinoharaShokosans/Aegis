@@ -11,6 +11,7 @@
 
 from agent_runtime.guardrails.canary import (
     build_canary_directive,
+    derive_session_canary,
     detect_canary_leak,
     generate_canary_token,
     sanitize_canary,
@@ -33,6 +34,7 @@ __all__ = [
     "build_canary_directive",
     "build_replan_notice",
     "compute_fingerprint",
+    "derive_session_canary",
     "detect_canary_leak",
     "generate_canary_token",
     "is_failure_observation",

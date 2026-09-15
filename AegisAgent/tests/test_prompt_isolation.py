@@ -244,3 +244,43 @@ def test_execution_context_sanitizes_delivery(tmp_path: Path):
     assert token not in safe_delivery
     assert "[SECURITY_REDACTED]" in safe_delivery
 
+
+def test_session_scoped_canary_preserves_prompt_cache_consistency(tmp_path: Path):
+    """测试同一 Session 内的连续两轮任务共享相同的 Canary Token，而不同 Session 互斥。
+
+    确保同一会话内多轮提问时 Prompt Prefix（系统提示词+Canary Directive）完全一致，
+    使得 LLM KV Cache 命中率达到 100%。
+    """
+    from agent_runtime.execution_context import build_initial_state
+
+    # 1. 同一 session 内的第一轮与第二轮任务
+    session_id_1 = "sess_user_chat_100"
+    state_turn_1 = build_initial_state(
+        workspace_id="ws_1",
+        workspace_path=str(tmp_path),
+        session_id=session_id_1,
+        task_goal="Turn 1: Explain code",
+    )
+    state_turn_2 = build_initial_state(
+        workspace_id="ws_1",
+        workspace_path=str(tmp_path),
+        session_id=session_id_1,
+        task_goal="Turn 2: Refactor function",
+    )
+
+    # 验证同一会话内 Token 严格一致
+    assert state_turn_1["canary_token"] == state_turn_2["canary_token"]
+
+    # 2. 另一个不同 session 的任务
+    session_id_2 = "sess_user_chat_200"
+    state_diff_sess = build_initial_state(
+        workspace_id="ws_1",
+        workspace_path=str(tmp_path),
+        session_id=session_id_2,
+        task_goal="Turn 1 in new session",
+    )
+
+    # 验证不同会话间 Token 严格隔离
+    assert state_turn_1["canary_token"] != state_diff_sess["canary_token"]
+
+

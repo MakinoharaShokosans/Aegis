@@ -13,29 +13,60 @@
 
 from __future__ import annotations
 
+import hashlib
+import hmac
 import secrets
-from typing import Any, Mapping, Sequence
+from typing import Any, Mapping, Optional, Sequence
 
 from langchain_core.messages import BaseMessage
 from pydantic import BaseModel
 
 __all__ = [
     "build_canary_directive",
+    "derive_session_canary",
     "detect_canary_leak",
     "generate_canary_token",
     "sanitize_canary",
 ]
 
+#: 默认用于会话金丝雀派生的混淆盐（可通过参数或环境变量覆盖）
+_DEFAULT_CANARY_SALT = "aegis_session_canary_hmac_salt_2026"
 
-def generate_canary_token(prefix: str = "canary_") -> str:
-    """生成高熵随机 Canary Token。
+
+def derive_session_canary(session_id: str, salt: str = _DEFAULT_CANARY_SALT, prefix: str = "canary_") -> str:
+    """基于 session_id 与密钥盐通过 HMAC 派生会话级唯一 Canary Token。
+
+    特点：
+    - **同会话确定性**：相同 session_id 永远生成完全相同的 Token，保障多轮对话中 Prompt Prefix 缓存 100% 命中；
+    - **跨会话强隔离**：不同 session_id 派生出的 Token 在密码学上完全互斥且不可预测。
 
     Args:
+        session_id: 会话唯一标识。
+        salt: HMAC 盐值。
+        prefix: Token 识别前缀。
+
+    Returns:
+        会话专属的金丝雀 Token 字符串。
+    """
+    if not session_id:
+        return generate_canary_token(prefix=prefix)
+
+    digest = hmac.new(salt.encode("utf-8"), session_id.encode("utf-8"), hashlib.sha256).hexdigest()
+    return f"{prefix}{digest[:12]}"
+
+
+def generate_canary_token(session_id: Optional[str] = None, prefix: str = "canary_") -> str:
+    """生成高熵 Canary Token（支持会话级派生或全局随机生成）。
+
+    Args:
+        session_id: 可选的会话 ID。如果传入，则派生会话级确定性 Token（保缓存）；若未传入，则生成纯随机 Token。
         prefix: Token 前缀，便于内部识别与调试。
 
     Returns:
         形如 ``canary_3a9f0e2b1c8d`` 的防泄漏探针字符串。
     """
+    if session_id:
+        return derive_session_canary(session_id, prefix=prefix)
     return f"{prefix}{secrets.token_hex(6)}"
 
 

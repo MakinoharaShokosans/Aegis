@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from agent_runtime.guardrails.canary import (
     build_canary_directive,
+    derive_session_canary,
     detect_canary_leak,
     generate_canary_token,
     sanitize_canary,
@@ -14,6 +15,26 @@ from agent_runtime.guardrails.canary import (
 class DummyModel(BaseModel):
     name: str
     info: str
+
+
+def test_derive_session_canary():
+    """测试会话级 Canary 派生的确定性与跨会话隔离性。"""
+    session_a = "session_001_abc"
+    session_b = "session_002_xyz"
+
+    # 同一 session 多次派生产生相同 Token（保障 Prompt 缓存命中）
+    token_a1 = derive_session_canary(session_a)
+    token_a2 = derive_session_canary(session_a)
+    assert token_a1 == token_a2
+    assert token_a1.startswith("canary_")
+
+    # 不同 session 派生产生不同 Token（保障跨会话安全隔离）
+    token_b = derive_session_canary(session_b)
+    assert token_a1 != token_b
+
+    # generate_canary_token 传入 session_id 时委托给 derive_session_canary
+    token_gen = generate_canary_token(session_id=session_a)
+    assert token_gen == token_a1
 
 
 def test_generate_canary_token():

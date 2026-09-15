@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from loguru import logger
 
-from agent_runtime.guardrails.canary import generate_canary_token, sanitize_canary
+from agent_runtime.guardrails.canary import derive_session_canary, generate_canary_token, sanitize_canary
 from agent_runtime.memory.manager import MemoryManager
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.state import AgentState, FailedAttempt, Milestone
@@ -62,6 +62,7 @@ def build_initial_state(
     """构造任务的初始 ``AgentState``（Spawn 阶段）。
 
     所有物理度量从零起步；认知记忆从会话层继承——这正是"新任务不重复踩坑"的来源。
+    金丝雀 Token 默认与 ``session_id`` 绑定派生，确保同一会话内多轮对话的 Prompt 前缀缓存 100% 命中。
 
     Args:
         workspace_id: 工作区标识。
@@ -69,7 +70,7 @@ def build_initial_state(
         session_id: 会话标识。
         task_goal: 任务目标（永久锚定，不被修剪）。
         task_id: 任务 ID；缺省自动生成 UUID。
-        canary_token: 任务 Canary Token；缺省自动生成高熵随机 Token。
+        canary_token: 任务 Canary Token；缺省由 session_id 派生会话级唯一 Token。
         active_turns: 低水位线以上的活跃对话轮次。
         rolling_summary: 会话已压缩摘要。
         confirmed_facts: 会话已确认事实。
@@ -78,6 +79,8 @@ def build_initial_state(
     Returns:
         全新的 :class:`AgentState`。
     """
+    token = canary_token or (derive_session_canary(session_id) if session_id else generate_canary_token())
+
     return AgentState(
         workspace_id=workspace_id,
         workspace_path=workspace_path,
@@ -95,7 +98,7 @@ def build_initial_state(
         total_tokens=0,
         consecutive_errors=0,
         fingerprint_history=[],
-        canary_token=canary_token or generate_canary_token(),
+        canary_token=token,
         should_terminate=False,
         termination_reason="",
     )
