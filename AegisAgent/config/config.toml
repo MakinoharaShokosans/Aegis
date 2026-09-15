@@ -183,3 +183,22 @@ max_content_tokens = 1500           # 正文超过该 Token 数则落盘，只�
 preview_chars = 200                 # 摘要保留的头部字符数
 user_agent = "Mozilla/5.0 (compatible; AegisBot/0.1)"
 artifacts_dir = "storage/artifacts" # 长正文离线落盘根目录
+
+# ------------------------------------------------------------------------------
+# 12. 研究子智能体（外部不可信数据隔离区）
+#     规范：documents/agent_runtime/12_research_subagent.md
+#     作用：主 Agent 不接触任何原始网页，只接收强类型校验后的研究报告
+# ------------------------------------------------------------------------------
+[research]
+enabled = true                      # 关闭后主 Agent 完全丧失外部信息能力（最安全）
+model_tier = "fast"                 # 使用便宜快速的层级
+max_rounds = 3                      # 内部检索轮数上限
+max_sources = 5                     # 单轮最多来源数
+max_source_chars = 6000             # 单源正文进入子上下文的截断上限
+max_wall_time_sec = 45              # 子智能体挂钟上限（秒）
+max_total_tokens = 20000            # 子智能体 Token 上限
+max_findings = 8                    # 结论条目上限
+max_answer_chars = 500              # 单条结论长度上限
+max_code_examples = 5               # 代码示例条数上限
+max_code_chars = 2000               # 单个代码块长度上限
+max_report_chars = 4000             # 渲染后注入主上下文的上限

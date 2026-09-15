@@ -3,6 +3,11 @@
 > **状态**：已定稿 (Accepted)  
 > **责任领域**：`AegisAgent/src/services/web_search/`（**同工程子系统**，独立进程，默认监听 `127.0.0.1:8003`）  
 > **核心目标**：为 Agent 提供开源前沿动态调研、GitHub Issues 查错、内核更新日志检索等外部动态知识摄取能力。
+>
+> **暴露面变更（重要）**：本子系统**不再被主 Agent 直接调用**。
+> 抓取能力只对**研究子智能体**（`agent_runtime/research/`）开放，
+> 主工具表中没有 `web_search`，主 Agent 只能通过 `delegate_research` 请求研究
+> （见 `agent_runtime/12_research_subagent.md`）。
 
 ---
 

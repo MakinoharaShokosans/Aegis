@@ -34,7 +34,13 @@
    `config → state/errors → guardrails/edges → llm/memory/skills/observability → tools/mcps → nodes → workflow → api`。
    反向依赖一律禁止。
 
-7. **Sidecar 契约不可穿透**
+7. **不可信数据不进入特权上下文**
+   外部内容（网页）只能由**受限工具表**的研究子智能体接触；主工具表通过
+   `ToolRegistry(allow_untrusted=False)` **在构造期拒绝**不可信工具，
+   子智能体输出必须通过强类型契约校验（见 `12_research_subagent.md`）。
+   同类约束后续扩展到 MCP 工具与工作区技能包。
+
+8. **Sidecar 契约不可穿透**
    `src/services/*` **禁止 import `agent_runtime`**（连 `config` 也不行，各自读 TOML 段落）；
    `src/mcps/*` 只允许依赖契约层，不得感知图与节点。
 
@@ -53,6 +59,7 @@ AegisAgent/src/agent_runtime/
 ├── execution_context.py        ✅         Spawn 构造 + Teardown 因果下沉与会话记忆回写（07）
 ├── context.py                  ✅         ContextManager：四层 Prompt 装配 + 上下文检视（06 §4）
 ├── prompt_loader.py            ✅         提示词加载（包内路径优先 + 项目根回退 + 缓存）
+├── structured_output.py        ✅         结构化输出抽取（节点与研究子智能体共用）
 ├── checkpoint.py               ✅         AsyncSqliteSaver 生命周期（WAL / 建表 / 关闭）（04 §4）
 ├── routing.py                  ✅         路由契约**聚合导出**（实现分散在 edges/）
 ├── workflow.py                 ✅         进程级装配 + 任务级装配 + 图构建 + run/resume（04 §3–4）
@@ -77,7 +84,14 @@ AegisAgent/src/agent_runtime/
 │   ├── __init__.py
 │   ├── loop_detector.py                   MD5 指纹队列 + 连续错误计数 + 重规划通知文本
 │   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
-│   └── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
+│   ├── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
+│   └── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界）
+│
+├── research/                   ✅         研究子智能体：不可信外部数据的隔离区（12）
+│   ├── __init__.py
+│   ├── contracts.py                       ResearchRequest / ResearchReport 强类型契约 + render_for_model
+│   ├── runner.py                          有界异步循环：检索规划 → 并发抓取 → 强类型提炼
+│   └── tool.py                            DelegateResearchTool + build_research_tool 装配
 │
 ├── llm/                        ✅         双模型分层网关
 │   ├── __init__.py
@@ -120,8 +134,9 @@ AegisAgent/src/agent_runtime/
 │       └── introspection.py               skills / tools / mcp / models 自省（零密钥外泄）
 │
 └── prompts/                    ✅         提示词即内容（可热改）
-    ├── system.md                          内置行为纪律
+    ├── system.md                          内置行为纪律（含外部信息纪律）
     ├── planner.md / executor.md / evaluator.md
+    ├── research.md                        研究子智能体指令（检索规划 + 结论提炼）
     └── compactor.md                       会话记忆压缩提示词
 ```
 
@@ -205,7 +220,9 @@ AegisAgent/
 | ⑫ | `tool_layer/` 命名与内部混杂 | **更名 `tools/`，拆 `core/`（框架）与 `builtin/`（基础工具）** | 框架与业务分离；去掉冗余的 `_layer` |
 | ⑬ | 条件边全部挤在 `routing.py` | **新增 `edges/`，与 `nodes/` 对称；`routing.py` 退化为聚合导出** | 新增边不必修改公共文件 |
 | ⑭ | MCP 代码跨 `tools/` 与 `mcps/` 两处 | **全部归并到 `mcps/`**（`models` / `adapter` / `manager`） | 集中审计"谁拉起了什么进程" |
-| ⑮ | 部分基础能力（异常/分词/检查点/提示词加载）无归属 | **`errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py`** | 统一口径，避免各处重复实现 |
+| ⑮ | 部分基础能力（异常/分词/检查点/提示词加载）无归属 | **`errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py` / `structured_output.py`** | 统一口径，避免各处重复实现 |
+| ⑯ | 研究子智能体用**子图**还是 **tool** | **用 tool**：接口为 `delegate_research`，内部是一条有界异步循环，**不引入 LangGraph 子图** | 子图会共享 `messages` 与 Checkpoint ⇒ 原始网页回流主上下文，隔离形同虚设；tool 天然把不可信内容的生命周期关在一次函数调用内 |
+| ⑰ | "主工具表不含 web_search" 只靠约定 | **`AegisTool.trust` + `ToolRegistry(allow_untrusted=False)` 构造期拒绝** | 把约定变成可执行不变量——想犯这个错都犯不了 |
 
 ---
 
@@ -213,8 +230,8 @@ AegisAgent/
 
 行 = 调用方，列 = 被依赖方。`✔` 允许，`✘` 禁止。
 
-| ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | nodes | workflow | api | services |
-|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | research | nodes | workflow | api | services |
+|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
 | **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | **errors** | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
@@ -222,11 +239,11 @@ AegisAgent/
 | **edges** | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | **llm** | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | **memory** | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 | **mcps** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ |
-| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ |
-| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
-| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✔ | — | ✘ |
+| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | ✘ | — | ✘ | ✘ | ✘ |
+| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
+| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ |
 | **services** | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | — |
 
 **关键约束**：
@@ -235,6 +252,11 @@ AegisAgent/
 - `edges/*` 只依赖 `state` 与 `langgraph`，**不得**依赖 `llm`/`memory`/`tools`。
 - `guardrails/` 不得依赖 `llm`，保证可离线确定性单测。
 - `services/*` **连 `config` 都不依赖**——各自通过 `services/settings.py` 读 TOML 段落。
+- `research/*` 只依赖 `tools.core` 的**契约**（`AegisTool` / `ToolRegistry`），
+  **不 import 任何具体工具**——受限工具表由 `workflow` 注入（依赖倒置）。
+- **LLM 循环型能力不得放进 `tools/builtin/`**：`tools/builtin/` 只放叶子工具；
+  凡内部要跑模型循环的（如研究子智能体），归入各自的编排包（`research/`），
+  否则会形成 `tools ↔ research` 的包级循环。
 
 > 注：`services` 行全为 `✘` 指的是"不依赖 `agent_runtime`"；`services/settings.py` 是服务侧自有模块，不受本矩阵约束。
 
@@ -312,6 +334,7 @@ packages = [
 | `evaluation/{rag_bench,agent_bench}/` | `技术选型/evaluation.md` |
 | `storage/{checkpoints,traces,artifacts,logs}` | `01` §5、`06` §7 |
 | `edges/` | 裁决项⑬ |
+| `research/` + `guardrails/injection_guard.py` | `12_research_subagent.md` |
 | `api/` | 裁决项⑩、`11_http_api.md` |
 
 ---
@@ -332,4 +355,7 @@ packages = [
 | 交付层（`api/` + 6 组路由） | ✅ 已完成（OpenAPI：25 路径 / 30 操作） |
 | 子系统（`services/bash_shell` + `web_search`） | ✅ 已完成 |
 | 评测 harness（`rag_bench` + `agent_bench`） | ✅ 已完成 |
+| 外部检索隔离（`research/` + `Trust` 机制 + 注入标注） | ✅ 已完成（见 `12_research_subagent.md`） |
+| MCP 工具的不可信边界 | ⬜ 待办（同类约束的下一站） |
+| 工作区技能包的不可信边界 | ⬜ 待办 |
 | 自动化测试覆盖 | ⬜ 待补（当前仅记忆子系统的 8 个用例） |

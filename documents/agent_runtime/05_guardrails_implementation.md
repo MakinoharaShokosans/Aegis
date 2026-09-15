@@ -121,3 +121,28 @@ Primary: DeepSeek-V3 (api.deepseek.com) ──► Backup 1: OpenAI-4o-mini ─�
 
 * **Token 预算控制**：经裁剪后的工具响应，单次进入上下文严格限制在 1500 Token 以内；
 * **原子成对约束**：无论输出是否被截断，生成的 `ToolMessage` 必须携带对应的 `tool_call_id`，保持与前序 `AIMessage` 的原子关联。
+
+
+---
+
+## 5. 注入样态标注（Injection Guard）
+
+> **定位**：这是**纵深防御与审计手段，不是安全边界**。真正的边界是权限分离
+> （见 [`12_research_subagent.md`](./12_research_subagent.md)）。
+
+`agent_runtime/guardrails/injection_guard.py` 提供纯函数（零 I/O、零 LLM）：
+
+* `scan_injection(text) -> InjectionScan`：扫描中英双语指令样态
+  （`ignore previous instructions`、`system override`、`you are now`、
+  `do not tell the user`、`不要告诉用户`、`请执行以下命令`、`reveal your system prompt` 等）；
+* `redact_injection(text, matches) -> str`：把命中的片段替换为标记（可选）；
+* `summarize_matches(scan) -> str`：生成可写入 `warnings` 的一行摘要。
+
+**行为约定**：
+
+| 项 | 约定 |
+|:---|:---|
+| 是否拦截 | **不拦截**。只标注、记录、写轨迹，供离线统计"注入尝试频率" |
+| 应用位置 | 研究子智能体产出的文本字段；后续扩展到 MCP 工具输出与工作区技能包正文 |
+| 失败语义 | 扫描永不抛异常；最坏情况返回空结果 |
+| 误报代价 | 仅多一行 warning，不影响主流程——因此宁可宽扫 |

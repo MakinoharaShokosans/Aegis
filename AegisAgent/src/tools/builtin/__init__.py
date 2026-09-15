@@ -41,16 +41,20 @@ def build_builtin_tools(
     task_id: str,
     rag_client: Optional[ServiceClient] = None,
     shell_client: Optional[ServiceClient] = None,
-    web_client: Optional[ServiceClient] = None,
     skills: Optional[SkillsRegistry] = None,
     bash_timeout_sec: float = 60.0,
     rag_top_k: int = 5,
-    web_max_results: int = 8,
 ) -> List[AegisTool]:
-    """装配当前任务可用的全部基础工具。
+    """装配当前任务可用的**可信**基础工具。
 
     任何 sidecar 客户端为 ``None`` 时，对应工具**不注册**——这样在只做本地代码
-    分析（不需要网络/检索）的场景下，模型看不到也不会误调用不存在的工具。
+    分析（不需要检索）的场景下，模型看不到也不会误调用不存在的工具。
+
+    .. important::
+       **本函数刻意不包含网络检索工具**。`web_search` 是 ``trust="untrusted"``，
+       只能由研究子智能体在隔离区中使用；主 Agent 的外部信息入口是
+       ``delegate_research``（见 ``documents/agent_runtime/12_research_subagent.md``）。
+       把它加回主工具表会在构造期抛 ``ToolExecutionError``。
 
     Args:
         workspace_id: 工作区标识。
@@ -58,11 +62,9 @@ def build_builtin_tools(
         task_id: 任务 ID。
         rag_client: AegisRAG 客户端。
         shell_client: bash_shell 客户端。
-        web_client: web_search 客户端。
         skills: 技能注册表。
         bash_timeout_sec: bash 默认超时。
         rag_top_k: 检索默认返回条数。
-        web_max_results: 网络检索默认条数。
 
     Returns:
         工具实例列表。
@@ -81,8 +83,6 @@ def build_builtin_tools(
         )
     if rag_client is not None:
         tools.append(RagSearchTool(rag_client, default_top_k=rag_top_k))
-    if web_client is not None:
-        tools.append(WebSearchTool(web_client, task_id=task_id, default_max_results=web_max_results))
 
     tools.extend(build_file_tools(workspace_root))
 

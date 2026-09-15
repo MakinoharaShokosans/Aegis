@@ -36,10 +36,14 @@ graph TB
         TC["Async Concurrent Dispatcher<br/>(asyncio.gather 并发分发)"]
     end
 
+    subgraph Research["研究子智能体（不可信数据隔离区）"]
+        RS["Research Subagent<br/>(agent_runtime/research)<br/>受限工具表：仅网络检索"]
+    end
+
     subgraph Services["外部/本地服务 (Sidecar)"]
         RAG["AegisRAG<br/>(独立子工程 :8001)"]
         BASH["bash_shell 子系统<br/>(同工程独立进程 :8002)"]
-        WEB["web_search 子系统<br/>(同工程独立进程 :8003)"]
+        WEB["web_search 子系统<br/>(同工程独立进程 :8003)<br/>仅研究子智能体可达"]
     end
 
     subgraph Storage["本地持久化"]
@@ -58,7 +62,8 @@ graph TB
     G --> PR
     TC --> RAG
     TC --> BASH
-    TC --> WEB
+    TC --> RS
+    RS --> WEB
     G --> CK
     G --> TR
 ```
@@ -121,6 +126,12 @@ graph TB
 ### 4.5 子系统部署形态（两种，不可混淆）
 1. **同工程子系统**：`bash_shell`、`web_search` 位于 `AegisAgent/src/services/` 内，与 Agent 共享 `config.toml` 与依赖锁，但**各自作为独立进程**通过 HTTP 暴露（`:8002` / `:8003`）。禁止 `services/*` 反向 import `agent_runtime`。
 2. **独立子工程**：`AegisRAG` 因携带 `onnxruntime`、`tree-sitter` 等重依赖与 C 扩展，作为**物理独立子工程**（独立 `uv` 环境）运行于 `:8001`。
+
+### 4.6 信任边界：不可信外部数据的隔离
+* **问题**：网页等第三方内容可能携带指令（间接提示注入）。风险不在"读到坏内容"，而在**"读到坏内容的上下文同时握着特权工具"**；
+* **对策**：主工具表中**不存在任何网络抓取工具**（由 `ToolRegistry` 在构造期强制拒绝不可信工具，见 `10` 裁决项⑰）；主 Agent 只能通过 `delegate_research` 请求研究，由**受限工具表**的子智能体抓取与提炼，返回**强类型校验后**的报告；
+* **禁止宣称"物理斩断注入链"**，准确表述是"建立了权限边界，并抬高了注入的成功条件"；
+* 完整设计（威胁模型、四道结构性约束、有界循环、降级语义）见 [`12_research_subagent.md`](./12_research_subagent.md)。
 
 ---
 

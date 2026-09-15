@@ -8,11 +8,21 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Literal, Mapping, Optional
 
 from pydantic import BaseModel, Field
 
-__all__ = ["AegisTool", "ToolResult"]
+__all__ = ["AegisTool", "ToolResult", "ToolTrust"]
+
+#: 工具信任级别。
+#:
+#: ``trusted``   —— 返回值可视为可信数据（本地文件、内部检索、受控 shell）；
+#: ``untrusted`` —— 返回值来自**第三方不可控来源**（外部网页等）。
+#:
+#: 不可信工具**不得**注册进特权工具表：:class:`~tools.core.registry.ToolRegistry`
+#: 会在构造期直接拒绝。这样"主 Agent 不接触原始外部内容"就从提示词约定
+#: 变成了可执行不变量（见 ``documents/agent_runtime/12_research_subagent.md``）。
+ToolTrust = Literal["trusted", "untrusted"]
 
 
 class ToolResult(BaseModel):
@@ -52,9 +62,11 @@ class AegisTool(ABC):
         description: 给模型看的能力描述，直接影响调用准确率。
         parameters: JSON Schema 形式的入参定义。
         timeout_sec: 单次调用硬超时。
+        trust: 信任级别；来自第三方不可控来源的工具必须标为 ``untrusted``。
     """
 
     name: str = ""
+    trust: ToolTrust = "trusted"
     description: str = ""
     parameters: Dict[str, Any] = {"type": "object", "properties": {}}
     timeout_sec: float = 60.0

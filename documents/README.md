@@ -34,7 +34,8 @@ documents/
 │   ├── 08_skills_management.md
 │   ├── 09_mcp_integration_and_governance.md
 │   ├── 10_directory_structure.md  # 权威目录结构与工程分层（裁决记录）
-│   └── 11_http_api.md             # HTTP API 契约与对外交付入口
+│   ├── 11_http_api.md             # HTTP API 契约与对外交付入口
+│   └── 12_research_subagent.md    # 外部检索隔离：信任边界、强类型契约、有界研究循环
 │
 ├── bash_shell/                    # 【实施技术规范】受控 Shell 沙箱 (AegisAgent/src/services/bash_shell/)
 │   ├── README.md                  # 沙箱子系统实施规范索引与架构拓扑
@@ -71,9 +72,18 @@ documents/
 1. **Sidecar 契约不可穿透**：
    - `services/bash_shell` 与 `services/web_search` 作为独立进程运行，**严禁 import `agent_runtime` 下的任何模块**；
    - 两大服务各自通过轻量 `settings.py` 直接读取 `config/config.toml` 的对应段落。
-2. **工具层统一接入**：
-   - `agent_runtime` 通过 `tools/builtin/bash.py` 和 `tools/builtin/web_search.py` 作为适配器，经由 `ServiceClient` 走 HTTP 与各微服务交互；
+2. **工具层统一接入与不可信数据隔离**：
+   - `agent_runtime` 通过 `tools/builtin/bash.py`（等可信叶子工具）作为适配器，经由 `ServiceClient` 走 HTTP 与各微服务交互；
+   - **`tools/builtin/web_search.py` 标记为 `trust="untrusted"`，不在主 Agent 工具表中**——它只由研究子智能体
+     （`agent_runtime/research/`）在受限工具表内调用；主 Agent 的外部信息入口是 `delegate_research`，
+     收到的是经强类型校验（URL 白名单 / 版本正则 / 长度上限）净化后的报告。
+     `ToolRegistry(allow_untrusted=False)` 会在**构造期**拒绝把不可信工具注册进特权表（见 `12_research_subagent.md`）；
    - 单轮内多个 `tool_calls` 由 `ToolDispatcher` 通过 `asyncio.gather` 并发派发，端到端耗时大幅缩减。
-3. **证据链离线闭环**：
+3. **提示层安全三道互补机制**（详见 `agent_runtime/05`、`12`）：
+   - **XML 定界协议**：`<project_rules>` / `<user_task>` / `<tool_observation>` / `<external_content>`
+     内的文本一律视为数据而非指令（`system.md` §一）；
+   - **Canary Token**：会话级确定性派生的金丝雀注入系统提示词，检测外泄并熔断（`guardrails/canary.py`）；
+   - **权限分离**：不可信来源与特权工具不共处同一上下文，注入无法直接转化为特权动作（`12_research_subagent.md`）。
+4. **证据链离线闭环**：
    - 无论是 Shell 编译日志还是 Web 抓取的长篇技术文档，凡超过 Token 阈值，一律流式落盘写入 `storage/artifacts/{task_id}/`；
    - 仅向 Agent 上下文注入保留语法结构的精炼摘要与磁盘句柄，需要时按需精确查阅。

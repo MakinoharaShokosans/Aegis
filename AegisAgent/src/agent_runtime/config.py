@@ -193,7 +193,33 @@ class MCPConfig(BaseModel):
 
 
 # ==============================================================================
-# 10. 全局配置根对象 (AegisConfig)
+# 11. 研究子智能体配置（外部不可信数据隔离区）
+#     规范：documents/agent_runtime/12_research_subagent.md
+# ==============================================================================
+
+class ResearchConfig(BaseModel):
+    """
+    研究子智能体预算与契约上限。
+
+    这里的每一项都是**硬上限**：它们共同保证子智能体不会失控地消耗
+    Token、时间与上下文，也不会把过长的不可信文本带回主 Agent。
+    """
+    enabled: bool = Field(default=True, description="总开关；关闭后主 Agent 无任何外部信息能力")
+    model_tier: Literal["reasoning", "fast"] = Field(default="fast", description="子智能体使用的模型层级")
+    max_rounds: int = Field(default=3, description="内部检索轮数上限")
+    max_sources: int = Field(default=5, description="单轮最多来源数")
+    max_source_chars: int = Field(default=6000, description="单源正文入子上下文的截断上限")
+    max_wall_time_sec: float = Field(default=45.0, description="子智能体挂钟上限（秒）")
+    max_total_tokens: int = Field(default=20000, description="子智能体 Token 上限")
+    max_findings: int = Field(default=8, description="结论条目上限")
+    max_answer_chars: int = Field(default=500, description="单条结论长度上限")
+    max_code_examples: int = Field(default=5, description="代码示例条数上限")
+    max_code_chars: int = Field(default=2000, description="单个代码块长度上限")
+    max_report_chars: int = Field(default=4000, description="渲染后注入主上下文的上限")
+
+
+# ==============================================================================
+# 12. 全局配置根对象 (AegisConfig)
 # ==============================================================================
 
 class AegisConfig(BaseSettings):
@@ -212,6 +238,7 @@ class AegisConfig(BaseSettings):
     services: ServicesConfig = Field(default_factory=ServicesConfig)
     server: ServerConfig = Field(default_factory=ServerConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
+    research: ResearchConfig = Field(default_factory=ResearchConfig)
 
     @classmethod
     def settings_customise_sources(

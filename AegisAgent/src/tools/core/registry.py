@@ -18,12 +18,24 @@ __all__ = ["ToolRegistry"]
 
 
 class ToolRegistry:
-    """工具注册表（进程内单例由装配层持有）。"""
+    """工具注册表（进程内单例由装配层持有）。
 
-    __slots__ = ("_tools",)
+    Args:
+        allow_untrusted: 是否允许注册 ``trust="untrusted"`` 的工具。
+            **默认 False**：特权工具表（主 Agent）在构造期就会拒绝不可信工具，
+            想犯错也犯不了。只有隔离区（研究子智能体）才应显式置为 True。
+    """
 
-    def __init__(self) -> None:
+    __slots__ = ("_tools", "_allow_untrusted")
+
+    def __init__(self, *, allow_untrusted: bool = False) -> None:
         self._tools: Dict[str, AegisTool] = {}
+        self._allow_untrusted = allow_untrusted
+
+    @property
+    def allow_untrusted(self) -> bool:
+        """本注册表是否允许承载不可信工具。"""
+        return self._allow_untrusted
 
     def register(self, tool: AegisTool) -> None:
         """注册（或覆盖）一个工具。
@@ -32,13 +44,20 @@ class ToolRegistry:
             tool: 工具实例。
 
         Raises:
-            ToolExecutionError: 工具名为空或与已有工具重名时抛出。
+            ToolExecutionError: 工具名为空、与已有工具重名，
+                或在**不允许不可信工具**的注册表中注册了 ``trust="untrusted"`` 的工具。
         """
         if not tool.name:
             raise ToolExecutionError(f"工具 {type(tool).__name__} 未声明 name")
         if tool.name in self._tools:
             # 重名通常意味着并发装配 bug，直接失败而不是静默覆盖
             raise ToolExecutionError(f"工具名重复注册: {tool.name}")
+        if getattr(tool, "trust", "trusted") != "trusted" and not self._allow_untrusted:
+            # 这是权限边界的落点：不可信来源的工具不得进入特权上下文
+            raise ToolExecutionError(
+                f"拒绝将不可信工具 {tool.name} 注册进特权工具表",
+                context={"tool": tool.name, "trust": getattr(tool, "trust", "unknown")},
+            )
         self._tools[tool.name] = tool
         logger.debug(f"[ToolRegistry] 注册工具 {tool.name}")
 

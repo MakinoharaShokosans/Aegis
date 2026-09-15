@@ -15,6 +15,7 @@
 | [09_mcp_integration_and_governance.md](./09_mcp_integration_and_governance.md) | **MCP 协议集成与治理** | **JSON-RPC 协议转译、stdio 进程托管与防僵尸、命名空间隔离、懒加载连接池** |
 | [10_directory_structure.md](./10_directory_structure.md) | **目录结构与工程分层（权威）** | **内容/代码分离、依赖方向矩阵、统一裁决记录、打包与资源约定** |
 | [11_http_api.md](./11_http_api.md) | **HTTP API 契约（唯一用户入口）** | **工作区/会话/任务 REST、SSE 事件流、DTO 分层、安全红线** |
+| [12_research_subagent.md](./12_research_subagent.md) | **外部检索隔离（信任边界）** | **研究子智能体、trust 构造期拒绝、四道结构性约束、注入样态标注** |
 
 ---
 
@@ -76,6 +77,14 @@
   - `AegisAgent/src/agent_runtime/observability/trajectory.py` (`storage/traces/{task_id}.jsonl`)
   - `AegisAgent/src/agent_runtime/observability/langfuse_tracer.py` (Langfuse 回调)
 
+### 步骤十：外部检索隔离（不可信数据边界）
+- 参考：[`12_research_subagent.md`](./12_research_subagent.md)
+- 实现：
+  - `AegisAgent/src/agent_runtime/research/` (`contracts.py` / `runner.py` / `tool.py`)
+  - `AegisAgent/src/agent_runtime/guardrails/injection_guard.py` (注入样态标注)
+  - `AegisAgent/src/tools/core/registry.py`（`allow_untrusted` 构造期拒绝）
+- 关键约束：主工具表**不得**出现 `web_search`；主 Agent 唯一外部入口是 `delegate_research`
+
 ---
 
 ## 3. 文档版本与依赖基线（v2 统一修订）
@@ -110,6 +119,8 @@
 - **同工程子系统**：`bash_shell`、`web_search` 保留在 `AegisAgent/src/services/` 内，各自作为独立进程经 HTTP 暴露（`:8002` / `:8003`），不拆分独立子工程。
 - **独立子工程**：仅 `AegisRAG`（因 `onnxruntime` / `tree-sitter` 重依赖与 C 扩展而物理隔离，`:8001`）。
 - **用户入口**：仅 HTTP API（`127.0.0.1:8000`），不提供 CLI；后续由 Web 前端消费。
+- **信任边界**：网络检索被隔离在研究子智能体内部，主工具表通过 `ToolRegistry` 的
+  `allow_untrusted=False` 在**构造期**拒绝不可信工具（见 `12_research_subagent.md`）。
 
 ## 4. 代码目录映射 (`AegisAgent/`)
 
@@ -123,6 +134,7 @@ AegisAgent/
 │   ├── agent_runtime/
 │   │   ├── __init__.py  config.py  errors.py  tokenizer.py
 │   │   ├── state.py              # 契约唯一真源：AgentState / ExecutionContext / Milestone ...
+│   │   ├── structured_output.py  # 结构化输出抽取（节点与研究子智能体共用）
 │   │   ├── execution_context.py  # Spawn 构造 + Teardown 因果下沉
 │   │   ├── context.py            # 四层 Prompt 装配 + 上下文检视
 │   │   ├── prompt_loader.py      # 提示词加载（包内优先 + 项目根回退）
@@ -131,7 +143,8 @@ AegisAgent/
 │   │   ├── workflow.py           # 进程级/任务级装配 + 图构建 + run/resume
 │   │   ├── edges/                # 条件边：与 nodes/ 一一对称，每条迁移一个模块
 │   │   ├── nodes/                # planner / budget_guard / executor / evaluator + base
-│   │   ├── guardrails/           # loop_detector / physical_budget / observation_pruner
+│   │   ├── guardrails/           # loop_detector / physical_budget / observation_pruner / injection_guard
+│   │   ├── research/             # 研究子智能体：contracts / runner / tool（见 12）
 │   │   ├── llm/                  # endpoints / fallback / client 三层
 │   │   ├── memory/               # 工作区/会话双层记忆 + 水位压缩
 │   │   ├── skills/               # 技能注册表（代码侧）

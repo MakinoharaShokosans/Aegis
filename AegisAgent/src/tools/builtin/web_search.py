@@ -1,5 +1,9 @@
 """``web_search`` 基础工具：外部动态知识摄取。
 
+**信任级别**：``trust = "untrusted"``。本工具**不得**注册进主 Agent 的特权工具表
+（``ToolRegistry`` 会在构造期拒绝），只能由研究子智能体在隔离区中调用。
+详见 ``documents/agent_runtime/12_research_subagent.md``。
+
 **WAF Fail-Fast**：来源被 Cloudflare 之类阻断时不做逆向对抗，直接把该条标记为
 ``BLOCKED`` 并只保留搜索摘要——把"要不要换检索词"的决策交回给模型（条件边重规划），
 这是比无限爬虫对抗更稳的工程选择（见 ``技术选型/web_search.md``）。
@@ -7,7 +11,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Mapping
+from typing import Any, Dict, List, Mapping, Optional
 
 from loguru import logger
 
@@ -28,6 +32,8 @@ class WebSearchTool(AegisTool):
     """
 
     name = "web_search"
+    #: 外部网页内容不可信：特权工具表必须拒绝本工具
+    trust = "untrusted"
     description = (
         "检索外部网络资料（官方文档、GitHub Issue、内核更新日志等），"
         "返回去噪后的 Markdown 正文。适合确认版本行为、查证已知缺陷与最新变更。"
@@ -51,8 +57,45 @@ class WebSearchTool(AegisTool):
         self._default_max_results = default_max_results
         self.timeout_sec = 60.0
 
+    async def search(
+        self,
+        query: str,
+        *,
+        max_results: Optional[int] = None,
+        fetch: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """**结构化**检索接口（供研究子智能体使用）。
+
+        与 :meth:`invoke` 的区别：这里返回原始结构化结果列表，不做任何渲染。
+        研究子智能体需要逐条提取 URL、状态与正文，因此不能吃"渲染后的文本"。
+
+        Args:
+            query: 检索词。
+            max_results: 候选条数；缺省使用构造时的默认值。
+            fetch: 是否抓取并清洗正文。
+
+        Returns:
+            检索结果字典列表（字段由 web 子系统定义）。
+
+        Raises:
+            DependencyUnavailableError: 子系统不可达或返回异常。
+        """
+        payload = {
+            "query": query,
+            "max_results": int(max_results or self._default_max_results),
+            "fetch": bool(fetch),
+            "task_id": self._task_id,
+        }
+        data = await self._client.request_json("POST", "/api/v1/search/query", payload=payload)
+        results = data.get("results") or []
+        return [dict(item) for item in results if isinstance(item, Mapping)]
+
     async def invoke(self, args: Mapping[str, Any]) -> ToolResult:
         """执行检索并汇总为可引用文本。
+
+        .. note::
+           本工具 ``trust = "untrusted"``，**不会出现在主 Agent 的工具表里**；
+           这里的渲染逻辑只服务于研究子智能体内部的调试与降级路径。
 
         Args:
             args: ``{"query": str, "max_results"?: int, "fetch"?: bool}``。
@@ -64,20 +107,16 @@ class WebSearchTool(AegisTool):
         if not query:
             return ToolResult.failure("缺少 query 参数")
 
-        payload = {
-            "query": query,
-            "max_results": int(args.get("max_results") or self._default_max_results),
-            "fetch": bool(args.get("fetch", True)),
-            "task_id": self._task_id,
-        }
-
         try:
-            data = await self._client.request_json("POST", "/api/v1/search/query", payload=payload)
+            results = await self.search(
+                query,
+                max_results=int(args.get("max_results") or self._default_max_results),
+                fetch=bool(args.get("fetch", True)),
+            )
         except DependencyUnavailableError as exc:
             logger.error(f"[WebSearchTool] web 子系统不可用: {exc}")
             return ToolResult.failure(str(exc), tool=self.name)
 
-        results = data.get("results") or []
         if not results:
             return ToolResult(ok=True, content="未检索到相关网络资料。", meta={"hits": 0})
 

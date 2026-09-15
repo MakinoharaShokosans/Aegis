@@ -41,12 +41,14 @@ from agent_runtime.nodes import (
 from agent_runtime.nodes.base import NodeFn
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
+from agent_runtime.research import build_research_tool
 from agent_runtime.skills.registry import SkillsRegistry
 from agent_runtime.state import AgentState
 from agent_runtime.tokenizer import count_tokens
 from mcps.adapter import MCPToolAdapter
 from mcps.manager import MCPManager
 from tools.builtin import build_builtin_tools
+from tools.builtin.web_search import WebSearchTool
 from tools.core.dispatcher import ToolDispatcher
 from tools.core.http_client import ServiceClient
 from tools.core.registry import ToolRegistry
@@ -214,6 +216,8 @@ async def prepare_task(
     )
     skills.scan()
 
+    # 主工具表：**可信工具专用**（默认 allow_untrusted=False）。
+    # 网络抓取工具是 untrusted，注册进来会直接抛错——这是权限边界的落点。
     registry = ToolRegistry()
     registry.register_all(
         build_builtin_tools(
@@ -222,11 +226,31 @@ async def prepare_task(
             task_id=state["task_id"],
             rag_client=clients["rag"],
             shell_client=clients["shell"],
-            web_client=clients["web"],
             skills=skills,
-            bash_timeout_sec=float(getattr(cfg, "server", None) and 60.0 or 60.0),
+            bash_timeout_sec=60.0,
         )
     )
+
+    # 研究隔离区：独立注册表 + 允许不可信工具 + 唯一外部信息入口
+    if cfg.research.enabled:
+        research_tools = ToolRegistry(allow_untrusted=True)
+        research_tools.register(
+            WebSearchTool(
+                clients["web"],
+                task_id=state["task_id"],
+                default_max_results=int(cfg.research.max_sources),
+            )
+        )
+        registry.register(
+            build_research_tool(
+                gateway=deps.gateway,
+                research_tools=research_tools,
+                prompts=deps.prompts,
+                config=cfg.research,
+            )
+        )
+    else:
+        logger.warning("[Workflow] research 已关闭：主 Agent 不具备任何外部信息能力（离线最安全模式）")
     # MCP 远端工具按需发现并转译为本地工具（失败会被隔离，不影响内置工具）
     try:
         for definition in await deps.mcp_manager.list_tools():

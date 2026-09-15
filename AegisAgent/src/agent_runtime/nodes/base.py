@@ -6,13 +6,13 @@
 
 from __future__ import annotations
 
-import json
 from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Sequence
 
 from langchain_core.messages import AIMessage, BaseMessage
 from loguru import logger
 
 from agent_runtime.state import FailedAttempt, Milestone
+from agent_runtime.structured_output import extract_json_object
 from tools.core.protocol import ToolResult
 
 __all__ = [
@@ -86,43 +86,6 @@ def is_failure_result(result: ToolResult) -> bool:
     if result.exit_code is not None:
         return result.exit_code != 0
     return is_failure_observation(result.content)
-
-
-def extract_json_object(text: str) -> Optional[Dict[str, Any]]:
-    """从模型输出中稳健地抽出 JSON 对象。
-
-    兼容三种常见污染：Markdown 代码围栏、前后解释性文字、空响应。
-
-    Args:
-        text: 模型原始输出。
-
-    Returns:
-        解析成功时返回字典，否则 ``None``（由调用方决定降级策略）。
-    """
-    if not text:
-        return None
-
-    cleaned = text.strip()
-    if cleaned.startswith("```"):
-        # 去掉 ```json ... ``` 包裹
-        cleaned = cleaned.split("\n", 1)[-1] if "\n" in cleaned else cleaned
-        if cleaned.endswith("```"):
-            cleaned = cleaned[:-3]
-        cleaned = cleaned.strip()
-
-    try:
-        parsed = json.loads(cleaned)
-    except (ValueError, TypeError):
-        # 退一步：截取首个 '{' 到最后一个 '}' 之间的内容
-        start, end = cleaned.find("{"), cleaned.rfind("}")
-        if start == -1 or end <= start:
-            return None
-        try:
-            parsed = json.loads(cleaned[start : end + 1])
-        except (ValueError, TypeError):
-            return None
-
-    return parsed if isinstance(parsed, dict) else None
 
 
 def merge_unique(existing: Sequence[str], new_items: Sequence[str]) -> List[str]:

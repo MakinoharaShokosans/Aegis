@@ -10,11 +10,13 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 
 from agent_runtime.api.deps import RuntimeDep
+from agent_runtime.research import build_research_tool
 from agent_runtime.skills.registry import SkillsRegistry
 from tools.builtin import build_builtin_tools
+from tools.builtin.web_search import WebSearchTool
 from tools.core.http_client import ServiceClient
 from tools.core.registry import ToolRegistry
 
@@ -50,14 +52,25 @@ async def list_skills(runtime: RuntimeDep) -> List[Dict[str, Any]]:
 
 
 @router.get("/tools", summary="列出已注册工具及其 Schema")
-async def list_tools(runtime: RuntimeDep) -> List[Dict[str, Any]]:
-    """返回一个"标准任务"会拿到的工具集合（含 MCP 远端工具）。
+async def list_tools(
+    runtime: RuntimeDep,
+    include_sandboxed: bool = Query(
+        default=False,
+        description="是否附带隔离区（研究子智能体）的受限工具信息",
+    ),
+) -> List[Dict[str, Any]]:
+    """返回主 Agent 实际握有的工具集合（含 MCP 远端工具）。
+
+    **默认只返回真实工具定义**（每项都含 ``function`` 字段），
+    保持与前端渲染约定一致；隔离区信息需显式以 ``include_sandboxed=true`` 索取，
+    此时会追加一条 ``type="note"`` 的说明项。
 
     Args:
         runtime: 进程级运行时。
+        include_sandboxed: 是否附加隔离区工具说明。
 
     Returns:
-        OpenAI function calling 定义列表。
+        工具定义列表（OpenAI function calling 形状）。
     """
     config = runtime.config
     skills = SkillsRegistry.from_workspace(
@@ -77,14 +90,45 @@ async def list_tools(runtime: RuntimeDep) -> List[Dict[str, Any]]:
             task_id="introspection",
             rag_client=clients[0],
             shell_client=clients[1],
-            web_client=clients[2],
             skills=skills,
         )
         registry = ToolRegistry()
         registry.register_all(tools)
+
+        # 与任务装配保持一致：主工具表只承载可信工具 + delegate_research 接口
+        sandboxed: List[str] = []
+        if runtime.config.research.enabled:
+            research_tools = ToolRegistry(allow_untrusted=True)
+            web_tool = WebSearchTool(
+                clients[2],
+                task_id="introspection",
+                default_max_results=int(runtime.config.research.max_sources),
+            )
+            research_tools.register(web_tool)
+            sandboxed = research_tools.names()
+            registry.register(
+                build_research_tool(
+                    gateway=runtime.gateway,
+                    research_tools=research_tools,
+                    prompts=runtime.prompts,
+                    config=runtime.config.research,
+                )
+            )
+
         definitions: List[Dict[str, Any]] = list(registry.to_openai_tools())
         for definition in definitions:
             definition["source"] = "builtin"
+        if sandboxed and include_sandboxed:
+            # 仅在显式索取时附加：明确告知前端这些工具不在主 Agent 手里
+            definitions.append(
+                {
+                    "type": "note",
+                    "source": "sandboxed",
+                    "sandbox": "research",
+                    "tools": sandboxed,
+                    "description": "不可信工具，仅供研究子智能体在隔离区调用，主 Agent 无法直接使用",
+                }
+            )
     finally:
         for client in clients:
             await client.aclose()
