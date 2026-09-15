@@ -24,7 +24,6 @@ dependencies = [
     { name = "openai" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
-    { name = "tavily-python" },
     { name = "tenacity" },
     { name = "tiktoken" },
     { name = "trafilatura" },
@@ -55,7 +54,6 @@ requires-dist = [
     { name = "openai", specifier = ">=3.14.0,<4.0.0" },
     { name = "pydantic", specifier = ">=2.13.5,<3.0.0" },
     { name = "pydantic-settings", specifier = ">=2.15.0,<3.0.0" },
-    { name = "tavily-python", specifier = ">=0.8.3,<1.0.0" },
     { name = "tenacity", specifier = ">=9.1.4,<10.0.0" },
     { name = "tiktoken", specifier = ">=0.14.0,<1.0.0" },
     { name = "trafilatura", specifier = ">=2.2.0,<3.0.0" },
@@ -2342,20 +2340,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/58/8c37dea7bbf769b20d58e7ace7e5edfe65b849442b00ffcdd56be88697c6/tabulate-0.10.0.tar.gz", hash = "sha256:e2cfde8f79420f6deeffdeda9aaec3b6bc5abce947655d17ac662b126e48a60d", size = 91754, upload-time = "2026-03-04T18:55:34.402Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/99/55/db07de81b5c630da5cbf5c7df646580ca26dfaefa593667fc6f2fe016d2e/tabulate-0.10.0-py3-none-any.whl", hash = "sha256:f0b0622e567335c8fabaaa659f1b33bcb6ddfe2e496071b743aa113f8774f2d3", size = 39814, upload-time = "2026-03-04T18:55:31.284Z" },
-]
-
-[[package]]
-name = "tavily-python"
-version = "0.8.3"
-source = { registry = "https://pypi.org/simple" }
-dependencies = [
-    { name = "httpx" },
-    { name = "requests" },
-    { name = "tiktoken" },
-]
-sdist = { url = "https://files.pythonhosted.org/packages/3f/a6/1a59a99b503961a0f99daf88ad37a14dbd54c2948ad98e6e8a548cfa1a02/tavily_python-0.8.3.tar.gz", hash = "sha256:8f9dfda3da805a8b84f1b30c4ec7a5411347af4b718a998b0cb66655d1c6c9bc", size = 35241, upload-time = "2026-09-14T18:39:23.359Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/44/c8/b69f31a191179292fb52cad0ea0df3fefdbe75de569f82874568e9a5ad8f/tavily_python-0.8.3-py3-none-any.whl", hash = "sha256:bb8975d0b426cd087488e48e0075219cd35ad25be8ae99f30f2fab6ce88cc60f", size = 24437, upload-time = "2026-09-14T18:39:22.444Z" },
 ]
 
 [[package]]

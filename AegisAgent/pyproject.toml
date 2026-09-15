@@ -31,7 +31,6 @@ dependencies = [
     # 5. Web 搜索与正文清洗 (Agent 工具层)
     "duckduckgo-search>=8.1.1,<9.0.0",
     "trafilatura>=2.2.0,<3.0.0",
-    "tavily-python>=0.8.3,<1.0.0",
 
     # 6. 可观测性与追踪
     "loguru>=0.7.3,<1.0.0",

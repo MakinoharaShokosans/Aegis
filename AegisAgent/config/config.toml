@@ -174,7 +174,7 @@ artifacts_dir = "storage/artifacts" # 全量日志离线落盘根目录
 [web_search]
 host = "127.0.0.1"
 port = 8003
-provider = "ddg"                    # 搜索源："ddg"（默认免费）| "tavily"
+provider = "ddg"                    # 搜索源："ddg"（开箱即用免 Key 检索）
 max_results = 8                     # 单次搜索返回候选条数
 fetch_concurrency = 5               # 并发抓取页数
 request_timeout_sec = 10            # 单页抓取超时（秒）
