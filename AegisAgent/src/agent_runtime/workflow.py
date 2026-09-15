@@ -111,7 +111,7 @@ async def build_runtime(config: Optional[AegisConfig] = None) -> RuntimeDeps:
         gateway=LLMGateway.from_config(cfg.models, cfg.runtime.retry),
         prompts=PromptLibrary(),
         skills=SkillsRegistry.from_workspace(
-            workspace_root=Path.cwd(), builtin_dir=builtin_dir
+            workspace_root=Path.cwd(), builtin_dir=builtin_dir, config=cfg.skills
         ),
         mcp_manager=MCPManager(cfg.mcp),
         checkpoints=checkpoints,
@@ -213,12 +213,25 @@ async def prepare_task(
     skills = SkillsRegistry.from_workspace(
         workspace_root=workspace.root_path,
         builtin_dir=deps.builtin_skills_dir,
+        config=cfg.skills,
     )
     skills.scan()
 
-    # 主工具表：**可信工具专用**（默认 allow_untrusted=False）。
-    # 网络抓取工具是 untrusted，注册进来会直接抛错——这是权限边界的落点。
-    registry = ToolRegistry()
+    # MCP 远端工具：先发现（内部已完成描述消毒），再据此构造显式授权清单。
+    # 顺序很重要——授权清单必须先于注册表构造，才能"逐名授权"而不是"开关放行"。
+    mcp_adapters: List[MCPToolAdapter] = []
+    try:
+        for definition in await deps.mcp_manager.list_tools():
+            mcp_adapters.append(MCPToolAdapter(definition, deps.mcp_manager, state["task_id"]))
+    except Exception as exc:  # noqa: BLE001 - MCP 是增强项，失败必须隔离
+        logger.error(f"[Workflow] MCP 工具发现失败，已跳过全部 MCP 工具: {exc}")
+
+    # 主工具表：可信工具全放行；不可信工具（MCP 第三方）**逐名授权**。
+    # 网络抓取工具不在其中——它属于研究隔离区，注册进来会直接抛错。
+    registry = ToolRegistry(
+        allow_untrusted=bool(mcp_adapters),
+        untrusted_allowlist={adapter.name for adapter in mcp_adapters} if mcp_adapters else None,
+    )
     registry.register_all(
         build_builtin_tools(
             workspace_id=workspace.workspace_id,
@@ -251,12 +264,15 @@ async def prepare_task(
         )
     else:
         logger.warning("[Workflow] research 已关闭：主 Agent 不具备任何外部信息能力（离线最安全模式）")
-    # MCP 远端工具按需发现并转译为本地工具（失败会被隔离，不影响内置工具）
-    try:
-        for definition in await deps.mcp_manager.list_tools():
-            registry.register(MCPToolAdapter(definition, deps.mcp_manager, state["task_id"]))
-    except Exception as exc:  # noqa: BLE001 - MCP 是增强项，失败必须隔离
-        logger.error(f"[Workflow] MCP 工具发现失败，已跳过全部 MCP 工具: {exc}")
+
+    # 已通过描述消毒 + 用户在配置中显式开启的 MCP 工具：逐名授权后进入主工具表
+    for adapter in mcp_adapters:
+        registry.register(adapter)
+
+    logger.info(
+        f"[Workflow] 工具表就绪: {len(registry)} 个"
+        f"（可信 {len(registry) - len(mcp_adapters)} / 已授权不可信 {len(mcp_adapters)}）"
+    )
 
     context = ContextManager(
         prompts=deps.prompts,

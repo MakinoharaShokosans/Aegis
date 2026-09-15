@@ -38,6 +38,7 @@ async def list_skills(runtime: RuntimeDep) -> List[Dict[str, Any]]:
     registry = SkillsRegistry.from_workspace(
         workspace_root=Path.cwd(),
         builtin_dir=runtime.builtin_skills_dir,
+        config=runtime.config.skills,
     )
     return [
         {
@@ -46,6 +47,10 @@ async def list_skills(runtime: RuntimeDep) -> List[Dict[str, Any]]:
             "triggers": list(skill.triggers),
             "required_tools": list(skill.required_tools),
             "source": skill.source,
+            # 信任与治理信息透出给前端：来源分级 + 高权限信号 + 元数据告警
+            "trust": skill.trust,
+            "high_privilege": skill.high_privilege,
+            "warnings": list(skill.warnings),
         }
         for skill in registry.list_skills()
     ]
@@ -74,7 +79,9 @@ async def list_tools(
     """
     config = runtime.config
     skills = SkillsRegistry.from_workspace(
-        workspace_root=Path.cwd(), builtin_dir=runtime.builtin_skills_dir
+        workspace_root=Path.cwd(),
+        builtin_dir=runtime.builtin_skills_dir,
+        config=runtime.config.skills,
     )
 
     # 自省端点即用即弃：显式持有客户端并在 finally 中关闭，避免连接泄漏
@@ -116,8 +123,13 @@ async def list_tools(
             )
 
         definitions: List[Dict[str, Any]] = list(registry.to_openai_tools())
+        # 标注每一项的来源与信任级，便于前端展示风险徽标
+        trust_by_name = {tool.name: getattr(tool, "trust", "trusted") for tool in registry.all()}
         for definition in definitions:
-            definition["source"] = "builtin"
+            name = definition["function"]["name"]
+            trust = trust_by_name.get(name, "trusted")
+            definition["source"] = "mcp" if trust != "trusted" else "builtin"
+            definition["trust"] = trust
         if sandboxed and include_sandboxed:
             # 仅在显式索取时附加：明确告知前端这些工具不在主 Agent 手里
             definitions.append(

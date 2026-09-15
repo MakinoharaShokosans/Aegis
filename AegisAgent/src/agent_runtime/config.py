@@ -183,6 +183,15 @@ class MCPConfig(BaseModel):
     call_timeout_sec: float = Field(default=60.0, description="单次调用超时上限（秒）")
     servers: Dict[str, MCPServerConfig] = Field(default_factory=dict, description="服务器注册表")
 
+    # ---- 数据面治理：工具描述消毒（描述会进工具 Schema，位置高于普通观察值）----
+    max_description_chars: int = Field(default=1000, description="工具描述长度上限")
+    reject_on_injection: bool = Field(default=True, description="描述命中注入样态时拒绝注册该工具")
+
+    # ---- 控制面治理：stdio 子进程资源上限（Linux）----
+    rlimit_as_mb: int = Field(default=1024, description="stdio 子进程虚拟内存上限（MB）")
+    rlimit_fsize_mb: int = Field(default=50, description="stdio 子进程单文件大小上限（MB）")
+    rlimit_cpu_sec: int = Field(default=300, description="stdio 子进程纯 CPU 时间上限（秒）")
+
     @model_validator(mode="after")
     def _fill_server_names(self) -> "MCPConfig":
         """以字典键回填服务器名，避免在 TOML 中重复书写 name 字段"""
@@ -219,7 +228,30 @@ class ResearchConfig(BaseModel):
 
 
 # ==============================================================================
-# 12. 全局配置根对象 (AegisConfig)
+# 12. 技能信任与治理配置
+#     规范：documents/agent_runtime/08_skills_management.md 第 4.1-4.3 节
+# ==============================================================================
+
+class SkillsConfig(BaseModel):
+    """
+    技能来源信任分级与元数据治理。
+
+    技能内容会进入**系统提示词**，信任位置高于工具输出，因此必须按来源分级；
+    其中工作区覆盖来自"被指向的仓库"，属于不可信来源，默认拒绝。
+    """
+    allow_builtin: bool = Field(default=True, description="是否加载内置技能包（可信）")
+    allow_global: bool = Field(default=True, description="是否加载用户全局技能库（可信）")
+    allow_workspace: bool = Field(default=False, description="是否加载工作区技能覆盖（不可信，默认拒绝）")
+    max_description_chars: int = Field(default=200, description="清单中单条描述的长度上限")
+    max_triggers: int = Field(default=12, description="单技能触发词条数上限")
+    high_privilege_tools: List[str] = Field(
+        default_factory=lambda: ["bash", "write_file"],
+        description="高风险工具名单：技能声明依赖它们时会被显式标注（仅标注，不拦截）",
+    )
+
+
+# ==============================================================================
+# 13. 全局配置根对象 (AegisConfig)
 # ==============================================================================
 
 class AegisConfig(BaseSettings):
@@ -239,6 +271,7 @@ class AegisConfig(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
+    skills: SkillsConfig = Field(default_factory=SkillsConfig)
 
     @classmethod
     def settings_customise_sources(

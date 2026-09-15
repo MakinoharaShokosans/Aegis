@@ -126,6 +126,11 @@ artifact_preview_chars = 200
 enabled = true                      # 总开关（关闭后忽略全部 servers）
 connection_timeout_sec = 30
 call_timeout_sec = 60
+max_description_chars = 1000         # 数据面治理：工具描述长度上限
+reject_on_injection = true           # 数据面治理：描述命中注入样态时拒绝注册该工具
+rlimit_as_mb = 1024                  # 控制面治理：stdio 子进程 RLIMIT_AS 上限
+rlimit_fsize_mb = 50                 # 控制面治理：stdlib 子进程 RLIMIT_FSIZE 上限
+rlimit_cpu_sec = 300                 # 控制面治理：stdio 子进程 RLIMIT_CPU 上限
 
 # 本地 stdio 模式服务器（示例：路径按实际工作区填写后再启用）
 [mcp.servers.filesystem]
@@ -202,3 +207,18 @@ max_answer_chars = 500              # 单条结论长度上限
 max_code_examples = 5               # 代码示例条数上限
 max_code_chars = 2000               # 单个代码块长度上限
 max_report_chars = 4000             # 渲染后注入主上下文的上限
+
+
+# ------------------------------------------------------------------------------
+# 13. 技能信任与治理（工作区技能包是不可信来源）
+#     规范：documents/agent_runtime/08_skills_management.md 第 4.1-4.3 节
+#     说明：技能内容会进入系统提示词，信任位置高于工具输出，因此按来源分级，
+#           工作区覆盖默认拒绝——克隆一个恶意仓库即可注入，必须显式授权。
+# ------------------------------------------------------------------------------
+[skills]
+allow_builtin = true                # 内置技能包（随发行版交付，可信）
+allow_global = true                 # 用户全局技能库 ~/.aegis/skills（用户自己的，可信）
+allow_workspace = false             # 工作区覆盖 <repo>/.aegis/skills（不可信，默认拒绝）
+max_description_chars = 200         # 清单中单条描述的长度上限
+max_triggers = 12                   # 单技能触发词条数上限
+high_privilege_tools = ["bash", "write_file"]   # 高风险工具名单（用于标注，不用于拦截）
