@@ -15,7 +15,7 @@
         ▼                                 ▼
 [ 1. 搜索引擎检索 (Query) ]        [ 2. 网页全文异步抓取 (Fetch) ]
   - 默认: duckduckgo-search (无Key)  - httpx (全异步并发 / 超时治理)
-  - 可选: Tavily Search (AI定制优化)                │
+        │                                 │
         │                                 ▼
         │                      [ WAF / Cloudflare 拦截检测 ]
         │                       ├── 触发 403 / 503 挑战
@@ -45,16 +45,14 @@
 
 ## 2. 核心技术决策与权衡依据
 
-### 2.1 搜索引擎源选型：配置驱动双模适配（DuckDuckGo + Tavily）
+### 2.1 搜索引擎源选型：开箱即用零成本检索（DuckDuckGo）
 
 * **决策理由**：
-  1. **默认源：`duckduckgo-search`（开箱即用，零成本）**：
-     - 100% 免费、完全无需注册任何 API Key；
-     - 任何人在任何机器上 clone 项目均可即刻跑通 Web 搜索功能。
-  2. **生产/增强源：`Tavily Search API`（深度 Agent 优化）**：
-     - 专为 AI Agent 打造的商业搜索引擎，返回干净精准的网页摘要；
-     - 系统采用接口适配器模式（Adapter Pattern），通过环境变量 `SEARCH_PROVIDER="ddg" | "tavily"` 实现无缝切换。
-  3. **结果去重与时效性保障**：
+  1. **零成本与开箱即用：`duckduckgo-search`**：
+     - 100% 免费、完全无需注册或配置任何商业 API Key；
+     - 任何人在任何机器上 clone 项目均可即刻跑通 Web 搜索功能，杜绝外部收费服务绑定；
+     - 系统采用接口适配器模式（Adapter Pattern），调用方仅依赖 `SearchProvider` 抽象基类。
+  2. **结果去重与时效性保障**：
      - **去重策略（Deduplication）**：基于标题+摘要的内容指纹（MD5 哈希前 8 位）过滤镜像站与转载重复内容；
      - **时效性过滤（Freshness Filter，可选）**：对时间敏感查询（如"2025 年 Linux 6.x 新特性"）优先返回最近 6-12 个月内容，避免过期文档混入。
 

@@ -20,7 +20,7 @@
 | **01** | **Agent 核心运行时** | [Agent Runtime 选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/agent_runtime.md) | LangGraph 状态图、SQLite 状态快照、AsyncOpenAI 统一接入、Pydantic v2 契约、tiktoken 预算监控、死循环哈希检测、双轨可观测 |
 | **02** | **独立 RAG 检索基础设施** | [RAG 检索服务选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/rag_retrieval.md) | Qdrant 稠密+稀疏一体化、fastembed (ONNX 轻量 CPU 推理)、RRF 库内倒排互惠融合、bge-reranker 精排、tree-sitter 代码 AST 切片 |
 | **03** | **受控代码执行沙箱** | [Bash Shell 服务选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/bash_shell.md) | asyncio.subprocess、os.setsid 独立进程组两段式硬杀 (SIGTERM->SIGKILL)、Linux setrlimit 物理配额 (2GB/50MB)、海量输出截断卸载 |
-| **04** | **外部网络信息摄取** | [Web 搜索服务选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/web_search.md) | DuckDuckGo / Tavily 双模搜索、httpx 异步抓取、trafilatura 智能去噪转 Markdown、WAF 阻断 Fail-Fast 降级与 Agent 自愈重规划 |
+| **04** | **外部网络信息摄取** | [Web 搜索服务选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/web_search.md) | DuckDuckGo 开箱即用免费检索、httpx 异步抓取、trafilatura 智能去噪转 Markdown、WAF 阻断 Fail-Fast 降级与 Agent 自愈重规划 |
 | **05** | **自动化双轨评测体系** | [评测工具链选型](file:///home/Skualeilu/Projects/Aegis/documents/技术选型/evaluation.md) | numpy 离线计算 IR 物理排序指标 (HitRate/MRR/NDCG)、pytest 端到端测试套件、Trajectory 因果轨迹量化故障自愈率 |
 
 ---
