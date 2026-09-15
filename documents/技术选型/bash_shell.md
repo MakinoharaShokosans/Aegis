@@ -1,8 +1,10 @@
 # 架构决策记录：受控 Bash Shell 执行沙箱与输出治理服务
 
-> **状态**：已定稿 (Accepted)  
-> **责任领域**：`services/bash_shell/`  
+> **状态**：已定稿 (Accepted)
+> **责任领域**：`AegisAgent/src/services/bash_shell/`（**同工程子系统**，独立进程，默认监听 `127.0.0.1:8002`）
 > **核心目标**：为 Agent 提供安全、确定、具备硬超时、物理资源配额与输出防溢出治理的代码编译与实验执行沙箱。
+>
+> **v2 修订记录**：① 执行工作目录（cwd）由"锁定临时目录"改为**工作区 `root_path`**（见 §2.3），修正了与原方案的自相矛盾——Agent 的职责是修改目标工程，锁死到临时目录会导致任务无法完成；② 产物与轨迹命名统一由 `{run_id}` 改为 `{task_id}`，对齐 `AgentState` 契约；③ 明确本服务为**同工程子系统**而非独立子工程（裁决记录见 `10_directory_structure.md` 裁决项③⑦）。
 
 ---
 
@@ -10,23 +12,24 @@
 
 ```text
  Agent Runtime (通过 httpx 调用 /api/v1/shell/execute)
-                         │
-                         ▼
+                          │  入参携带 workspace_id + workspace_root + task_id
+                          ▼
         [ CommandAudit ] ──► 高危破坏性命令前置正则拦截
-                         │ (通过校验)
-                         ▼
+                          │ (通过校验)
+                          ▼
         [ Subprocess Sandbox ]
          ├── os.setsid 建立独立进程组 (PGID)
          ├── resource.setrlimit: 内存 2GB / 文件 50MB / CPU 时间
-         └── 锁定 cwd 至 storage/artifacts/{run_id}/workspace/
-                         │
+         ├── cwd = Workspace.root_path  (目标工程根目录)
+         └── 路径越界校验: 任何写入必须落在 root_path 之内
+                          │
         ┌────────────────┴────────────────┐
         ▼ (若执行超时)                     ▼ (正常完成)
 两段式进程组硬杀                 异步流式读取 stdout / stderr
 SIGTERM (等待 2s) -> SIGKILL              │
                                           ▼
                          [ 全量日志落盘 (Offloading) ]
-                         storage/artifacts/{run_id}/step_{step_id}_bash.log
+                         storage/artifacts/{task_id}/step_{step_id}_bash.log
                                           │
                                           ▼
                          [ Distilled Observation 提炼 ]
@@ -36,6 +39,8 @@ SIGTERM (等待 2s) -> SIGKILL              │
                                           ▼
                          返回给 Agent 进行推理与自我修正
 ```
+
+> **关键解耦**：**执行目录（cwd）与落盘目录是两个不同的位置**。cwd 是用户的目标工程（会被真实修改），落盘目录是 Aegis 自己的 `storage/artifacts/`（只存日志与产物）。混淆二者是本服务历史上最大的设计错误。
 
 ---
 
@@ -66,14 +71,16 @@ SIGTERM (等待 2s) -> SIGKILL              │
 ### 2.3 工作区沙箱与前置命令审计（Workspace Sandbox）
 
 * **治理方案**：
-  1. **工作区目录限制（Restricted CWD）**：每次 Run 强制锁定在独立的临时目录（`storage/artifacts/{run_id}/workspace/`）下执行，严禁在系统根目录或敏感系统路径下进行写操作；
-  2. **高危指令正则黑名单（CommandAudit）**：在命令派发前进行前置语法拦截（拦截 `rm -rf /`, `mkfs`, 敏感系统文件改动等），直接返回强类型安全警告，引导模型更换合规命令。
+  1. **工作目录绑定工作区（Workspace-bound CWD）**：执行前将子进程 `cwd` 设置为**该任务所属工作区的 `root_path`**（目标工程绝对路径），使 `make`、`git`、编译器能够真实作用于用户工程。工作目录由 Agent 随请求下发并通过 `workspace_id` 反查校验，服务端**不得**接受任意客户端路径；
+  2. **路径越界防护（Path Escape Guard）**：所有显式的写入/删除目标路径在派发前规范化（`Path.resolve()`），若最终路径不在 `root_path` 子树内，立即拒绝并返回 `422 PATH_ESCAPE_DETECTED`，防止逃逸到其他工作区或系统目录；
+  3. **产物落盘隔离**：日志与产物一律写入 Aegis 自身的 `storage/artifacts/{task_id}/`，**与 cwd 解耦**，避免污染用户工程的工作区（用户工程内只应出现 Agent 有意修改的源码与补丁）；
+  4. **高危指令正则黑名单（CommandAudit）**：在命令派发前进行前置语法拦截（拦截 `rm -rf /`、`mkfs`、敏感系统文件改动等），直接返回强类型安全警告，引导模型更换合规命令。
 
 ### 2.4 海量输出治理与离线卸载（Observation Offloading & Distillation）
 
 * **痛点**：编译 Linux 内核模块或运行压力测试可能产生上万行日志，直接喂入模型会导致 Context Window 爆炸与模型”中间迷失”。
 * **治理方案**：
-  1. **无损全量异步流式落盘**：`stdout` 与 `stderr` 通过 `StreamReader` 分块读取，完整写入 `storage/artifacts/{run_id}/step_{step_id}_bash.log`；
+  1. **无损全量异步流式落盘**：`stdout` 与 `stderr` 通过 `StreamReader` 分块读取，完整写入 `storage/artifacts/{task_id}/step_{step_id}_bash.log`；
   2. **结构化感知的分级提炼（Structure-Aware Distillation）**：
      - **结构化输出（JSON/YAML/XML）**：优先尝试解析并验证完整性，避免截断破坏语法结构；若解析失败再降级为文本处理；
      - **成功状态（Exit Code == 0）**：提取头部 20 行 + 尾部 30 行，中间提示省略行数并附带文件句柄；
@@ -82,3 +89,18 @@ SIGTERM (等待 2s) -> SIGKILL              │
 ### 2.5 服务接口契约
 
 暴露 `POST /api/v1/shell/execute`，返回包含 `exit_code`, `distilled_stdout`, `distilled_stderr`, `is_truncated`, `artifact_path`, `execution_time_ms` 的强类型响应对象。
+
+请求体需携带定位执行上下文的三要素：
+
+```json
+{
+  "workspace_id": "ws_...",
+  "workspace_root": "/home/user/projects/target",   // 服务端以 workspace_id 反查校验，二者必须一致
+  "task_id": "9b1e...",
+  "step_id": 7,
+  "command": "make -j4",
+  "timeout_sec": 60
+}
+```
+
+**装配约束**：本服务为同工程子系统，可依赖 `config`，但**禁止 import `agent_runtime`**（见 `10_directory_structure.md` §5 依赖方向矩阵）。

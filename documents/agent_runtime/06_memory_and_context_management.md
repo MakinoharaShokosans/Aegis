@@ -36,6 +36,8 @@
 └──────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+> **契约说明（唯一真源）**：`FailedAttempt` 的字段结构由 `agent_runtime/state.py` 独家定义（对齐 `02`），`memory/models.py` 一律 **import 复用**，不得自持第二份定义。本节与 §7 的表中 `failed_attempts` / `global_failed_attempts` 均为该模型的 JSON 序列化列。
+
 ---
 
 ## 2. 工作区（Workspace）生命周期与管理规范

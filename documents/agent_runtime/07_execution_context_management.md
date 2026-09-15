@@ -1,7 +1,9 @@
 # 微观执行上下文与草稿纸治理规范 (ExecutionContext)
 
-> **责任领域**：`AegisAgent/src/agent_runtime/state.py` & `execution_context.py`  
+> **责任领域**：`AegisAgent/src/agent_runtime/state.py`（纯契约）与 `AegisAgent/src/agent_runtime/execution_context.py`（运行期行为）  
 > **核心原则**：任务自闭环、草稿纸隔离、观察值物理下沉、终结即归档、零污染外溢。
+>
+> **契约边界（重要）**：`ExecutionContext` **不是第二套持久化契约**。LangGraph 的 Checkpoint 单位始终是 `state.py` 定义的 `AgentState`；`ExecutionContext` 是单任务在内存中的运行时视图，任务终结时擦除，仅把结论回写 `AgentState`，全量链路落盘至 `storage/traces/{task_id}.jsonl`。两者的字段同名同义，`step_history` 属内存态审计视图、不进入 Checkpoint。详见 [`03_node_specification.md`](./03_node_specification.md) §3。
 
 ---
 

@@ -13,6 +13,8 @@
 | [07_execution_context_management.md](./07_execution_context_management.md) | **微观执行上下文** | **任务草稿纸 (Scratchpad)、四阶段生命周期、绑定工作区根路径(cwd)、观察值截断下沉、瞬态护栏** |
 | [08_skills_management.md](./08_skills_management.md) | **专家技能系统** | **两阶段渐进式披露、SOP 目录包规范、load_skill 按需动态挂载** |
 | [09_mcp_integration_and_governance.md](./09_mcp_integration_and_governance.md) | **MCP 协议集成与治理** | **JSON-RPC 协议转译、stdio 进程托管与防僵尸、命名空间隔离、懒加载连接池** |
+| [10_directory_structure.md](./10_directory_structure.md) | **目录结构与工程分层（权威）** | **内容/代码分离、依赖方向矩阵、统一裁决记录、打包与资源约定** |
+| [11_http_api.md](./11_http_api.md) | **HTTP API 契约（唯一用户入口）** | **工作区/会话/任务 REST、SSE 事件流、DTO 分层、安全红线** |
 
 ---
 
@@ -61,6 +63,19 @@
   - `AegisAgent/src/agent_runtime/routing.py` (条件边与重规划路由)
   - `AegisAgent/src/agent_runtime/workflow.py` (LangGraph 图构建与编译)
 
+### 步骤八：HTTP API 接入层（唯一用户入口）
+- 参考：[`11_http_api.md`](./11_http_api.md)
+- 实现：
+  - `AegisAgent/src/agent_runtime/api/` (`app.py` / `deps.py` / `schemas.py` / `task_registry.py` / `routes/`)
+- 前置依赖变更：`fastapi`、`uvicorn[standard]`；`config.toml` 补 `[server]` 段（含 CORS 白名单）
+
+### 步骤九：双轨可观测
+- 参考：`01` §4、[`技术栈.md`](file:///home/Skualeilu/Projects/Aegis/documents/技术栈.md)
+- 实现：
+  - `AegisAgent/src/agent_runtime/observability/logging.py` (Loguru 结构化 JSONL)
+  - `AegisAgent/src/agent_runtime/observability/trajectory.py` (`storage/traces/{task_id}.jsonl`)
+  - `AegisAgent/src/agent_runtime/observability/langfuse_tracer.py` (Langfuse 回调)
+
 ---
 
 ## 3. 文档版本与依赖基线（v2 统一修订）
@@ -78,39 +93,58 @@
 
 **最终节点集合**：`planner` / `budget_guard` / `executor` / `evaluator`。
 
+> **结构与契约裁决的完整清单**（pruner 归属、技能内容/代码分离、子系统部署形态、`FailedAttempt` 唯一真源、`run_id`→`task_id`、Bash cwd 语义、评测入口、HTTP API 入口、可观测性落点，共 11 项）统一记录在 [`10_directory_structure.md`](./10_directory_structure.md) §4。**该表是关于目录与归属的唯一权威来源**，本节仅保留状态机契约层面的裁决。
+
 ### 3.2 依赖基线
 
 - 依赖唯一真源为 `AegisAgent/pyproject.toml` + `AegisAgent/uv.lock`（RAG 侧同理），**文档中的版本号仅为视图**，不得作为安装依据。
 - 断点续跑所依赖的 `AsyncSqliteSaver` 位于独立包 **`langgraph-checkpoint-sqlite`**，当前**未声明、未锁定**；实现 `workflow.py` 前须执行 `uv add "langgraph-checkpoint-sqlite"`（详见 `04` §4.1）。
+- HTTP API 接入层（步骤八）需要新增 `fastapi`、`uvicorn[standard]`；MCP 集成（步骤四）需要 `mcp`。三者都必须在同一次变更中同步刷新 `uv.lock`。
 
 ### 3.3 实施进度对照
 
-`02` 提出的工作区/状态契约中，记忆子系统（`memory/`）**已实现并通过单测**；`state.py` 与 `context.py` 尚未落地。`03`–`09` 规范的实现文件目前均为空占位，详见各步骤的"实现"路径。
+`02` 提出的工作区/状态契约中，记忆子系统（`memory/`）**已实现并通过单测**；`state.py` 与 `context.py` 尚未落地。`03`–`09`、`11` 规范的实现文件目前均为空占位，详见各步骤的"实现"路径与 `10` §2–§3 的 `＋` 标记。
+
+### 3.4 架构定位（补充确认）
+
+- **同工程子系统**：`bash_shell`、`web_search` 保留在 `AegisAgent/src/services/` 内，各自作为独立进程经 HTTP 暴露（`:8002` / `:8003`），不拆分独立子工程。
+- **独立子工程**：仅 `AegisRAG`（因 `onnxruntime` / `tree-sitter` 重依赖与 C 扩展而物理隔离，`:8001`）。
+- **用户入口**：仅 HTTP API（`127.0.0.1:8000`），不提供 CLI；后续由 Web 前端消费。
 
 ## 4. 代码目录映射 (`AegisAgent/`)
+
+> 下列为**速览版**。目录结构、依赖方向矩阵、打包约定与占位规则的**权威定义**见 [`10_directory_structure.md`](./10_directory_structure.md)。
 
 ```text
 AegisAgent/
 ├── config/
-│   └── config.toml               # 物理配额、多模型降级列表、服务寻址
+│   └── config.toml               # 物理配额、多模型降级列表、服务寻址、[server]、[mcp]
 ├── src/
 │   ├── agent_runtime/
 │   │   ├── __init__.py
 │   │   ├── config.py             # Pydantic 强类型配置
-│   │   ├── state.py              # AgentState 契约
-│   │   ├── context.py            # 上下文装配器与已压缩记忆
+│   │   ├── state.py              # AgentState / Milestone / FailedAttempt 契约
+│   │   ├── execution_context.py  # 单任务草稿纸与 Teardown 落盘
+│   │   ├── context.py            # 多层上下文装配器
 │   │   ├── workflow.py           # LangGraph 状态图编译入口
 │   │   ├── routing.py            # 条件边与熔断跳转
-│   │   ├── prompts/
-│   │   │   └── system.md         # 内置系统提示词
-│   │   ├── nodes/                # 算子实现
-│   │   ├── guardrails/           # 护栏与 Pruner
-│   │   └── llm/                  # 双模型 Fallback 网关
-│   ├── tool_layer/               # 工具适配器、HTTP Client
-│   ├── services/                 # bash_shell, web_search
-│   └── evaluation/
+│   │   ├── memory/               # 已实现：工作区/会话双层记忆 + 水位压缩
+│   │   ├── prompts/              # system.md / planner.md / compactor.md ...
+│   │   ├── nodes/                # planner / budget_guard / executor / evaluator
+│   │   ├── guardrails/           # loop_detector / budget_guard / pruner
+│   │   ├── llm/                  # 双模型 Fallback 网关
+│   │   ├── skills/               # 技能注册表（代码）
+│   │   ├── observability/        # Loguru / Trajectory / Langfuse
+│   │   └── api/                  # HTTP API：app / deps / schemas / routes（见 11）
+│   ├── skills/                   # 内置技能内容包（SKILL.md 等，数据）
+│   ├── tool_layer/               # 工具适配器、并发派发、HTTP Client、MCP 适配
+│   ├── mcps/                     # MCP 服务器托管
+│   ├── services/                 # bash_shell / web_search（同工程子系统）
+│   └── evaluation/               # rag_bench / agent_bench
+├── tests/                        # 与 src 镜像的测试树（pytest 入口）
 └── storage/
     ├── checkpoints/              # SQLite 状态快照
-    ├── artifacts/                # 离线截断日志
-    └── traces/                   # JSONL 因果轨迹
+    ├── artifacts/{task_id}/      # 离线截断日志与产物
+    ├── traces/{task_id}.jsonl    # JSONL 因果轨迹
+    └── logs/                     # Loguru JSONL
 ```

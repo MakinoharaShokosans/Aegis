@@ -13,6 +13,7 @@
 1. **物理指标替代外部计费**：坚决弃用不可控的 `cost_usd` 字段，以确定性的物理指标 `total_tokens` 与 `step_count` 实行硬熔断。
 2. **原子消息对（Atomic Message Pair）契约**：依托 `langgraph.graph.message.add_messages` Reducer 纳管消息更新，确保 `AIMessage(tool_calls)` 与 `ToolMessage` 不被意外割裂。
 3. **内聚结构化认知记忆**：在 State 中显式纳管 `confirmed_facts`、`failed_attempts` 与 `artifacts` 句柄，杜绝上下文失忆与重复踏坑。
+4. **共享领域模型唯一真源**：`FailedAttempt` 与 `Milestone` 由本文件对应的 `state.py` **独家定义**；`memory/models.py` 等其它模块一律 **import 复用**，严禁重复声明同名结构（历史上 `memory/models.py` 曾自持一份 `FailedAttempt`，已裁决收敛到 `state.py`，见 `10_directory_structure.md` 裁决项⑤）。
 
 ---
 

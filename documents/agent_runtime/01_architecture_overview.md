@@ -17,8 +17,9 @@ Aegis Agent Runtime 是一个**确定性的工程化 Agent 运行时宿主**，�
 
 ```mermaid
 graph TB
-    subgraph Client["用户与会话层"]
-        U["User Prompt"]
+    subgraph Client["接入与前端层"]
+        FE["Web UI (前端)"]
+        API["Agent HTTP API (FastAPI)<br/>127.0.0.1:8000 /api/v1<br/>见 11_http_api.md"]
         SM["Session & Context Manager<br/>(会话主线 / 实体继承)"]
         CP["Prompt Assembler<br/>(系统提示词 + 记忆 + 输入)"]
     end
@@ -27,33 +28,34 @@ graph TB
         G["LangGraph 状态图<br/>(Planner -> Executor -> Evaluator)"]
         M["Memory Engine<br/>(已压缩记忆 / 最近 N 轮原子滑窗)"]
         GD["安全护栏<br/>(Loop Detector / Consecutive Errors / Token 预算)"]
+        PR["Observation Pruner<br/>(guardrails/pruner.py 长日志离线落盘)"]
         LLM["Dual-Tier LLM Gateway<br/>(Reasoning / Fast 多端点降级)"]
     end
 
     subgraph ToolLayer["工具派发与适配器 (tool_layer)"]
         TC["Async Concurrent Dispatcher<br/>(asyncio.gather 并发分发)"]
-        PR["Observation Pruner<br/>(长日志离线落盘 storage/artifacts/)"]
     end
 
-    subgraph Services["外部/本地服务 (Sidecar Daemon)"]
-        RAG["AegisRAG Service<br/>(独立进程 http://127.0.0.1:8001)"]
-        BASH["Bash Shell 宿主环境"]
-        WEB["Web Search (DuckDuckGo / Tavily)"]
+    subgraph Services["外部/本地服务 (Sidecar)"]
+        RAG["AegisRAG<br/>(独立子工程 :8001)"]
+        BASH["bash_shell 子系统<br/>(同工程独立进程 :8002)"]
+        WEB["web_search 子系统<br/>(同工程独立进程 :8003)"]
     end
 
     subgraph Storage["本地持久化"]
         CK["SQLite Checkpoints<br/>(状态快照 / 断点续跑)"]
-        TR["storage/traces/*.jsonl<br/>(审计与评测因果轨迹)"]
+        TR["storage/traces/{task_id}.jsonl<br/>(审计与评测因果轨迹)"]
     end
 
-    U --> SM
+    FE --> API
+    API --> SM
     SM --> CP
     CP --> G
     G --> M
     G --> GD
     G --> LLM
     G --> TC
-    TC --> PR
+    G --> PR
     TC --> RAG
     TC --> BASH
     TC --> WEB
@@ -107,6 +109,17 @@ graph TB
   - 基于 `tiktoken` 精准物理计量，达到 80% Token 上限自动触发；
   - 严格按完整人机对话单元对齐，切出最古老约 40% 对话送入 Fast 模型提炼，活跃水位降回安全低水位，提供充裕呼吸空间；
 * 彻底分离“用户主对话流（Session Context）”与“内部执行轨迹（Task Trajectory）”。
+
+### 4.4 接入层（Agent HTTP API）
+* **唯一用户入口**：`AegisAgent/src/agent_runtime/api/`，FastAPI 应用，监听 `127.0.0.1:8000`，基础路径 `/api/v1`；
+* **职责**：工作区/会话 CRUD、任务提交与续跑、SSE 实时事件流、上下文检视、产物与轨迹读取、能力自省；
+* **契约分层**：对外只暴露 `api/schemas.py` 的 DTO，**绝不**直接外发 `AgentState`（含 LangChain 消息对象）；
+* **完整端点与事件契约**：见 [`11_http_api.md`](./11_http_api.md)；
+* **安全红线**：仅本地回环，v1 无认证；禁止对外暴露（其工具链含受控命令执行能力）。
+
+### 4.5 子系统部署形态（两种，不可混淆）
+1. **同工程子系统**：`bash_shell`、`web_search` 位于 `AegisAgent/src/services/` 内，与 Agent 共享 `config.toml` 与依赖锁，但**各自作为独立进程**通过 HTTP 暴露（`:8002` / `:8003`）。禁止 `services/*` 反向 import `agent_runtime`。
+2. **独立子工程**：`AegisRAG` 因携带 `onnxruntime`、`tree-sitter` 等重依赖与 C 扩展，作为**物理独立子工程**（独立 `uv` 环境）运行于 `:8001`。
 
 ---
 

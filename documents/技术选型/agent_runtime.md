@@ -20,7 +20,7 @@
 │  [ Enhanced Guardrails ]      ──► 参数指纹 + 连续错误计数器 / 物理硬熔断    │
 │  [ Tool Concurrency ]         ──► asyncio.gather 并行分发工具调用            │
 │  [ Prompts Repository ]       ──► 独立 Markdown 规范文件 (prompts/*.md)   │
-│  [ Trajectory Store ]         ──► storage/traces/{run_id}.jsonl 因果轨迹归档 │
+│  [ Trajectory Store ]         ──► storage/traces/{task_id}.jsonl 因果轨迹归档 │
 │  [ Loguru + Langfuse ]        ──► 本地结构化日志 + 分布式调用瀑布流与成本追踪 │
 └────────────────────────────────────────────────────────────────────────┘
 ```
@@ -77,7 +77,7 @@
 ### 2.6 双轨可观测与因果追溯：Loguru + Langfuse + Trajectory Store
 
 * **决策理由**：
-  1. **本地系统轨（Loguru）**：异步写入 `storage/traces/{run_id}.jsonl`，记录全系统的结构化因果轨迹（包含 `step_id`, `phase`, `thought`, `action`, `distilled_observation` 与 `is_correction` 标记），直接作为自动化评测集输入；
+  1. **本地系统轨（Loguru）**：异步写入 `storage/traces/{task_id}.jsonl`，记录全系统的结构化因果轨迹（包含 `step_id`, `phase`, `thought`, `action`, `distilled_observation` 与 `is_correction` 标记），直接作为自动化评测集输入；
   2. **平台可视化轨（Langfuse）**：通过 Docker 容器本地运行，一键挂载 LangGraph 的 `CallbackHandler`。在 Web UI 展现清晰的调用树拓扑图、瀑布流（Waterfall）、耗时与 Token 成本，提升演示与排障效率；
   3. **证据链溯源（Evidence Provenance）**：基准测试等大体积物料下沉落盘，最终 Markdown 报告必须显式标注证据引用句柄（如 `artifact://...`），彻底消灭报告幻觉。
 

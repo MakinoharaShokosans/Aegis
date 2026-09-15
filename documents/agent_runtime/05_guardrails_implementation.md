@@ -109,13 +109,13 @@ Primary: DeepSeek-V3 (api.deepseek.com) ──► Backup 1: OpenAI-4o-mini ─�
 │                                                            │
 │  输入原始工具日志 (如 2500 行，50KB)                        │
 │    │                                                       │
-│    ├── 1. 完整原始内容落盘 ➔ storage/artifacts/{run_id}/   │
+│    ├── 1. 完整原始内容落盘 ➔ storage/artifacts/{task_id}/  │
 │    │                                                       │
 │    └── 2. 生成 Context 紧凑摘要:                           │
 │         - 保留头部关键行 (Head 20 lines)                   │
 │         - 提取包含 error/warning/failed 的中间关键行        │
 │         - 保留尾部结论行 (Tail 30 lines)                   │
-│         - 附带物理离线句柄: "artifact://run_01/build.log"   │
+│         - 附带物理离线句柄: "artifact://task_01/build.log"  │
 └────────────────────────────────────────────────────────────┘
 ```
 

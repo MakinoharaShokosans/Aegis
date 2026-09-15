@@ -1,7 +1,7 @@
 # 架构决策记录：自动化双轨评测工具链 (Evaluation Harness)
 
 > **状态**：已定稿 (Accepted)  
-> **责任领域**：`evaluation/`  
+> **责任领域**：`AegisAgent/src/evaluation/`（harness），pytest 用例位于 `AegisAgent/tests/evaluation/`  
 > **核心目标**：为 RAG 检索算法与 Agent 整体自主执行提供量化基准、消融实验与防止负优化的端到端回归保障。
 
 ---
@@ -9,15 +9,15 @@
 ## 1. 架构总览与双轨评测拓扑
 
 ```text
-                           Aegis 评测体系 (evaluation/)
+                           Aegis 评测体系 (src/evaluation/)
                                         │
                  ┌──────────────────────┴──────────────────────┐
                  ▼                                             ▼
      [ RAG 检索评测: rag_bench ]                   [ Agent 轨迹评测: agent_bench ]
      - 驱动：evaluate_retrieval.py (基于 numpy)    - 驱动：pytest test_agent_runner.py
-     - 数据：evaluation/rag_bench/datasets/        - 数据：evaluation/agent_bench/tasks/
+     - 数据：src/evaluation/rag_bench/datasets/    - 数据：src/evaluation/agent_bench/tasks/
      - 指标：HitRate@K / MRR@K / NDCG@K / 耗时      - 指标：完成率 / 故障自愈率 / 步骤效率 / 证据合规率
-     - 成本：零 LLM 消耗，纯数学与统计              - 来源：解析 storage/traces/{run_id}.jsonl 轨迹
+     - 成本：零 LLM 消耗，纯数学与统计              - 来源：解析 storage/traces/{task_id}.jsonl 轨迹
                  │                                             │
                  └──────────────────────┬──────────────────────┘
                                         ▼
@@ -44,7 +44,7 @@
 
 ### 2.2 Agent 轨迹评测：聚焦因果链与核心自愈率（Self-Correction Rate）
 
-* **评测数据源**：直接读取运行时生成的结构化日志 `storage/traces/{run_id}.jsonl`。
+* **评测数据源**：直接读取运行时生成的结构化日志 `storage/traces/{task_id}.jsonl`。
 * **面试级核心量化指标**：
   1. **Task Completion Rate（任务完成率）**：物理断言检查是否最终产出合格的技术报告与 Benchmark 数据产物；
   2. **Error Recovery Rate（故障自愈率，核心杀手锏）**：当 Shell 编译或网络请求报错时，Agent 在接下来的步骤中**自主修正错误并继续推进任务的成功比例**；
@@ -55,9 +55,9 @@
 
 * **决策理由**：
   1. 将 20~50 个标准工程研究场景沉淀为 `pytest` 自动化测试用例（如 `test_kernel_analysis_benchmark()`）；
-  2. 一条命令 `pytest evaluation/` 完成全系统能力回归，杜绝改动 Prompt 后引起前向能力退化；
+  2. 一条命令 `pytest tests/evaluation/` 完成全系统能力回归，杜绝改动 Prompt 后引起前向能力退化；
   3. 规范支持集成至 GitHub Actions CI/CD 流水线。
 
 ### 2.4 报告可视化生成：选用 `tabulate`
 
-自动将消融实验与评测基准数据格式化为高可读性的 Markdown 与控制台对比表格（输出至 `evaluation/rag_bench/benchmark_report.md`）。
+自动将消融实验与评测基准数据格式化为高可读性的 Markdown 与控制台对比表格（输出至 `src/evaluation/rag_bench/reports/benchmark_report.md`）。

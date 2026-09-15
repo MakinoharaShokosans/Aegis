@@ -1,8 +1,10 @@
 # 架构决策记录：独立 RAG 检索基础设施 (Retrieval Service)
 
 > **状态**：已定稿 (Accepted)  
-> **责任领域**：`services/rag_retrieval/`  
+> **责任领域**：`AegisRAG/`（**独立子工程**，独立 `uv` 环境，默认监听 `127.0.0.1:8001`）
 > **核心目标**：为 Agent 提供高精度、源码语义感知、结合关键词与语义的双路召回与重排微服务。
+>
+> **命名说明**：早期文档曾写作 `services/rag_retrieval/`，与仓库实际布局不符。因携带 `onnxruntime`、`tree-sitter` 等重依赖与 C 扩展，RAG 是**物理独立的子工程**（`AegisRAG/`），而非 `AegisAgent/src/services/` 下的同工程子系统（裁决记录见 `10_directory_structure.md` 裁决项③⑧）。
 
 ---
 

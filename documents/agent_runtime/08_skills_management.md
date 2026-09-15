@@ -99,15 +99,21 @@ python {skill_dir}/scripts/parse_asan.py /tmp/asan.log
 
 ## 4. 多级目录扫描与覆盖优先级
 
-运行时启动时扫描两个位置，允许项目定制覆盖全局：
+运行时启动时扫描**三个**位置，同名技能由高优先级**严格覆盖**低优先级：
 
-1. **项目级技能（Project Skills）**：
-   - 路径：`AegisAgent/src/skills/`（或项目工作区 `.aegis/skills/`）；
-   - 作用域：当前项目专有，优先加载；
-2. **全局级技能（Global Skills）**：
-   - 路径：`~/.aegis/skills/`；
-   - 作用域：本机跨项目通用的标准工具包；
-3. **优先级规则**：若项目级与全局级存在同名技能，**项目级严格覆盖全局级**。
+| 优先级 | 扫描根 | 定位 |
+| :-- | :--- | :--- |
+| 1（最高） | `<workspace.root_path>/.aegis/skills/` | 工作区（目标工程）自带的项目级技能，**仅对该工作区可见** |
+| 2 | `AegisAgent/src/skills/` | 随发行版交付的**内置**官方技能包 |
+| 3（最低） | `~/.aegis/skills/` | 用户全局技能库，本机跨项目通用 |
+
+**内容与代码分离（重要）**：
+
+- 上表三个根目录存放的是**技能内容包**（`SKILL.md` + `scripts/` + `references/` + `resources/`），属于**数据**，不含 Python 编排逻辑；
+- 扫描、YAML frontmatter 解析与"可用技能清单"装配的**代码**位于 `AegisAgent/src/agent_runtime/skills/registry.py`；
+- 二者不可混放（裁决依据：`10_directory_structure.md` 裁决项②）。
+
+**隔离性**：工作区级技能只在对应工作区内生效，严禁跨工作区泄漏（与工作区记忆的隔离原则一致，`06` §6.1）。
 
 ---
 

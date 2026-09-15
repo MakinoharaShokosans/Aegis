@@ -1,7 +1,7 @@
 # 架构决策记录：外部 Web 搜索与网页降噪清洗服务
 
 > **状态**：已定稿 (Accepted)  
-> **责任领域**：`services/web_search/`  
+> **责任领域**：`AegisAgent/src/services/web_search/`（**同工程子系统**，独立进程，默认监听 `127.0.0.1:8003`）  
 > **核心目标**：为 Agent 提供开源前沿动态调研、GitHub Issues 查错、内核更新日志检索等外部动态知识摄取能力。
 
 ---
@@ -34,7 +34,7 @@
                                                   │
                                                   ▼
                                  [ 4. 网页内容离线卸载 (Offloading) ]
-                                 - 全量存盘 storage/artifacts/.../web_xxx.md
+                                 - 全量存盘 storage/artifacts/{task_id}/web_xxx.md
                                  - 超长内容截取前 1500 Token + 证据句柄
                                                   │
                                                   ▼
@@ -84,4 +84,4 @@
 
 ### 2.5 海量网页内容治理
 
-清洗后的 Markdown 正文若超过 1,500 Token，全量异步落盘至 `storage/artifacts/{run_id}/`，仅向 Context 注入头部精炼摘要与文件句柄，保证多轮长任务的 Token 预算安全。
+清洗后的 Markdown 正文若超过 1,500 Token，全量异步落盘至 `storage/artifacts/{task_id}/`，仅向 Context 注入头部精炼摘要与文件句柄，保证多轮长任务的 Token 预算安全。
