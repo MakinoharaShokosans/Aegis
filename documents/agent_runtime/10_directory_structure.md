@@ -85,7 +85,7 @@ AegisAgent/src/agent_runtime/
 │   ├── loop_detector.py                   MD5 指纹队列 + 连续错误计数 + 重规划通知文本
 │   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
 │   ├── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
-│   └── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界）
+│   └── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
 │
 ├── research/                   ✅         研究子智能体：不可信外部数据的隔离区（12）
 │   ├── __init__.py
@@ -172,8 +172,9 @@ AegisAgent/
 │   ├── mcps/                   ✅         MCP 代码全部集中（不再跨包）
 │   │   ├── __init__.py
 │   │   ├── models.py                      命名空间规则 + MCPToolDefinition
-│   │   ├── adapter.py                     远端工具 → 本地 AegisTool 契约转译
-│   │   └── manager.py                     懒加载握手 / 故障隔离 / AsyncExitStack 防僵尸
+│   │   ├── vetting.py                     ★ 工具描述消毒（注入样态硬拒 + 形状约束）
+│   │   ├── adapter.py                     远端工具 → 本地 AegisTool 契约转译（trust=untrusted）
+│   │   └── manager.py                     懒加载握手 / 故障隔离 / stdio 资源上限 / AsyncExitStack
 │   │
 │   ├── services/               ✅         同工程子系统（各自独立进程，禁止反向依赖）
 │   │   ├── __init__.py
@@ -223,6 +224,8 @@ AegisAgent/
 | ⑮ | 部分基础能力（异常/分词/检查点/提示词加载）无归属 | **`errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py` / `structured_output.py`** | 统一口径，避免各处重复实现 |
 | ⑯ | 研究子智能体用**子图**还是 **tool** | **用 tool**：接口为 `delegate_research`，内部是一条有界异步循环，**不引入 LangGraph 子图** | 子图会共享 `messages` 与 Checkpoint ⇒ 原始网页回流主上下文，隔离形同虚设；tool 天然把不可信内容的生命周期关在一次函数调用内 |
 | ⑰ | "主工具表不含 web_search" 只靠约定 | **`AegisTool.trust` + `ToolRegistry(allow_untrusted=False)` 构造期拒绝** | 把约定变成可执行不变量——想犯这个错都犯不了 |
+| ⑱ | 工作区技能包静默进入**系统提示词** | **按来源分级：`builtin`/`global` 可信、`workspace` 默认拒绝**；元数据做注入标注与长度截断；内容纳入 XML 定界信封 | 克隆恶意仓库即可注入是唯一"零交互可中招"的路径，必须默认拒绝（`08` §4.1–4.3） |
+| ⑲ | MCP 工具直接进主工具表 | **数据面与控制面分离**：描述消毒硬拒 + 结果标注；`trust="untrusted"` 且经 `untrusted_allowlist` **逐名授权**；stdio 子进程施加 setrlimit | 工具描述会进**工具 Schema**（位置高于观察值）；stdio server 是任意代码执行，只能靠 opt-in + 资源上限 + 审计（`09` §3.5） |
 
 ---
 
@@ -356,6 +359,7 @@ packages = [
 | 子系统（`services/bash_shell` + `web_search`） | ✅ 已完成 |
 | 评测 harness（`rag_bench` + `agent_bench`） | ✅ 已完成 |
 | 外部检索隔离（`research/` + `Trust` 机制 + 注入标注） | ✅ 已完成（见 `12_research_subagent.md`） |
-| MCP 工具的不可信边界 | ⬜ 待办（同类约束的下一站） |
-| 工作区技能包的不可信边界 | ⬜ 待办 |
+| 工作区技能包的不可信边界（信任分级 / 默认拒绝 / 披露信封） | ✅ 已完成（见 `08` §4.1–4.3，裁决⑱） |
+| MCP 工具的不可信边界（描述消毒 / 逐名授权 / 子进程资源上限） | ✅ 已完成（见 `09` §3.5，裁决⑲） |
+| 本地代码库（RAG 检索结果） | 视为可信（用户自己的工作区）；若将来索引外部仓库需重新评估 |
 | 自动化测试覆盖 | ⬜ 待补（当前仅记忆子系统的 8 个用例） |

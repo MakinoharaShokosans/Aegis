@@ -79,11 +79,16 @@ documents/
      收到的是经强类型校验（URL 白名单 / 版本正则 / 长度上限）净化后的报告。
      `ToolRegistry(allow_untrusted=False)` 会在**构造期**拒绝把不可信工具注册进特权表（见 `12_research_subagent.md`）；
    - 单轮内多个 `tool_calls` 由 `ToolDispatcher` 通过 `asyncio.gather` 并发派发，端到端耗时大幅缩减。
-3. **提示层安全三道互补机制**（详见 `agent_runtime/05`、`12`）：
-   - **XML 定界协议**：`<project_rules>` / `<user_task>` / `<tool_observation>` / `<external_content>`
-     内的文本一律视为数据而非指令（`system.md` §一）；
+3. **提示层与不可信面安全：五道互补机制**（详见 `agent_runtime/05`、`08`、`09`、`12`）：
+   - **XML 定界协议**：`<project_rules>` / `<user_task>` / `<tool_observation>` / `<external_content>` /
+     `<available_skills>` / `<skill_sop>` 内的文本一律视为数据而非指令（`system.md` §一）；
    - **Canary Token**：会话级确定性派生的金丝雀注入系统提示词，检测外泄并熔断（`guardrails/canary.py`）；
-   - **权限分离**：不可信来源与特权工具不共处同一上下文，注入无法直接转化为特权动作（`12_research_subagent.md`）。
+   - **权限分离（只读信息源）**：网络检索隔离在研究子智能体内，主 Agent 结构性地拿不到原始网页
+     （`12_research_subagent.md`）；
+   - **技能信任分级**：内置/全局技能可信、**工作区技能默认拒绝**，元数据做注入标注与截断，
+     内容纳入 XML 定界信封（`08_skills_management.md` §4.1–4.3）；
+   - **MCP 数据面/控制面分离**：工具描述消毒硬拒、结果标注；server 默认关闭、
+     `trust="untrusted"` 且经**逐名授权**进入主工具表，stdio 子进程施加 setrlimit（`09` §3.5）。
 4. **证据链离线闭环**：
    - 无论是 Shell 编译日志还是 Web 抓取的长篇技术文档，凡超过 Token 阈值，一律流式落盘写入 `storage/artifacts/{task_id}/`；
    - 仅向 Agent 上下文注入保留语法结构的精炼摘要与磁盘句柄，需要时按需精确查阅。

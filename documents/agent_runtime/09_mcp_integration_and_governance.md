@@ -84,6 +84,48 @@
 
 ---
 
+### 3.5 不可信数据治理：数据面与控制面分离
+
+MCP 的风险必须拆成两类，对策完全不同——把它们混为一谈是这类集成最常见的设计错误：
+
+| 面 | 载体 | 风险 | 对策 |
+| :--- | :--- | :--- | :--- |
+| **数据面** | `tools/list` 的 `description` / `inputSchema`；`tools/call` 的返回内容 | **工具描述投毒**（描述会进工具 Schema，位置高于普通观察值）；返回内容注入 | **注册前消毒 + 返回后标注** |
+| **控制面** | stdio 模式下的 MCP Server **进程本体** | **任意代码执行**——它是用户主动运行的第三方程序 | **默认关闭 + 显式 opt-in + 资源上限 + 审计**；架构无法代偿 |
+
+> ⚠️ **必须说清的边界**：stdio MCP Server 不是"数据源"，而是**一段你选择运行的代码**。
+> 任何提示词层或契约层防御都无法让它变安全。能做的只有：默认关闭、限制其资源消耗、
+> 留下可审计证据。
+
+#### 3.5.1 数据面：描述消毒与结果标注
+
+`mcps/vetting.py` 在 `_connect()` 拿到 `tools/list` 之后、注册之前执行：
+
+1. **注入样态硬拒**：`description` 命中 `injection_guard` 任一模式即**拒绝注册该工具**。
+   与技能不同——**工具描述本就不该包含指令样态**，因此这里可以硬拒而不是仅标注；
+2. **形状约束**：`description` 截断至 `max_description_chars`；`inputSchema` 必须是合法 object；
+3. **拒绝留痕**：被拒工具写入 `MCPManager` 的拒绝清单，经 `/api/v1/mcp/servers` 暴露供人工复核；
+4. **结果标注**：`tools/call` 的返回内容照旧由 executor 包进 `<tool_observation>`，
+   并由 `injection_guard` 追加标注。
+
+#### 3.5.2 控制面：显式授权与资源上限
+
+1. **默认关闭**：所有 server `enabled = false`，必须人工逐个开启；
+2. **资源上限**：stdio server 以 `sh -c 'ulimit -v …; ulimit -f …; ulimit -t …; exec <cmd>'` 包装启动，
+   施加 `RLIMIT_AS` / `RLIMIT_FSIZE` / `RLIMIT_CPU`；并置于独立会话（`setsid`）避免信号串扰；
+3. **显式授权**：`MCPToolAdapter.trust = "untrusted"`，因此**默认无法进入主工具表**。
+   授权通过 `ToolRegistry(untrusted_allowlist={...})` **逐名**授予——
+   把"用户为该 server 显式开启 + 描述通过消毒"这一人工动作，
+   在代码里表达成一份**具名能力清单**，而不是一个粗放的布尔开关；
+4. **审计**：拉起了哪个 server、命令与参数、声明了哪些工具、哪些被拒，全部落轨迹。
+
+**为什么不用 summarizer 包裹 MCP 工具**：研究子智能体的"隔离 + 蒸馏"是为
+**只读信息源**设计的；MCP 工具多为**动作执行器**（建 issue、写库），
+参数必须精确、返回值必须原样，包一层模型只会引入失真与成本。
+动作型风险的正确对策是**权限闸门**，不是蒸馏。
+
+---
+
 ## 4. 声明式配置规范 (`config.toml`)
 
 在 [`AegisAgent/config/config.toml`](file:///home/Skualeilu/Projects/Aegis/AegisAgent/config/config.toml) 中，提供标准声明结构：
@@ -96,6 +138,15 @@
 enabled = true
 connection_timeout_sec = 30
 call_timeout_sec = 60
+
+# 数据面治理（描述消毒）
+max_description_chars = 1000    # 工具描述长度上限
+reject_on_injection = true      # 描述命中注入样态时拒绝注册该工具
+
+# 控制面治理（stdio 子进程资源上限，Linux）
+rlimit_as_mb = 1024             # RLIMIT_AS 虚拟内存上限
+rlimit_fsize_mb = 50            # RLIMIT_FSIZE 单文件大小上限
+rlimit_cpu_sec = 300            # RLIMIT_CPU 纯 CPU 时间上限
 
 # 本地 stdio 模式服务器
 [mcp.servers.filesystem]
