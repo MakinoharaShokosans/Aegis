@@ -6,7 +6,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, Iterator, List, Optional
+from typing import Dict, Iterator, List, Optional, Set
 
 from loguru import logger
 
@@ -23,19 +23,36 @@ class ToolRegistry:
     Args:
         allow_untrusted: 是否允许注册 ``trust="untrusted"`` 的工具。
             **默认 False**：特权工具表（主 Agent）在构造期就会拒绝不可信工具，
-            想犯错也犯不了。只有隔离区（研究子智能体）才应显式置为 True。
+            想犯错也犯不了。
+        untrusted_allowlist: **逐名授权清单**。当 ``allow_untrusted=True`` 时：
+            ``None`` 表示放行全部不可信工具（供隔离区使用，如研究子智能体）；
+            提供集合时只放行列出的名字——这是"用户为该 MCP server 显式开启"
+            这一人工动作在代码里的表达（见 `09` §3.5.2）。
     """
 
-    __slots__ = ("_tools", "_allow_untrusted")
+    __slots__ = ("_tools", "_allow_untrusted", "_untrusted_allowlist")
 
-    def __init__(self, *, allow_untrusted: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        allow_untrusted: bool = False,
+        untrusted_allowlist: Optional[Set[str]] = None,
+    ) -> None:
         self._tools: Dict[str, AegisTool] = {}
         self._allow_untrusted = allow_untrusted
+        self._untrusted_allowlist: Optional[Set[str]] = (
+            set(untrusted_allowlist) if untrusted_allowlist is not None else None
+        )
 
     @property
     def allow_untrusted(self) -> bool:
         """本注册表是否允许承载不可信工具。"""
         return self._allow_untrusted
+
+    @property
+    def untrusted_allowlist(self) -> Optional[Set[str]]:
+        """逐名授权清单；``None`` 表示未设限（隔离区模式）。"""
+        return set(self._untrusted_allowlist) if self._untrusted_allowlist is not None else None
 
     def register(self, tool: AegisTool) -> None:
         """注册（或覆盖）一个工具。
@@ -52,12 +69,19 @@ class ToolRegistry:
         if tool.name in self._tools:
             # 重名通常意味着并发装配 bug，直接失败而不是静默覆盖
             raise ToolExecutionError(f"工具名重复注册: {tool.name}")
-        if getattr(tool, "trust", "trusted") != "trusted" and not self._allow_untrusted:
+        trust = getattr(tool, "trust", "trusted")
+        if trust != "trusted":
             # 这是权限边界的落点：不可信来源的工具不得进入特权上下文
-            raise ToolExecutionError(
-                f"拒绝将不可信工具 {tool.name} 注册进特权工具表",
-                context={"tool": tool.name, "trust": getattr(tool, "trust", "unknown")},
-            )
+            if not self._allow_untrusted:
+                raise ToolExecutionError(
+                    f"拒绝将不可信工具 {tool.name} 注册进特权工具表",
+                    context={"tool": tool.name, "trust": trust},
+                )
+            if self._untrusted_allowlist is not None and tool.name not in self._untrusted_allowlist:
+                raise ToolExecutionError(
+                    f"不可信工具 {tool.name} 未获显式授权",
+                    context={"tool": tool.name, "trust": trust, "allowlist": sorted(self._untrusted_allowlist)},
+                )
         self._tools[tool.name] = tool
         logger.debug(f"[ToolRegistry] 注册工具 {tool.name}")
 
