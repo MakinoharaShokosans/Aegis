@@ -1,7 +1,7 @@
 """AegisAgent 的 web_search 子系统（同工程独立 FastAPI 服务，默认 :8003）。
 
 职责（依据 ``documents/技术选型/web_search.md``）：
-    1. 双模搜索源适配：``duckduckgo_search``（默认、零 Key）与 ``tavily``（可选增强）；
+    1. 搜索源适配：``duckduckgo_search``（默认、零 Key）；
     2. 基于 ``httpx`` 的全异步并发抓取与 WAF Fail-Fast 降级；
     3. 基于 ``trafilatura`` 的网页正文降噪清洗（输出 Markdown，保留代码块）；
     4. 基于 MD5 内容指纹的镜像站/转载去重；

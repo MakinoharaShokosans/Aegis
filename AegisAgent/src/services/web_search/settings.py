@@ -31,22 +31,17 @@ __all__ = [
     "get_settings",
     "normalize_provider_name",
     "PROVIDER_DDG",
-    "PROVIDER_TAVILY",
     "SUPPORTED_PROVIDERS",
 ]
 
 #: 默认搜索源：DuckDuckGo（无需 API Key，开箱即用，见 ADR §2.1）
 PROVIDER_DDG: Final[str] = "ddg"
 
-#: 增强搜索源：Tavily（面向 AI Agent 的商业搜索 API，见 ADR §2.1）
-PROVIDER_TAVILY: Final[str] = "tavily"
-
 #: 配置段中 ``provider`` 允许的写法 → 规范化名称（兼容历史命名，避免拼写漂移）
 _PROVIDER_ALIASES: Final[dict[str, str]] = {
     "ddg": PROVIDER_DDG,
     "duckduckgo": PROVIDER_DDG,
     "duckduckgo_search": PROVIDER_DDG,
-    "tavily": PROVIDER_TAVILY,
 }
 
 #: 对外暴露的受支持搜索源集合（用于错误提示与自省）
@@ -65,7 +60,7 @@ def normalize_provider_name(name: str) -> str:
     """把配置中的搜索源名称规范化为受支持的标准名。
 
     Args:
-        name: 原始名称，例如 ``"ddg"`` / ``"DuckDuckGo"`` / ``"tavily"``。
+        name: 原始名称，例如 ``"ddg"`` / ``"DuckDuckGo"``。
 
     Returns:
         规范化后的名称，取值属于 :data:`SUPPORTED_PROVIDERS`。
@@ -108,7 +103,7 @@ class WebSearchSettings(BaseModel):
 
     host: str = Field(min_length=1, description="服务监听地址")
     port: int = Field(ge=1, le=65535, description="服务监听端口")
-    provider: str = Field(min_length=1, description="搜索源：ddg | tavily")
+    provider: str = Field(min_length=1, description="搜索源：ddg")
     max_results: int = Field(ge=1, description="单次搜索候选条数上限")
     fetch_concurrency: int = Field(ge=1, description="并发抓取页数上限")
     request_timeout_sec: float = Field(gt=0, description="单页抓取超时（秒）")
