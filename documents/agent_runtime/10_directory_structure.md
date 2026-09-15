@@ -2,28 +2,41 @@
 
 > **责任领域**：`AegisAgent/` 全工程目录布局
 > **契约基线**：`01`–`09` 规范 + `documents/技术选型/*` ADR
-> **文档状态**：v1（统一裁决版）。本文件是目录结构的**唯一权威来源**；与本文冲突的历史表述以本文为准。
-> **前置说明**：本文件只定义**结构与归属**，不定义实现细节；实现细节回引对应规范文档。
+> **文档状态**：v2（落地修订版）。本文件是目录结构的**唯一权威来源**；与本文冲突的历史表述以本文为准。
+> **v2 修订**：① `tool_layer/` 更名 `tools/` 并拆分为 `core/`（框架）+ `builtin/`（基础工具）；
+> ② 新增 `edges/`，与 `nodes/` 一一对称；③ MCP 代码全部归并到 `mcps/`；
+> ④ `guardrails/` 消除重名（`physical_budget.py` / `observation_pruner.py`）；
+> ⑤ 补齐 `errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py` 等基础工具；
+> ⑥ 全量实现已落地，本文件同步标注实现状态。
 
 ---
 
 ## 1. 设计原则
 
 1. **契约与行为分离**
-   `state.py` 只放纯类型契约（TypedDict / Pydantic 模型，零 I/O、零依赖）；运行期草稿纸行为放在 `execution_context.py`。对应 `07` 点名的两个文件。
+   `state.py` 只放纯类型契约（TypedDict / Pydantic 模型，零 I/O、零依赖）；运行期草稿纸行为放在 `execution_context.py`。
 
 2. **内容与代码分离**
-   专家技能的 `SKILL.md` 与辅助脚本是**内容**（数据），放 `src/skills/`；技能的扫描、元数据解析与清单装配是**代码**，放 `src/agent_runtime/skills/registry.py`。两者绝不混放。
+   专家技能的 `SKILL.md` 与辅助脚本是**内容**（数据），放 `src/skills/`；扫描与元数据解析是**代码**，放 `src/agent_runtime/skills/registry.py`。
 
 3. **纯函数优先**
-   `routing.py` 与 `guardrails/` 必须全部是确定性逻辑：不调用 LLM、不做网络 I/O，可离线单测。这是"确定性包围非确定性"的落点。
+   `routing.py`、`edges/` 与 `guardrails/` 必须全部是确定性逻辑：不调用 LLM、不做网络 I/O，可离线单测。
 
-4. **依赖严格单向**
-   `config → state → guardrails/routing → llm/memory → tool_layer → nodes → workflow → api`。
+4. **nodes 与 edges 对称**
+   节点负责"做事"，边负责"决定下一步去哪"。每个节点一个模块，每条迁移一个模块——
+   新增一条边只碰一个文件，`routing.py` 仅做聚合导出。
+
+5. **基础工具单独存放**
+   工具的**框架机制**（协议、Schema 转译、注册表、并发派发、HTTP 客户端）在 `tools/core/`；
+   **具体基础工具**在 `tools/builtin/`。新增工具永远不碰框架代码，反之亦然。
+
+6. **依赖严格单向**
+   `config → state/errors → guardrails/edges → llm/memory/skills/observability → tools/mcps → nodes → workflow → api`。
    反向依赖一律禁止。
 
-5. **Sidecar 契约不可穿透**
-   `src/services/*` 与 `src/mcps/*` **禁止 import `agent_runtime`**。前者是独立 HTTP 服务，后者托管外部进程；一旦反向依赖就破坏了双子工程进程隔离的初衷（`01` §3）。
+7. **Sidecar 契约不可穿透**
+   `src/services/*` **禁止 import `agent_runtime`**（连 `config` 也不行，各自读 TOML 段落）；
+   `src/mcps/*` 只允许依赖契约层，不得感知图与节点。
 
 ---
 
@@ -31,71 +44,85 @@
 
 ```text
 AegisAgent/src/agent_runtime/
-├── __init__.py
-├── config.py                  ✅ 已实现   Pydantic Settings 分层装配（TOML + .env）
-├── state.py                   ＋          AgentState / Milestone / StepRecord / FailedAttempt 契约（02）
-├── execution_context.py       ＋          草稿纸运行时对象 + Teardown 因果下沉（07）
-├── context.py                 ＋          ContextManager 四层 Prompt 装配（06 §4）
-├── routing.py                 ＋          4 个纯路由函数（04 §2）
-├── workflow.py                ＋          图构建/编译 + run_agent / resume_agent（04 §3–4）
+├── __init__.py                            对外能力边界（仅导出稳定入口）
+├── config.py                   ✅         强类型配置（TOML + .env 分层装配 + 回环护栏）
+├── errors.py                   ✅         领域异常体系（code + context，与 HTTP 解耦）
+├── tokenizer.py                ✅         统一分词计量（tiktoken + 字符粗算降级）
+├── state.py                    ✅         契约唯一真源：AgentState / ExecutionContext / Milestone /
+│                                          FailedAttempt / StepRecord / TaskStatus
+├── execution_context.py        ✅         Spawn 构造 + Teardown 因果下沉与会话记忆回写（07）
+├── context.py                  ✅         ContextManager：四层 Prompt 装配 + 上下文检视（06 §4）
+├── prompt_loader.py            ✅         提示词加载（包内路径优先 + 项目根回退 + 缓存）
+├── checkpoint.py               ✅         AsyncSqliteSaver 生命周期（WAL / 建表 / 关闭）（04 §4）
+├── routing.py                  ✅         路由契约**聚合导出**（实现分散在 edges/）
+├── workflow.py                 ✅         进程级装配 + 任务级装配 + 图构建 + run/resume（04 §3–4）
 │
-├── memory/                    ✅ 已实现   记忆子系统（06）
+├── edges/                      ✅         条件边：与 nodes/ 一一对称，每条迁移一个模块
 │   ├── __init__.py
-│   ├── models.py                          Workspace / WorkspaceMemory / CompressedMemory / TurnRecord ...
-│   ├── sqlite_store.py                    SQLite(WAL) 五表存储引擎
-│   ├── manager.py                         双层记忆门面 + 水位压缩调度
+│   ├── base.py                            RouterFn 契约 + 终点/里程碑判定原语
+│   ├── after_planner.py                   熔断→END / 里程碑全完成→evaluator / 否则→budget_guard
+│   ├── after_budget_guard.py              熔断→END / 否则→executor
+│   ├── after_executor.py                  熔断→END / 否则→planner
+│   └── after_evaluator.py                 达成→END / 否则→planner
+│
+├── nodes/                      ✅         图节点：工厂函数闭包注入依赖
+│   ├── __init__.py
+│   ├── base.py                            NodeFn 契约 + 结构化解析/合并等纯辅助
+│   ├── planner.py                         reasoning 层：宏观规划 + 里程碑计划 + 反思重规划
+│   ├── budget_guard.py                    薄节点：包装 PhysicalBudgetGuard
+│   ├── executor.py                        fast 层：生成 tool_calls + 并发派发 + 观察值治理
+│   └── evaluator.py                       reasoning 层：里程碑独立验收 + 事实沉淀
+│
+├── guardrails/                 ✅         纯确定性策略（零 LLM、零 I/O）
+│   ├── __init__.py
+│   ├── loop_detector.py                   MD5 指纹队列 + 连续错误计数 + 重规划通知文本
+│   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
+│   └── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
+│
+├── llm/                        ✅         双模型分层网关
+│   ├── __init__.py
+│   ├── endpoints.py                       端点解析 + 凭据注入（本地端点 EMPTY / 云端缺钥跳过）
+│   ├── fallback.py                        tenacity 端点内退避 → 跨端点降级链
+│   └── client.py                          统一门面 LLMGateway + LangChain↔OpenAI 消息转换
+│
+├── memory/                     ✅         记忆子系统（06）
+│   ├── __init__.py
+│   ├── models.py                          Workspace / WorkspaceMemory / CompressedMemory / TurnRecord
+│   ├── sqlite_store.py                    SQLite(WAL) 五表存储 + 只读查询（get_session / list_turns）
+│   ├── manager.py                         双层记忆门面 + 水位压缩调度 + 只读/更新接口
 │   └── compactor.py                       对话对齐切片 + LLM 提炼 + 优雅降级
 │
-├── llm/
+├── skills/                     ✅         技能注册表（代码侧；内容在 src/skills/）
 │   ├── __init__.py
-│   └── client.py              ＋          双模型网关：tenacity 退避 + 跨端点降级（05 §3）
+│   └── registry.py                        三档扫描 + frontmatter 解析 + 清单装配 + 按需加载
 │
-├── guardrails/                            纯确定性，零 LLM
+├── observability/              ✅         双轨可观测
 │   ├── __init__.py
-│   ├── loop_detector.py       ＋          MD5 参数指纹 + consecutive_errors（05 §1）
-│   ├── budget_guard.py        ＋          PhysicalBudgetGuard 类（05 §2）
-│   └── pruner.py              ＋          Observation Pruner：Head/Tail 提炼 + 离线落盘（05 §4）
+│   ├── logging.py                         Loguru 控制台 + 结构化 JSONL 双 sink
+│   ├── trajectory.py                      Trajectory Store → storage/traces/{task_id}.jsonl
+│   └── langfuse_tracer.py                 Langfuse 回调（可失败旁路，未配置即跳过）
 │
-├── nodes/
+├── api/                        ✅         交付层：HTTP + SSE（契约见 11_http_api.md）
 │   ├── __init__.py
-│   ├── planner.py             ＋          reasoning 层：宏观规划，产出决策指令
-│   ├── budget_guard.py        ＋          薄节点：包装 guardrails.budget_guard
-│   ├── executor.py            ＋          fast 层：生成 tool_calls + 并发派发（03 §4.3）
-│   └── evaluator.py           ＋          reasoning 层：里程碑验收 + 事实沉淀（03 §4.4）
+│   ├── app.py                             FastAPI 装配 + lifespan + CORS 白名单
+│   ├── deps.py                            依赖注入（RuntimeDeps / TaskRegistry / MemoryManager）
+│   ├── schemas.py                         对外 DTO（与 AgentState 解耦）
+│   ├── errors.py                          领域异常 → HTTP 状态码映射 + 统一错误体
+│   ├── task_registry.py                   任务句柄 + SSE 环形缓冲 + 订阅广播 + 并发闸门
+│   ├── __main__.py                        uvicorn 入口（127.0.0.1:8000）
+│   └── routes/
+│       ├── __init__.py
+│       ├── health.py                      进程健康 + sidecar 依赖连通性
+│       ├── workspaces.py                  工作区 CRUD + 共享记忆上浮
+│       ├── sessions.py                    会话 CRUD + 流水分页 + 上下文检视
+│       ├── tasks.py                       提交/状态/SSE/续跑/取消/时间线/轨迹
+│       ├── artifacts.py                   产物列表与原文下载（路径穿越防护）
+│       └── introspection.py               skills / tools / mcp / models 自省（零密钥外泄）
 │
-├── skills/
-│   ├── __init__.py
-│   └── registry.py            ＋          技能扫描 / frontmatter 解析 / 清单装配（08）
-│
-├── observability/                         双轨可观测（01 §4、技术栈.md）
-│   ├── __init__.py
-│   ├── logging.py             ＋          Loguru 结构化 JSONL 落盘
-│   ├── trajectory.py          ＋          Trajectory Store → storage/traces/{task_id}.jsonl
-│   └── langfuse_tracer.py     ＋          Langfuse 回调挂载与 Trace 关联
-│
-├── api/                                   ★ 用户入口（HTTP API，见 11_http_api.md）
-│   ├── __init__.py
-│   ├── app.py                 ＋          FastAPI 装配 + lifespan + CORS 白名单
-│   ├── deps.py                ＋          依赖注入：config / MemoryManager / graph app / TaskRegistry
-│   ├── schemas.py             ＋          请求/响应 DTO（与 AgentState 解耦，见 11 §3）
-│   ├── errors.py              ＋          统一错误模型与异常处理器
-│   ├── task_registry.py       ＋          运行中任务注册表 + SSE 事件广播
-│   ├── routes/
-│   │   ├── __init__.py
-│   │   ├── health.py          ＋
-│   │   ├── workspaces.py      ＋
-│   │   ├── sessions.py        ＋
-│   │   ├── tasks.py           ＋
-│   │   ├── artifacts.py       ＋
-│   │   └── introspection.py   ＋          skills / tools / mcp 只读自省
-│   └── __main__.py            ＋          uvicorn 入口（默认 127.0.0.1:8000）
-│
-└── prompts/                               提示词即配置，可热改
-    ├── system.md              ＋          内置行为纪律（01 / README 点名）
-    ├── planner.md             ＋
-    ├── executor.md            ＋
-    ├── evaluator.md           ＋
-    └── compactor.md           ✅ 已实现
+└── prompts/                    ✅         提示词即内容（可热改）
+    ├── system.md                          内置行为纪律
+    ├── planner.md / executor.md / evaluator.md
+    └── compactor.md                       会话记忆压缩提示词
 ```
 
 ---
@@ -104,96 +131,56 @@ AegisAgent/src/agent_runtime/
 
 ```text
 AegisAgent/
-├── config/
-│   └── config.toml                        ✅ 已有（含 [server] 与 [mcp] 段）
-├── pyproject.toml  uv.lock  README.md
-├── .env.example  .gitignore  .python-version
+├── config/config.toml          ✅         全部可调参数（含 [server] / [mcp] / [bash_shell] / [web_search]）
+├── pyproject.toml  uv.lock  README.md  .env.example  .gitignore  .python-version
 │
 ├── src/
-│   ├── agent_runtime/                     ← 见 §2
+│   ├── agent_runtime/          ✅         ← 见 §2
 │   │
-│   ├── skills/                            内置技能「内容包」（数据，非 Python 逻辑）
-│   │   └── <skill_name>/
-│   │       ├── SKILL.md                   必选，YAML frontmatter
-│   │       ├── scripts/                   辅助脚本（如 parse_asan.py）
-│   │       ├── references/
-│   │       └── resources/
-│   │
-│   ├── tool_layer/
+│   ├── tools/                  ✅         工具能力层（与 agent_runtime 平级）
 │   │   ├── __init__.py
-│   │   ├── base.py            ＋          AegisTool 协议 / 基类
-│   │   ├── registry.py        ＋          tools_registry
-│   │   ├── dispatcher.py      ＋          asyncio.gather 并发派发（01 架构图点名）
-│   │   ├── http_client.py     ＋          共享 httpx 连接池 + X-Trace-ID 透传
-│   │   ├── mcp_adapter.py     ＋          MCP 命名空间转译（09）
-│   │   └── tools/
-│   │       ├── __init__.py
-│   │       ├── bash_tool.py           ＋
-│   │       ├── rag_tool.py            ＋
-│   │       ├── web_search_tool.py     ＋
-│   │       ├── file_tool.py           ＋
-│   │       └── skill_tool.py          ＋   load_skill（08）
-│   │
-│   ├── mcps/
-│   │   ├── __init__.py
-│   │   ├── models.py          ＋          MCPServerConfig / MCPToolDefinition（09）
-│   │   └── manager.py         ＋          stdio/SSE 托管、防僵尸、懒加载连接池（09）
-│   │
-│   ├── services/                          同工程内子系统，可独立进程启动（裁决项③）
-│   │   ├── __init__.py
-│   │   ├── bash_shell/
+│   │   ├── core/                          【框架】不含任何具体工具
 │   │   │   ├── __init__.py
-│   │   │   ├── app.py         ＋          POST /api/v1/shell/execute
-│   │   │   ├── sandbox.py     ＋          os.setsid + setrlimit + SIGTERM→SIGKILL
-│   │   │   ├── audit.py       ＋          命令黑名单审计
-│   │   │   ├── memory_pool.py ＋          GlobalMemoryBudget 排队与预估
-│   │   │   └── __main__.py    ＋          uvicorn 入口 :8002
-│   │   └── web_search/
-│   │       ├── __init__.py
-│   │       ├── app.py         ＋          /api/v1/search/*
-│   │       ├── providers.py   ＋          duckduckgo / tavily 适配器
-│   │       ├── extractor.py   ＋          trafilatura 正文提炼
-│   │       ├── dedup.py       ＋          MD5 内容指纹去重
-│   │       └── __main__.py    ＋          uvicorn 入口 :8003
+│   │   │   ├── protocol.py                AegisTool 抽象基类 + ToolResult 统一契约
+│   │   │   ├── schema.py                  AegisTool → OpenAI function Schema 转译
+│   │   │   ├── registry.py                注册表（重名即失败）
+│   │   │   ├── dispatcher.py              asyncio.gather 并发派发 + 单工具超时 + 失败降级
+│   │   │   └── http_client.py             ServiceClient：共享连接池 + X-Trace-ID 透传
+│   │   └── builtin/                       【基础工具】单独存放
+│   │       ├── __init__.py                build_builtin_tools 装配入口
+│   │       ├── bash.py                    调 bash_shell :8002
+│   │       ├── rag_search.py              调 AegisRAG :8001
+│   │       ├── web_search.py              调 web_search :8003
+│   │       ├── file_ops.py                view_file / write_file（root_path 越界防护）
+│   │       └── load_skill.py              渐进式披露第二阶段：按需挂载 SOP
 │   │
-│   └── evaluation/
-│       ├── __init__.py
-│       ├── rag_bench/
-│       │   ├── __init__.py
-│       │   ├── metrics.py             ＋  HitRate@K / MRR@K / NDCG@K（numpy）
-│       │   ├── dataset.py             ＋
-│       │   ├── evaluate_retrieval.py  ＋  离线驱动脚本
-│       │   ├── datasets/              ＋  标注数据集
-│       │   └── reports/               ＋  benchmark_report.md 输出
-│       └── agent_bench/
-│           ├── __init__.py
-│           ├── metrics.py             ＋  Completion / Recovery / Efficiency / Provenance
-│           ├── runner.py              ＋
-│           └── tasks/                 ＋  20~50 个标准工程研究场景
+│   ├── mcps/                   ✅         MCP 代码全部集中（不再跨包）
+│   │   ├── __init__.py
+│   │   ├── models.py                      命名空间规则 + MCPToolDefinition
+│   │   ├── adapter.py                     远端工具 → 本地 AegisTool 契约转译
+│   │   └── manager.py                     懒加载握手 / 故障隔离 / AsyncExitStack 防僵尸
+│   │
+│   ├── services/               ✅         同工程子系统（各自独立进程，禁止反向依赖）
+│   │   ├── __init__.py
+│   │   ├── settings.py                    独立 TOML 段落读取（不依赖 agent_runtime）
+│   │   ├── bash_shell/                    settings / audit / memory_pool / sandbox / app / __main__  :8002
+│   │   └── web_search/                    settings / providers / extractor / dedup / app / __main__  :8003
+│   │
+│   ├── skills/                 ✅         内置技能内容包（数据）。空目录以 __init__.py 占位
+│   │   └── <skill_name>/{SKILL.md, scripts/, references/, resources/}
+│   │
+│   └── evaluation/             ✅         离线评测 harness（零 LLM 消耗）
+│       ├── rag_bench/                     metrics(HR/MRR/NDCG) / dataset / evaluate_retrieval
+│       │                                  + datasets/ + reports/
+│       └── agent_bench/                   metrics(完成/自愈/效率/溯源) / runner + tasks/
 │
-├── tests/
-│   ├── conftest.py            ＋          共享 fixture（临时 DB、mock LLM、mock 工具）
-│   ├── fixtures/              ＋
-│   ├── test_config.py         ＋
-│   ├── memory/                ＋          test_models / test_sqlite_store / test_compactor / test_manager
-│   ├── guardrails/            ＋
-│   ├── nodes/                 ＋
-│   ├── routing/               ＋
-│   ├── workflow/              ＋
-│   ├── context/               ＋
-│   ├── llm/                   ＋
-│   ├── skills/                ＋
-│   ├── mcps/                  ＋
-│   ├── services/              ＋
-│   ├── api/                   ＋
-│   └── evaluation/            ＋          pytest 入口在此（裁决项⑨）
-│
+├── tests/                      ✅         与 src 镜像的测试树（conftest + fixtures + 各子系统目录）
 └── storage/
     ├── aegis_meta.db                      运行时生成（已 gitignore）
-    ├── checkpoints/                      ✅ .gitkeep — LangGraph 状态快照
-    ├── traces/                           ✅ .gitkeep — {task_id}.jsonl 因果轨迹
-    ├── artifacts/                        ✅ .gitkeep — {task_id}/ 离线卸载
-    └── logs/                  ＋ .gitkeep — Loguru JSONL 落盘
+    ├── checkpoints/            ✅         LangGraph 状态快照
+    ├── traces/                 ✅         {task_id}.jsonl 因果轨迹
+    ├── artifacts/              ✅         {task_id}/ 离线卸载
+    └── logs/                   ✅         Loguru JSONL
 ```
 
 ---
@@ -204,17 +191,21 @@ AegisAgent/
 
 | # | 冲突点 | 最终裁决 | 理由 / 依据 |
 |:--|:---|:---|:---|
-| ① | `pruner.py` 归属：`guardrails/`（README 步骤六）vs `tool_layer/`（`01` 架构图） | **归 `agent_runtime/guardrails/pruner.py`**，并同步修订 `01` 架构图 | README 的文件级映射比示意图更具体；Pruner 属确定性治理逻辑，与 guardrails 同层 |
-| ② | 技能内容位置：`src/skills/`（`08` + wheel 列表）vs `agent_runtime/skills/`（`08` 责任领域） | **内容在 `src/skills/`，代码在 `agent_runtime/skills/registry.py`** | 内容与代码分离原则；与 `pyproject.toml` 的 `packages` 列表一致 |
-| ③ | `services/bash_shell`、`web_search` 是否拆为独立子工程 | **不拆分**，保留在 `AegisAgent/src/services/` 内，作为可独立 `uvicorn` 启动的 FastAPI 子应用 | 只涉及 HTTP 服务与外部工具，与 Agent 共享 config 与契约；`AegisRAG` 因重依赖（onnxruntime/tree-sitter）才独立 |
-| ④ | `budget_guard` 双身份：节点（`03`）vs 实现文件（README 步骤六） | **类在 `guardrails/budget_guard.py`（`PhysicalBudgetGuard`），薄节点在 `nodes/budget_guard.py`** | 确定性逻辑与图节点解耦，便于离线单测 |
-| ⑤ | `FailedAttempt` 在 `memory/models.py` 与 `02` 中重复定义 | **`state.py` 为唯一真源**，`memory/models.py` 改为 import | 避免两套契约漂移；属小幅重构已实现模块 |
-| ⑥ | 产物命名 `{run_id}` vs `{task_id}` | **统一 `{task_id}`**（`storage/artifacts/{task_id}/`、`storage/traces/{task_id}.jsonl`） | `task_id` 是 `AgentState` 的正式字段 |
-| ⑦ | Bash 沙箱 cwd：`storage/artifacts/{run_id}/workspace/`（bash ADR）vs 工作区 `root_path`（`06` §2.3） | **以工作区 `root_path` 为 cwd**；`storage/artifacts/{task_id}/` 只用于日志与产物落盘 | Agent 的职责是修改目标工程；锁死到临时目录则任务无法完成。路径越界防护以 `root_path` 为边界 |
+| ① | `pruner.py` 归属：`guardrails/`（README 步骤六）vs `tools/`（`01` 架构图） | **归 `agent_runtime/guardrails/observation_pruner.py`**，并同步修订 `01` 架构图 | README 的文件级映射比示意图更具体；Pruner 属确定性治理逻辑，与 guardrails 同层 |
+| ② | 技能内容位置：`src/skills/`（`08` + wheel 列表）vs `agent_runtime/skills/`（`08` 责任领域） | **内容在 `src/skills/`，代码在 `agent_runtime/skills/registry.py`** | 内容与代码分离原则 |
+| ③ | `services/bash_shell`、`web_search` 是否拆为独立子工程 | **不拆分**，保留在 `AegisAgent/src/services/` 内，各自作为独立进程经 HTTP 暴露 | 只涉及 HTTP 服务与外部工具，共享工程与依赖锁；`AegisRAG` 因重依赖（onnxruntime/tree-sitter）才物理独立 |
+| ④ | `budget_guard` 双身份：节点（`03`）vs 实现文件（README 步骤六） | **类在 `guardrails/physical_budget.py`，薄节点在 `nodes/budget_guard.py`** | 确定性逻辑与图节点解耦，便于离线单测 |
+| ⑤ | `FailedAttempt` 在 `memory/models.py` 与 `02` 中重复定义 | **`state.py` 为唯一真源**，`memory/models.py` 改为 import | 避免两套契约漂移 |
+| ⑥ | 产物命名 `{run_id}` vs `{task_id}` | **统一 `{task_id}`** | `task_id` 是 `AgentState` 的正式字段 |
+| ⑦ | Bash 沙箱 cwd：临时目录（bash ADR）vs 工作区 `root_path`（`06` §2.3） | **以工作区 `root_path` 为 cwd**；`storage/artifacts/{task_id}/` 只用于日志与产物落盘 | Agent 的职责是修改目标工程 |
 | ⑧ | `services/rag_retrieval/`（rag ADR）vs 独立子工程 `AegisRAG/` | **统一为 `AegisRAG/`** | 与仓库实际布局一致 |
 | ⑨ | 评测入口 `pytest evaluation/`（evaluation ADR）vs `testpaths=["tests"]` | **harness 在 `src/evaluation/`，pytest 用例在 `tests/evaluation/`** | 与 `pyproject.toml` 的 pytest 配置一致 |
-| ⑩ | 缺用户入口 | **提供 HTTP API**（`agent_runtime/api/`，`127.0.0.1:8000`），不提供 CLI | 后续将由 Web 前端消费 Agent 能力 |
-| ⑪ | 可观测性无代码落点 | **新增 `agent_runtime/observability/`** | `01`/`技术栈.md` 要求 Loguru JSONL + Langfuse + Trajectory 双轨 |
+| ⑩ | 缺用户入口 | **提供 HTTP API**（`agent_runtime/api/`，`127.0.0.1:8000`），不提供 CLI | 由 Web 前端消费 Agent 能力 |
+| ⑪ | 可观测性无代码落点 | **`agent_runtime/observability/`** | `01`/`技术栈.md` 要求双轨可观测 |
+| ⑫ | `tool_layer/` 命名与内部混杂 | **更名 `tools/`，拆 `core/`（框架）与 `builtin/`（基础工具）** | 框架与业务分离；去掉冗余的 `_layer` |
+| ⑬ | 条件边全部挤在 `routing.py` | **新增 `edges/`，与 `nodes/` 对称；`routing.py` 退化为聚合导出** | 新增边不必修改公共文件 |
+| ⑭ | MCP 代码跨 `tools/` 与 `mcps/` 两处 | **全部归并到 `mcps/`**（`models` / `adapter` / `manager`） | 集中审计"谁拉起了什么进程" |
+| ⑮ | 部分基础能力（异常/分词/检查点/提示词加载）无归属 | **`errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py`** | 统一口径，避免各处重复实现 |
 
 ---
 
@@ -222,36 +213,41 @@ AegisAgent/
 
 行 = 调用方，列 = 被依赖方。`✔` 允许，`✘` 禁止。
 
-| ↓ 调用 / → 被调用 | config | state | guardrails | routing | llm | memory | tool_layer | mcps | nodes | workflow | api | services |
-|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **guardrails** | ✔ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **routing** | ✘ | ✔ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **llm** | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **memory** | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **tool_layer** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✔ | ✘ | ✘ | ✘ | ✘ |
-| **mcps** | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ |
-| **nodes** | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | — | ✘ | ✘ | ✘ |
-| **workflow** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | — | ✘ | ✘ |
-| **api** | ✔ | ✔ | ✘ | ✘ | ✘ | ✔ | ✘ | ✔ | ✘ | ✔ | — | ✘ |
-| **services** | ✔ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | — |
+| ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | nodes | workflow | api | services |
+|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **errors** | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **guardrails** | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **edges** | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **llm** | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **memory** | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **mcps** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ |
+| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ |
+| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
+| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✔ | — | ✘ |
+| **services** | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | — |
 
 **关键约束**：
-- `nodes/*` 之间**禁止互相 import**（`03` §1）。跨节点复用逻辑必须下沉为纯函数模块。
-- `services/*` 只能依赖 `config`（读取自身端口/配额），**不得**依赖 `state` 或 `agent_runtime`。
-- `routing` 与 `guardrails` 不得依赖 `llm`，保证可离线确定性单测。
+
+- `nodes/*` 之间**禁止互相 import**；跨节点复用逻辑下沉为 `nodes/base.py` 的纯函数。
+- `edges/*` 只依赖 `state` 与 `langgraph`，**不得**依赖 `llm`/`memory`/`tools`。
+- `guardrails/` 不得依赖 `llm`，保证可离线确定性单测。
+- `services/*` **连 `config` 都不依赖**——各自通过 `services/settings.py` 读 TOML 段落。
+
+> 注：`services` 行全为 `✘` 指的是"不依赖 `agent_runtime`"；`services/settings.py` 是服务侧自有模块，不受本矩阵约束。
 
 ---
 
 ## 6. 打包与资源约定
 
-`pyproject.toml` 的 `[tool.hatch.build.targets.wheel] packages` 必须覆盖以下包：
+`pyproject.toml` 的 `[tool.hatch.build.targets.wheel] packages` 必须覆盖：
 
 ```toml
 packages = [
     "src/agent_runtime",
-    "src/tool_layer",
+    "src/tools",
     "src/mcps",
     "src/services",
     "src/skills",
@@ -259,9 +255,9 @@ packages = [
 ]
 ```
 
-**非 `.py` 资源打包（已实测验证，无需额外配置）**：`src/agent_runtime/prompts/*.md` 与 `src/skills/**` 下的 `SKILL.md` / 脚本必须随 wheel 分发，否则安装后提示词与技能包会丢失。
+**非 `.py` 资源打包（已实测验证，无需额外配置）**：`src/agent_runtime/prompts/*.md` 与 `src/skills/**` 下的 `SKILL.md` / 脚本必须随 wheel 分发。
 
-**hatchling 对 `packages` 列出的目录默认打包其下全部文件（含 `.md` / `.sh`），无需 `include` 或 `force-include`。** 该结论已在构建 `aegis_agent-0.1.0-py3-none-any.whl` 时实测确认：
+**hatchling 对 `packages` 列出的目录默认打包其下全部文件（含 `.md` / `.sh`），无需 `include` 或 `force-include`。** 已在构建 `aegis_agent-0.1.0-py3-none-any.whl` 时实测确认：
 
 | 资源 | wheel 内路径 | 结果 |
 |:---|:---|:---|
@@ -269,34 +265,34 @@ packages = [
 | 技能 SOP | `skills/<name>/SKILL.md` | ✓ 已打包 |
 | 技能脚本 | `skills/<name>/scripts/*.sh` | ✓ 已打包 |
 
-**唯一例外**：被 `.gitignore` 排除的文件不会被 hatchling 打包（hatchling 默认遵循 VCS ignore）。因此技能脚本切勿放入被忽略的路径模式（如 `*.log`、`__pycache__/`）。
+**唯一例外**：被 `.gitignore` 排除的文件不会被 hatchling 打包（默认遵循 VCS ignore）。
 
-**发布前冒烟断言**：用 `importlib.resources` 读取 `agent_runtime/prompts/system.md` 与任一 `SKILL.md` 必须成功。
-
-**提示词与技能路径解析**：运行时**禁止**写死相对路径；统一通过 `importlib.resources` 或"包内相对路径 + 项目根回退"双策略解析（现有 `compactor.py::_resolve_default_prompt_path` 已是该模式，新代码须沿用）。
+**提示词与技能路径解析**：运行时**禁止**写死相对路径；统一走 `prompt_loader.py` 的"包内优先 + 项目根回退"双策略。
 
 ---
 
 ## 7. 命名与占位约定
 
 - **任务标识**：一律 `task_id`（UUID）。产物路径 `storage/artifacts/{task_id}/`，轨迹 `storage/traces/{task_id}.jsonl`。
-- **实现状态标记**：`✅` = 已实现并有单测；`＋` = **已有骨架占位**（仅模块 docstring 记录规范出处，零逻辑），尚未实现。骨架已按本规范落地，后续实现直接填充占位文件即可，无需再建目录。
-- **空目录占位**：需要入库的空目录一律放 `.gitkeep`（`storage/` 与 `src/services/*` 已有先例），并在本文件登记。
-- **`__init__.py` 策略**：所有 Python 包目录必须有 `__init__.py`（含 `src/skills/`，即使它是内容目录——保持 hatchling `packages` 解析稳定）。
+- **实现状态标记**：`✅` = 已实现。本规范 v2 起，§2/§3 的目录均已落地。
+- **空目录占位**：需要入库的空目录一律放 `.gitkeep`；Python 包目录必须有 `__init__.py`。
+- **时区与时间**：一律使用 Unix 秒（浮点），不用本地化字符串。
 
 ---
 
 ## 8. 技能扫描优先级（裁决项②细化）
 
-技能注册表 `registry.py` 按**由高到低**的顺序扫描，同名技能高优先级**严格覆盖**低优先级：
+技能注册表按**由高到低**扫描，同名技能高优先级**严格覆盖**低优先级：
 
 | 优先级 | 扫描根 | 用途 |
 |:--|:---|:---|
-| 1（最高） | `<workspace.root_path>/.aegis/skills/` | 工作区（目标工程）自带的项目级技能 |
+| 1（最高） | `<workspace.root_path>/.aegis/skills/` | 目标工程自带的项目级技能 |
 | 2 | `AegisAgent/src/skills/`（内置） | 随发行版交付的官方技能包 |
 | 3（最低） | `~/.aegis/skills/` | 用户全局技能库 |
 
-**渐进式披露**（`08` §3）：系统提示词仅注入技能清单（名称 + 一句话描述，总量控制在 1000 Token 内）；命中场景后由 Agent 调用 `load_skill` 载入完整 SOP；任务结束随 `ExecutionContext` 销毁。
+**实现细节**：注册表按"低优先级先写入、高优先级后覆盖"的顺序遍历，天然实现覆盖语义；
+`build_prompt_summary()` 只注入名称 + 一句话描述（渐进式披露第一阶段），
+完整 SOP 由 `load_skill` 工具按需载入。
 
 ---
 
@@ -304,18 +300,19 @@ packages = [
 
 | 结构 | 依据 |
 |:---|:---|
-| `config.py` / `state.py` / `context.py` / `workflow.py` / `routing.py` / `nodes/` / `guardrails/` / `llm/` | `README.md` §2 步骤一~七、§4 |
+| `config.py` / `state.py` / `context.py` / `workflow.py` / `routing.py` / `nodes/` / `guardrails/` / `llm/` | `README.md` §2 步骤一~七 |
 | `memory/*` / `execution_context.py` | `06`、`07` 责任领域 |
-| `guardrails/loop_detector.py` / `budget_guard.py` / `pruner.py` | `README.md` 步骤六（逐文件点名） |
-| `llm/client.py` | `README.md` 步骤五 |
-| `skills/registry.py` + `tool_layer/tools/skill_tool.py` | `README.md` 步骤三、`08` |
-| `mcps/manager.py` / `mcps/models.py` / `tool_layer/mcp_adapter.py` | `README.md` 步骤四、`09` §5 |
+| `guardrails/{loop_detector,physical_budget,observation_pruner}.py` | `README.md` 步骤六、`05` §1/§2/§4 |
+| `llm/{endpoints,fallback,client}.py` | `README.md` 步骤五、`05` §3 |
+| `skills/registry.py` + `tools/builtin/load_skill.py` | `README.md` 步骤三、`08` |
+| `mcps/{models,adapter,manager}.py` | `README.md` 步骤四、`09` §5 |
 | `src/skills/<name>/{SKILL.md,scripts,references,resources}` | `08` §2 |
-| `prompts/system.md` / `prompts/*.md` | `01` §4.3、`README.md` §4 |
-| `services/bash_shell/` / `services/web_search/` | `技术选型/bash_shell.md`、`web_search.md` 责任领域 |
-| `evaluation/rag_bench/datasets/` / `agent_bench/tasks/` | `技术选型/evaluation.md` |
-| `storage/{checkpoints,traces,artifacts}` | `01` §5、`06` §7 |
-| `api/` | 裁决项⑩（HTTP API 入口） |
+| `prompts/system.md` 等 | `01` §4.3 |
+| `services/{bash_shell,web_search}/` | `技术选型/bash_shell.md`、`web_search.md` |
+| `evaluation/{rag_bench,agent_bench}/` | `技术选型/evaluation.md` |
+| `storage/{checkpoints,traces,artifacts,logs}` | `01` §5、`06` §7 |
+| `edges/` | 裁决项⑬ |
+| `api/` | 裁决项⑩、`11_http_api.md` |
 
 ---
 
@@ -323,9 +320,16 @@ packages = [
 
 | 项 | 状态 |
 |:---|:---|
-| `pyproject.toml` 新增 `fastapi` / `uvicorn[standard]` / `mcp` / `langgraph-checkpoint-sqlite`，并同步刷新 `uv.lock` | ✅ 已完成（`uv lock --check` 通过，114 包） |
-| `config.toml` 新增 `[server]` 与 `[mcp]` 段 | ✅ 已完成 |
-| `config.py` 新增 `ServerConfig` / `MCPServerConfig` / `MCPConfig` 强类型模型（含非回环地址 fail-closed 护栏） | ✅ 已完成 |
-| 本规范 §2/§3 的全部骨架目录与占位模块 | ✅ 已完成（19 个包、28 个占位模块导入通过、wheel 资源打包已实测） |
-| `storage/logs/` 占位与 `.gitignore` 放行规则 | ✅ 已完成 |
-| 各模块的**实际实现** | ⬜ 待办（按 `03`–`09`、`11` 逐模块填充） |
+| `pyproject.toml` 依赖（fastapi / uvicorn / mcp / langgraph-checkpoint-sqlite）与 `uv.lock` | ✅ 已完成（`uv lock --check` 通过，114 包） |
+| `config.toml` 的 `[server]` / `[mcp]` / `[bash_shell]` / `[web_search]` 段 | ✅ 已完成 |
+| `config.py` 强类型模型与回环 fail-closed 护栏 | ✅ 已完成 |
+| 契约层（`state` / `errors` / `tokenizer`） | ✅ 已完成 |
+| 策略层（`guardrails/` 三件套） | ✅ 已完成 |
+| 能力层（`llm` / `memory` / `skills` / `observability`） | ✅ 已完成（`memory` 为最早期实现） |
+| 工具层（`tools/core` 框架 + `tools/builtin` 五个基础工具） | ✅ 已完成 |
+| MCP 层（`mcps/` 三件套） | ✅ 已完成 |
+| 编排层（`edges/` + `nodes/` + `routing` + `context` + `execution_context` + `workflow`） | ✅ 已完成 |
+| 交付层（`api/` + 6 组路由） | ✅ 已完成（OpenAPI：25 路径 / 30 操作） |
+| 子系统（`services/bash_shell` + `web_search`） | ✅ 已完成 |
+| 评测 harness（`rag_bench` + `agent_bench`） | ✅ 已完成 |
+| 自动化测试覆盖 | ⬜ 待补（当前仅记忆子系统的 8 个用例） |

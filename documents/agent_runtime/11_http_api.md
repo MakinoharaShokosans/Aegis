@@ -47,7 +47,7 @@
 
 **请求**：`Content-Type: application/json`；所有时间戳为 Unix 秒（浮点）。
 
-**调用链透传**：请求头 `X-Trace-ID`（可选）。若缺省，服务端生成 UUID 并回写同名字段，同时注入所有下游 sidecar 调用（`06`、`tool_layer/http_client.py`）。
+**调用链透传**：请求头 `X-Trace-ID`（可选）。若缺省，服务端生成 UUID 并回写同名字段，同时注入所有下游 sidecar 调用（`06`、`tools/core/http_client.py`）。
 
 **分页**：查询参数 `limit`（默认 50，上限 200）与 `cursor`（不透明游标）。响应统一为：
 

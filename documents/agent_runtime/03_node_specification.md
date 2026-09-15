@@ -19,6 +19,10 @@
 | `planner` 直接产出 `tool_calls`，`executor` 纯派发 | `planner`(reasoning) 产出**决策指令**；`executor`(fast) 生成**具体 `tool_calls`** 并并发派发 | `01` §4.1/§4.2、`05` §3 |
 
 > 节点集合最终定为 **`planner` / `budget_guard` / `executor` / `evaluator`** 四个，与 `README.md` 索引及 `01` 的 `Planner -> Executor -> Evaluator` 拓扑一致。
+>
+> **实现位置**：每个节点一个模块（`agent_runtime/nodes/{planner,budget_guard,executor,evaluator}.py`），
+> 公共契约与纯辅助在 `nodes/base.py`；与之对称的**条件边**在 `agent_runtime/edges/after_*.py`，
+> 路由决策的完整定义见 `04_routing_and_control_flow.md`。
 
 ---
 

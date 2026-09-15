@@ -27,7 +27,7 @@
 │  │ ExecutionContext (微观单任务执行草稿纸 - task_id)                 │  │
 │  │  - 环境: cwd = Workspace.root_path                               │  │
 │  │  - Step 1: 调用 bash 运行 valgrind ➔ 发现 leak at connection.cpp │  │
-│  │  - Step 2: 调 tool_layer 读代码 ➔ 截断下沉到 storage/artifacts/   │  │
+│  │  - Step 2: 调 tools 读代码 ➔ 截断下沉到 storage/artifacts/   │  │
 │  │  - Step 3: 修改代码并 make test ➔ 编译报错 (consecutive_errors=1)│  │
 │  │  - Step 4: 修复头文件引用 ➔ 编译通过 (consecutive_errors=0)      │  │
 │  │  - Step 5: 验证通过，生成 patch.diff                             │  │

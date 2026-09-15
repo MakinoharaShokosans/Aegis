@@ -149,3 +149,37 @@ enabled = false
 transport = "sse"
 url = "http://127.0.0.1:8005/sse"
 env = {}
+
+# ------------------------------------------------------------------------------
+# 10. bash_shell 子系统（同工程独立进程 :8002）
+#     规范：documents/技术选型/bash_shell.md
+#     注意：本段由子系统自行读取，不经过 agent_runtime.config，保持 sidecar 边界
+# ------------------------------------------------------------------------------
+[bash_shell]
+host = "127.0.0.1"
+port = 8002
+timeout_sec = 60                    # 单命令默认硬超时（秒）
+sigterm_grace_sec = 2               # SIGTERM -> SIGKILL 之间的宽限期（秒）
+rlimit_as_mb = 2048                 # RLIMIT_AS 虚拟内存上限
+rlimit_fsize_mb = 50                # RLIMIT_FSIZE 单文件大小上限
+rlimit_cpu_sec = 300                # RLIMIT_CPU 纯 CPU 时间上限
+memory_pool_mb = 8192               # 全局内存池总量（并发配额）
+max_concurrent = 4                  # 并发执行上限
+artifacts_dir = "storage/artifacts" # 全量日志离线落盘根目录
+
+# ------------------------------------------------------------------------------
+# 11. web_search 子系统（同工程独立进程 :8003）
+#     规范：documents/技术选型/web_search.md
+# ------------------------------------------------------------------------------
+[web_search]
+host = "127.0.0.1"
+port = 8003
+provider = "ddg"                    # 搜索源："ddg"（默认免费）| "tavily"
+max_results = 8                     # 单次搜索返回候选条数
+fetch_concurrency = 5               # 并发抓取页数
+request_timeout_sec = 10            # 单页抓取超时（秒）
+total_timeout_sec = 30              # 单次检索总超时（秒）
+max_content_tokens = 1500           # 正文超过该 Token 数则落盘，只回精炼摘要
+preview_chars = 200                 # 摘要保留的头部字符数
+user_agent = "Mozilla/5.0 (compatible; AegisBot/0.1)"
+artifacts_dir = "storage/artifacts" # 长正文离线落盘根目录

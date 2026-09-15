@@ -147,7 +147,7 @@ class SkillPackage(BaseModel):
 
 ### 5.2 技能加载器工具（Built-in Tool: `load_skill`）
 
-作为 Agent 默认可调用的系统级工具注册到 `tool_layer`：
+作为 Agent 默认可调用的系统级工具注册到 `tools`：
 
 ```python
 class LoadSkillInput(BaseModel):

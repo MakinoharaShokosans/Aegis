@@ -45,6 +45,11 @@ graph TD
 
 所有路由函数必须是**纯函数**：只读 `state`，零 I/O，零 LLM，零副作用。
 
+**实现位置**：每条迁移一个模块，位于 `agent_runtime/edges/after_*.py`，与 `nodes/` 一一对称；
+每个模块同时导出 `route_after_xxx()`（决策）与 `TARGETS`（供 `add_conditional_edges` 使用的目标映射）。
+`agent_runtime/routing.py` **不再实现逻辑**，只把四个路由函数与 `EDGE_TABLE` 聚合导出，
+供 `workflow.build_agent_graph()` 遍历挂载条件边——新增一条边无需修改图构建代码。
+
 ### 2.1 `planner` 之后
 
 ```python

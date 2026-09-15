@@ -28,11 +28,11 @@ graph TB
         G["LangGraph 状态图<br/>(Planner -> Executor -> Evaluator)"]
         M["Memory Engine<br/>(已压缩记忆 / 最近 N 轮原子滑窗)"]
         GD["安全护栏<br/>(Loop Detector / Consecutive Errors / Token 预算)"]
-        PR["Observation Pruner<br/>(guardrails/pruner.py 长日志离线落盘)"]
+        PR["Observation Pruner<br/>(guardrails/observation_pruner.py 长日志离线落盘)"]
         LLM["Dual-Tier LLM Gateway<br/>(Reasoning / Fast 多端点降级)"]
     end
 
-    subgraph ToolLayer["工具派发与适配器 (tool_layer)"]
+    subgraph ToolDispatch["工具派发与适配器 (tools)"]
         TC["Async Concurrent Dispatcher<br/>(asyncio.gather 并发分发)"]
     end
 
@@ -85,7 +85,8 @@ graph TB
 
 ### 4.1 核心执行拓扑（Graph Topology）
 * **`planner`**：调用 `models.reasoning`（如 DeepSeek-R1 / OpenAI o1）进行宏观目标分解与反思规划；
-* **`executor`**：调用 `models.fast`（如 DeepSeek-V3 / GPT-4o-mini）生成具体的 ToolCall 参数，由 `tool_layer` 使用 `asyncio.gather` 并发执行；
+* **`executor`**：调用 `models.fast`（如 DeepSeek-V3 / GPT-4o-mini）生成具体的 ToolCall 参数，由 `tools` 使用 `asyncio.gather` 并发执行；
+* **`edges/`（条件边）**：每条迁移一个模块，与 `nodes/` 一一对称；`routing.py` 仅做聚合导出。路由决策全部是纯函数（零 I/O、零 LLM），可离线单测；
 * **`should_continue`（条件边）**：
   - 工具连续报错达到阈值（`consecutive_errors >= 3`）$\to$ 强行熔断并回退至 `planner` 触发重规划；
   - 参数指纹连续 3 次相同 $\to$ 判定为死循环拦截；

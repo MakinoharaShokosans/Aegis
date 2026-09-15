@@ -1,5 +1,11 @@
-"""同工程子系统集合（各自独立进程，禁止反向依赖 agent_runtime）。
+"""同工程子系统集合。
 
-规范：documents/agent_runtime/10_directory_structure.md 第 4 节裁决项③
-状态：骨架占位（尚未实现）。
+**解耦红线**：本包下的子系统是独立进程的 sidecar，
+**禁止 import `agent_runtime` / `tools` / `mcps`**（连配置也不共用，
+各自通过 :mod:`services.settings` 读取 `config.toml` 的对应段落）。
+
+理由见 `documents/agent_runtime/01_architecture_overview.md` §3：
+把 LangGraph / LangChain / OpenAI SDK 拖进服务进程会破坏崩溃隔离与秒级冷启动。
 """
+
+__all__: list[str] = []

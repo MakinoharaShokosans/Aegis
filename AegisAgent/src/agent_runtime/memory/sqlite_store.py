@@ -804,3 +804,87 @@ class SqliteMemoryStore:
             f"已保存会话压缩记忆 [session_id={session_id}, 水位线ID={memory.compacted_until_turn_id}, "
             f"facts={len(memory.confirmed_facts)}, attempts={len(memory.failed_attempts)}]"
         )
+
+    # ==========================================================================
+    # 5. 只读查询接口（供 HTTP API 的 GET 语义使用）
+    #    注意：与 create_or_get_session 的区别在于"不存在即返回 None"，
+    #    不会因为一次读请求而在库里凭空创建会话。
+    # ==========================================================================
+
+    async def get_session(self, session_id: str) -> Optional[SessionMetadata]:
+        """按 ID 查询会话元数据（不创建）。
+
+        Args:
+            session_id: 会话唯一标识。
+
+        Returns:
+            会话元数据；不存在时返回 ``None``。
+        """
+        await self._ensure_init()
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(
+                """
+                SELECT session_id, workspace_id, title, created_at, updated_at
+                FROM sessions WHERE session_id = ?
+                """,
+                (session_id,),
+            ) as cursor:
+                row = await cursor.fetchone()
+                if not row:
+                    return None
+                return SessionMetadata(
+                    session_id=row[0],
+                    workspace_id=row[1],
+                    title=row[2],
+                    created_at=row[3],
+                    updated_at=row[4],
+                )
+
+    async def list_turns(
+        self,
+        session_id: str,
+        limit: int = 50,
+        before_id: Optional[int] = None,
+    ) -> List[TurnRecord]:
+        """按游标倒序分页查询对话流水。
+
+        Args:
+            session_id: 会话唯一标识。
+            limit: 单页条数。
+            before_id: 只取 ``id`` 小于该值的记录（向后翻页游标）。
+
+        Returns:
+            轮次列表（时间正序，便于前端直接渲染）。
+        """
+        await self._ensure_init()
+        if limit <= 0:
+            return []
+
+        sql = (
+            "SELECT id, session_id, role, content, token_count, timestamp "
+            "FROM session_turns WHERE session_id = ?"
+        )
+        params: List[object] = [session_id]
+        if before_id is not None:
+            sql += " AND id < ?"
+            params.append(before_id)
+        sql += " ORDER BY id DESC LIMIT ?"
+        params.append(limit)
+
+        async with aiosqlite.connect(self.db_path) as db:
+            async with db.execute(sql, tuple(params)) as cursor:
+                rows = await cursor.fetchall()
+
+        turns = [
+            TurnRecord(
+                id=row[0],
+                session_id=row[1],
+                role=row[2],
+                content=row[3],
+                token_count=row[4],
+                timestamp=row[5],
+            )
+            for row in rows
+        ]
+        turns.reverse()
+        return turns

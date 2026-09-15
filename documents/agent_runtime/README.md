@@ -37,13 +37,13 @@
 - 参考：`08_skills_management.md`
 - 实现：
   - `AegisAgent/src/agent_runtime/skills/registry.py` (技能扫描与元数据提取)
-  - `AegisAgent/src/tool_layer/tools/skill_tool.py` (`load_skill` 系统工具)
+  - `AegisAgent/src/tools/builtin/load_skill.py` (`load_skill` 系统工具)
 
 ### 步骤四：MCP 外部协议与进程托管
 - 参考：`09_mcp_integration_and_governance.md`
 - 实现：
   - `AegisAgent/src/mcps/manager.py` (stdio 子进程托管与生命周期清理)
-  - `AegisAgent/src/tool_layer/mcp_adapter.py` (命名空间防冲突与 Schema 转译)
+  - `AegisAgent/src/mcps/adapter.py` (命名空间防冲突与 Schema 转译)
 
 ### 步骤五：双模型 Fallback 网关
 - 参考：`05_guardrails_implementation.md`
@@ -53,8 +53,8 @@
 - 参考：`05_guardrails_implementation.md`
 - 实现：
   - `AegisAgent/src/agent_runtime/guardrails/loop_detector.py` (指纹哈希)
-  - `AegisAgent/src/agent_runtime/guardrails/budget_guard.py` (步数与 Token 熔断)
-  - `AegisAgent/src/agent_runtime/guardrails/pruner.py` (长输出离线落盘)
+  - `AegisAgent/src/agent_runtime/guardrails/physical_budget.py` (步数与 Token 熔断)
+  - `AegisAgent/src/agent_runtime/guardrails/observation_pruner.py` (长输出离线落盘)
 
 ### 步骤七：状态图节点与条件边
 - 参考：`03_node_specification.md` & `04_routing_and_control_flow.md`
@@ -121,25 +121,27 @@ AegisAgent/
 │   └── config.toml               # 物理配额、多模型降级列表、服务寻址、[server]、[mcp]
 ├── src/
 │   ├── agent_runtime/
-│   │   ├── __init__.py
-│   │   ├── config.py             # Pydantic 强类型配置
-│   │   ├── state.py              # AgentState / Milestone / FailedAttempt 契约
-│   │   ├── execution_context.py  # 单任务草稿纸与 Teardown 落盘
-│   │   ├── context.py            # 多层上下文装配器
-│   │   ├── workflow.py           # LangGraph 状态图编译入口
-│   │   ├── routing.py            # 条件边与熔断跳转
-│   │   ├── memory/               # 已实现：工作区/会话双层记忆 + 水位压缩
-│   │   ├── prompts/              # system.md / planner.md / compactor.md ...
-│   │   ├── nodes/                # planner / budget_guard / executor / evaluator
-│   │   ├── guardrails/           # loop_detector / budget_guard / pruner
-│   │   ├── llm/                  # 双模型 Fallback 网关
-│   │   ├── skills/               # 技能注册表（代码）
-│   │   ├── observability/        # Loguru / Trajectory / Langfuse
-│   │   └── api/                  # HTTP API：app / deps / schemas / routes（见 11）
+│   │   ├── __init__.py  config.py  errors.py  tokenizer.py
+│   │   ├── state.py              # 契约唯一真源：AgentState / ExecutionContext / Milestone ...
+│   │   ├── execution_context.py  # Spawn 构造 + Teardown 因果下沉
+│   │   ├── context.py            # 四层 Prompt 装配 + 上下文检视
+│   │   ├── prompt_loader.py      # 提示词加载（包内优先 + 项目根回退）
+│   │   ├── checkpoint.py         # AsyncSqliteSaver 生命周期
+│   │   ├── routing.py            # 路由契约聚合导出（实现见 edges/）
+│   │   ├── workflow.py           # 进程级/任务级装配 + 图构建 + run/resume
+│   │   ├── edges/                # 条件边：与 nodes/ 一一对称，每条迁移一个模块
+│   │   ├── nodes/                # planner / budget_guard / executor / evaluator + base
+│   │   ├── guardrails/           # loop_detector / physical_budget / observation_pruner
+│   │   ├── llm/                  # endpoints / fallback / client 三层
+│   │   ├── memory/               # 工作区/会话双层记忆 + 水位压缩
+│   │   ├── skills/               # 技能注册表（代码侧）
+│   │   ├── observability/        # logging / trajectory / langfuse_tracer
+│   │   ├── api/                  # HTTP API：app / deps / schemas / errors / task_registry / routes
+│   │   └── prompts/              # system.md / planner.md / executor.md / evaluator.md / compactor.md
+│   ├── tools/                    # 工具能力层：core/(框架) + builtin/(基础工具)
+│   ├── mcps/                     # models / adapter / manager（MCP 代码全部集中）
+│   ├── services/                 # bash_shell / web_search（同工程子系统，含独立 settings.py）
 │   ├── skills/                   # 内置技能内容包（SKILL.md 等，数据）
-│   ├── tool_layer/               # 工具适配器、并发派发、HTTP Client、MCP 适配
-│   ├── mcps/                     # MCP 服务器托管
-│   ├── services/                 # bash_shell / web_search（同工程子系统）
 │   └── evaluation/               # rag_bench / agent_bench
 ├── tests/                        # 与 src 镜像的测试树（pytest 入口）
 └── storage/

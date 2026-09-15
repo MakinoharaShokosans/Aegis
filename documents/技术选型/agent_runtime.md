@@ -1,7 +1,7 @@
 # 架构决策记录：Agent Runtime 核心运行时
 
 > **状态**：已定稿 (Accepted)  
-> **责任领域**：`agent_runtime/` 与 `tool_layer/`  
+> **责任领域**：`agent_runtime/` 与 `tools/`  
 > **核心目标**：构建具备显式状态机、崩溃续跑、预算守卫、因果可追溯与强类型契约的微型操作系统级 Agent 宿主。
 
 ---
@@ -35,7 +35,7 @@
   1. **显式状态机（Explicit State）**：打破传统 Agent（如 AgentExecutor）内部无法精细干预的黑盒 `while` 循环，采用基于 Pydantic 的全局强类型状态 Schema（`AgentState`），状态跃迁 100% 透明；
   2. **天然支持有向循环图（Cyclic Graphs & Conditional Edges）**：工程研究天然需要试错循环（例如：编译报错 -> 诊断错误 -> 修改代码 -> 重新编译）；
   3. **细粒度节点生命周期控制**：可方便地在 Node 之间插入防死循环检测器（Loop Detector）、Token 预算熔断器与上下文修剪逻辑。
-* **工程约束**：只使用 LangGraph 核心图算子，工具适配与观察截断下沉至自研的 `tool_layer`，杜绝依赖第三方高层臃肿组件。
+* **工程约束**：只使用 LangGraph 核心图算子，工具适配与观察截断下沉至自研的 `tools`，杜绝依赖第三方高层臃肿组件。
 
 ### 2.2 状态持久化与断点续跑：SQLite (aiosqlite) + AsyncSqliteSaver
 

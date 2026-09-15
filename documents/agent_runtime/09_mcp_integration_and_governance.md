@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) 集成与运行时治理规范
 
-> **责任领域**：`AegisAgent/src/mcps/` & `AegisAgent/src/tool_layer/mcp_adapter.py`  
+> **责任领域**：`AegisAgent/src/mcps/` & `AegisAgent/src/mcps/adapter.py`  
 > **核心原则**：标准协议转译、命名空间物理隔离、子进程安全治理、懒加载按需连接、观察值截断受控。
 
 ---
@@ -16,7 +16,7 @@
 
 | MCP 原语 | 协议形态 | Aegis 映射与消费方式 |
 | :--- | :--- | :--- |
-| **Tools (工具)** | 带 JSON Schema 的可执行函数 | 经转译后作为标准 `AegisTool` 注册到 `tool_layer`，供模型自主调用 |
+| **Tools (工具)** | 带 JSON Schema 的可执行函数 | 经转译后作为标准 `AegisTool` 注册到 `tools`，供模型自主调用 |
 | **Resources (资源)** | 具有唯一 URI 的只读数据源 (`file://`, `postgres://`) | 供 Agent 按需读取，作为上下文直接注入 `ExecutionContext` |
 | **Prompts (提示词)** | 预定义的结构化交互模板 | 映射为斜杠快捷指令或专家工作流（如 `/review_pr`） |
 
@@ -48,7 +48,7 @@
 │  │    - 执行超时熔断 (单次调用上限 60s)                              │  │
 │  └───────────────────────┬──────────────────────────────────────────┘  │
 │                          │                                             │
-│  [tool_layer] ◀──────────┴── 伪装为原生 AegisTool，注入 Executor 调度  │
+│  [tools] ◀──────────┴── 伪装为原生 AegisTool，注入 Executor 调度  │
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -153,7 +153,7 @@ class MCPToolDefinition(BaseModel):
     input_schema: dict           # 标准 JSON Schema
 ```
 
-### 5.2 命名空间转译与适配器 (`tool_layer/mcp_adapter.py`)
+### 5.2 命名空间转译与适配器 (`mcps/adapter.py`)
 
 ```python
 from typing import Any, Dict

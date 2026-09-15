@@ -16,7 +16,6 @@ Aegis 记忆系统顶层管理器 (manager.py)
 import uuid
 from typing import Dict, List, Literal, Optional, Tuple
 from loguru import logger
-import tiktoken
 
 from agent_runtime.config import get_config
 from agent_runtime.memory.compactor import MemoryCompactor, select_turns_for_compaction
@@ -29,6 +28,7 @@ from agent_runtime.memory.models import (
     WorkspaceMemory,
 )
 from agent_runtime.memory.sqlite_store import SqliteMemoryStore
+from agent_runtime.tokenizer import count_tokens as _count_tokens
 
 
 class MemoryManager:
@@ -85,13 +85,6 @@ class MemoryManager:
             active_window_turns if active_window_turns is not None else ctx_cfg.active_window_turns
         )
 
-        # 4. 初始化本地精确分词器
-        try:
-            self._tokenizer = tiktoken.get_encoding("cl100k_base")
-        except Exception as e:
-            logger.warning(f"初始化 tiktoken 失败: {e}，将采用字符保底分词估算")
-            self._tokenizer = None
-
         logger.debug(
             f"MemoryManager 初始化就绪: Token上限={self.session_token_limit}, "
             f"高水位触发线={self.compaction_high_watermark:.0%}, 目标压缩率={self.compaction_ratio:.0%}"
@@ -99,23 +92,19 @@ class MemoryManager:
 
     def count_tokens(self, text: str) -> int:
         """
-        基于 tiktoken 精准计量输入文本的物理 Token 数量
-        
+        计量输入文本的物理 Token 数量。
+
+        委托给 :mod:`agent_runtime.tokenizer` 的统一实现，保证全系统
+        （记忆压缩 / 观察值裁剪 / 上下文装配 / 预算守卫）使用**同一分词口径**，
+        避免同一个字符串在不同模块算出不同 Token 数。
+
         Args:
             text: 目标文本
-            
+
         Returns:
             int: 物理 Token 数
         """
-        if not text:
-            return 0
-        if self._tokenizer is not None:
-            try:
-                return len(self._tokenizer.encode(text, disallowed_special=()))
-            except Exception:
-                pass
-        # 保底分词估算 (平均每 2 个字符约等于 1 Token)
-        return max(1, len(text) // 2)
+        return _count_tokens(text)
 
     async def initialize(self) -> None:
         """初始化底层存储环境"""
@@ -371,3 +360,70 @@ class MemoryManager:
     async def get_session_info(self, session_id: str) -> SessionMetadata:
         """获取会话元数据基础信息"""
         return await self.store.create_or_get_session(session_id)
+
+    # ==========================================================================
+    # 4. 只读与更新接口（供 HTTP API 使用）
+    # ==========================================================================
+
+    async def get_session(self, session_id: str) -> Optional[SessionMetadata]:
+        """按 ID 查询会话（不创建）。
+
+        Args:
+            session_id: 会话唯一标识。
+
+        Returns:
+            会话元数据；不存在时返回 ``None``。
+        """
+        return await self.store.get_session(session_id)
+
+    async def list_turns(
+        self,
+        session_id: str,
+        limit: int = 50,
+        before_id: Optional[int] = None,
+    ):
+        """分页查询会话对话流水。
+
+        Args:
+            session_id: 会话唯一标识。
+            limit: 单页条数。
+            before_id: 向后翻页游标。
+
+        Returns:
+            轮次列表（时间正序）。
+        """
+        return await self.store.list_turns(session_id, limit=limit, before_id=before_id)
+
+    async def update_workspace(
+        self,
+        workspace_id: str,
+        name: Optional[str] = None,
+        description: Optional[str] = None,
+    ) -> Optional[Workspace]:
+        """更新工作区元数据。
+
+        Args:
+            workspace_id: 工作区标识。
+            name: 新名称。
+            description: 新描述。
+
+        Returns:
+            更新后的工作区；不存在时返回 ``None``。
+        """
+        return await self.store.update_workspace(workspace_id, name=name, description=description)
+
+    async def get_session_context(
+        self,
+        session_id: str,
+        workspace_id: str = "default",
+    ):
+        """读取上下文装配所需的四层资产（供 ``/context`` 检视端点使用）。
+
+        Args:
+            session_id: 会话唯一标识。
+            workspace_id: 工作区标识。
+
+        Returns:
+            ``(workspace, workspace_memory, session_memory, active_turns)``。
+        """
+        return await self.load_session_context(session_id, workspace_id=workspace_id)

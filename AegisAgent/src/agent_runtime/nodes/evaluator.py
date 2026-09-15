@@ -1,5 +1,145 @@
-"""evaluator 节点（reasoning 层）：里程碑验收与认知事实沉淀。
+"""``evaluator`` 节点：里程碑验收与认知事实沉淀（reasoning 层）。
 
-规范：documents/agent_runtime/03_node_specification.md 第 4.4 节
-状态：骨架占位（尚未实现）。
+对应 ``documents/agent_runtime/03_node_specification.md`` §4.4。
+
+**为什么必须由独立节点验收**：让"干活的"自己宣布完工，等于没有验收。
+planner 主张里程碑完成，evaluator 独立复核并可以**打回**（不标记完成），
+同时把本轮暴露出的事实与踩坑沉淀为跨轮次记忆。
+
+**与 :class:`~agent_runtime.memory.compactor.MemoryCompactor` 的分工**：
+本节点处理**任务级**里程碑验收（reasoning 层，重判断质量）；
+压缩器处理**会话级**历史轮次压缩（fast 层，重成本）。二者层级不同，禁止混用。
 """
+
+from __future__ import annotations
+
+from typing import Any, Dict, List, Mapping, Optional
+
+from langchain_core.messages import AIMessage
+from loguru import logger
+
+from agent_runtime.context import ContextManager
+from agent_runtime.errors import LLMUnavailableError
+from agent_runtime.llm.client import LLMGateway
+from agent_runtime.nodes.base import (
+    NodeFn,
+    coerce_failed_attempts,
+    extract_json_object,
+    merge_unique,
+)
+from agent_runtime.observability.trajectory import TrajectoryRecorder
+from agent_runtime.prompt_loader import PromptLibrary
+from agent_runtime.state import Milestone
+
+__all__ = ["build_evaluator_node"]
+
+
+def _mark_milestone_completed(milestones: List[Milestone], index: int) -> List[Milestone]:
+    """把指定下标的里程碑标记为已完成。
+
+    Args:
+        milestones: 里程碑列表。
+        index: 目标下标。
+
+    Returns:
+        新的里程碑列表（不修改入参）。
+    """
+    if not (0 <= index < len(milestones)):
+        return list(milestones)
+    target_id = milestones[index].id
+    return [
+        milestone.model_copy(update={"status": "completed"}) if milestone.id == target_id else milestone
+        for milestone in milestones
+    ]
+
+
+def build_evaluator_node(
+    gateway: LLMGateway,
+    context: ContextManager,
+    prompts: PromptLibrary,
+    recorder: Optional[TrajectoryRecorder] = None,
+) -> NodeFn:
+    """构造 ``evaluator`` 节点。
+
+    Args:
+        gateway: 双模型网关。
+        context: 上下文装配器。
+        prompts: 提示词库。
+        recorder: 轨迹记录器（可选旁路）。
+
+    Returns:
+        节点函数。
+    """
+
+    async def evaluator(state: Mapping[str, Any]) -> Dict[str, Any]:
+        """复核里程碑达成情况并沉淀认知记忆。
+
+        Args:
+            state: ``AgentState``（只读）。
+
+        Returns:
+            里程碑、摘要、事实、踩坑与终止标记的增量。
+        """
+        messages = context.assemble(state, node_instruction=prompts.load("evaluator"))
+
+        try:
+            response = await gateway.invoke("reasoning", messages, force_json=True)
+        except LLMUnavailableError as exc:
+            logger.error(f"[Evaluator] LLM 全链路不可用: {exc}")
+            return {"should_terminate": True, "termination_reason": f"LLM 不可用: {exc}"}
+
+        verdict = extract_json_object(response.content) or {}
+        if not verdict:
+            logger.warning("[Evaluator] 未能解析结构化验收结论，按未达成处理")
+
+        milestones: List[Milestone] = list(state.get("milestones") or [])
+        current_index = int(state.get("current_milestone_idx", 0))
+        accepted = bool(verdict.get("milestone_ok"))
+
+        if accepted and milestones:
+            milestones = _mark_milestone_completed(milestones, current_index)
+
+        all_done = bool(milestones) and all(milestone.status == "completed" for milestone in milestones)
+
+        # 验收通过且仍有后续里程碑时，推进指针；全部完成则保持在末尾
+        next_index = min(current_index + 1, len(milestones) - 1) if (accepted and milestones) else current_index
+
+        summary = str(verdict.get("summary") or state.get("rolling_summary") or "").strip()
+        confirmed_facts = merge_unique(
+            state.get("confirmed_facts") or [],
+            [str(item) for item in (verdict.get("confirmed_facts") or [])],
+        )
+        failed_attempts = list(state.get("failed_attempts") or []) + coerce_failed_attempts(
+            verdict.get("failed_attempts")
+        )
+
+        logger.info(
+            f"[Evaluator] 验收结果={'通过' if accepted else '未通过'}，"
+            f"里程碑完成 {sum(1 for m in milestones if m.status == 'completed')}/{len(milestones)}"
+        )
+
+        if recorder is not None:
+            await recorder.record(
+                record_type="node",
+                node="evaluator",
+                phase="reflecting",
+                thought=summary[:1000],
+                ok=accepted,
+                step_count=int(state.get("step_count", 0)),
+                total_tokens=int(state.get("total_tokens", 0)) + response.total_tokens,
+                consecutive_errors=int(state.get("consecutive_errors", 0)),
+            )
+
+        return {
+            "messages": [AIMessage(content=summary or response.content or "验收完成。")],
+            "milestones": milestones,
+            "current_milestone_idx": next_index,
+            "rolling_summary": summary,
+            "confirmed_facts": confirmed_facts,
+            "failed_attempts": failed_attempts,
+            "should_terminate": all_done,
+            "termination_reason": "task_goal achieved" if all_done else "",
+            "total_tokens": int(state.get("total_tokens", 0)) + response.total_tokens,
+        }
+
+    return evaluator
