@@ -17,11 +17,14 @@
 from mcps.adapter import MCPToolAdapter
 from mcps.manager import MCPManager
 from mcps.models import MCPToolDefinition, parse_namespaced_tool, to_namespaced_name
+from mcps.vetting import VettingOutcome, vet_tool_definition
 
 __all__ = [
     "MCPManager",
     "MCPToolAdapter",
     "MCPToolDefinition",
+    "VettingOutcome",
     "parse_namespaced_tool",
     "to_namespaced_name",
+    "vet_tool_definition",
 ]

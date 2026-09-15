@@ -23,6 +23,7 @@ from __future__ import annotations
 import asyncio
 import atexit
 import os
+import sys
 from contextlib import AsyncExitStack
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Mapping, Optional, Tuple
@@ -31,8 +32,91 @@ from loguru import logger
 
 from agent_runtime.errors import ToolExecutionError
 from mcps.models import MCPToolDefinition, parse_namespaced_tool
+from mcps.vetting import vet_tool_definition
 
 __all__ = ["MCPManager"]
+
+#: 资源包装脚本：在 exec 目标程序**之前**施加内核配额并建立独立会话。
+#:
+#: 为什么用"同一个解释器 + execvp"而不是 shell 的 ``ulimit``：
+#: ``ulimit`` 的单位在不同 ``/bin/sh`` 实现间不一致（``-f`` 是 512 还是 1024 字节块
+#: 取决于 bash/dash），而 ``resource.setrlimit`` 以**字节**为单位，精确且无歧义。
+#: 代价是仅 POSIX 生效——这符合本项目的 Linux 单机定位。
+_RESOURCE_WRAPPER_TEMPLATE = (
+    "import os, resource, sys;"
+    "{limits}"
+    "os.setsid();"
+    "os.execvp(sys.argv[1], sys.argv[1:])"
+)
+
+
+def _resource_wrapper_args(command: str, args: list[str], config: Any) -> list[str]:
+    """构造资源包装脚本的参数列表。
+
+    Args:
+        command: 原始可执行文件。
+        args: 原始启动参数。
+        config: ``MCPConfig``。
+
+    Returns:
+        传给 ``sys.executable -c`` 的参数列表。
+    """
+    limits: list[str] = []
+    as_mb = int(getattr(config, "rlimit_as_mb", 0) or 0)
+    fsize_mb = int(getattr(config, "rlimit_fsize_mb", 0) or 0)
+    cpu_sec = int(getattr(config, "rlimit_cpu_sec", 0) or 0)
+
+    if as_mb > 0:
+        nbytes = as_mb * 1024 * 1024
+        limits.append(f"resource.setrlimit(resource.RLIMIT_AS, ({nbytes}, {nbytes}));")
+    if fsize_mb > 0:
+        nbytes = fsize_mb * 1024 * 1024
+        limits.append(f"resource.setrlimit(resource.RLIMIT_FSIZE, ({nbytes}, {nbytes}));")
+    if cpu_sec > 0:
+        limits.append(f"resource.setrlimit(resource.RLIMIT_CPU, ({cpu_sec}, {cpu_sec}));")
+
+    script = _RESOURCE_WRAPPER_TEMPLATE.format(limits="".join(limits))
+    return ["-c", script, command, *args]
+
+
+def _build_stdio_params(server_name: str, server: Any, config: Any) -> Any:
+    """构造 stdio 模式服务器参数（POSIX 下附带资源上限与独立会话）。
+
+    Args:
+        server_name: 服务器标识（仅用于日志）。
+        server: ``MCPServerConfig``。
+        config: ``MCPConfig``。
+
+    Returns:
+        ``StdioServerParameters`` 实例。
+
+    Raises:
+        ValueError: 未配置 ``command``。
+    """
+    from mcp import StdioServerParameters
+
+    command = str(getattr(server, "command", "") or "")
+    if not command:
+        raise ValueError(f"stdio 模式服务器 {server_name} 未配置 command")
+
+    raw_args = [str(item) for item in (getattr(server, "args", []) or [])]
+    env = _resolve_env(getattr(server, "env", {}) or {})
+
+    if os.name == "posix":
+        logger.debug(
+            f"[MCP] 服务器 {server_name} 将以资源包装启动"
+            f"（AS={getattr(config, 'rlimit_as_mb', 0)}MB / "
+            f"FSIZE={getattr(config, 'rlimit_fsize_mb', 0)}MB / "
+            f"CPU={getattr(config, 'rlimit_cpu_sec', 0)}s，独立会话）"
+        )
+        return StdioServerParameters(
+            command=sys.executable,
+            args=_resource_wrapper_args(command, raw_args, config),
+            env=env,
+        )
+
+    # 非 POSIX：不做包装（setrlimit/setsid 不可用），保持原命令
+    return StdioServerParameters(command=command, args=raw_args, env=env)
 
 
 def _resolve_env(env: Mapping[str, str]) -> Dict[str, str]:
@@ -75,13 +159,15 @@ class MCPManager:
         config: ``agent_runtime.config.MCPConfig``。
     """
 
-    __slots__ = ("_config", "_connections", "_failed", "_lock", "_atexit_registered")
+    __slots__ = ("_config", "_connections", "_failed", "_rejected", "_lock", "_atexit_registered")
 
     def __init__(self, config: Any) -> None:
         self._config = config
         self._connections: Dict[str, _Connection] = {}
         #: 连接失败的服务器（记录原因，避免每次调用都重试拖慢主循环）
         self._failed: Dict[str, str] = {}
+        #: 消毒未通过而被拒绝注册的工具（审计留痕，经 /api/v1/mcp/servers 暴露）
+        self._rejected: Dict[str, List[Dict[str, Any]]] = {}
         self._lock = asyncio.Lock()
         self._atexit_registered = False
 
@@ -104,6 +190,7 @@ class MCPManager:
                 "connected": name in self._connections,
                 "tool_count": len(self._connections[name].tools) if name in self._connections else 0,
                 "error": self._failed.get(name),
+                "rejected_tools": list(self._rejected.get(name, [])),
             }
         return states
 
@@ -219,7 +306,7 @@ class MCPManager:
 
     async def _connect(self, server_name: str, server: Any) -> _Connection:
         """建立单条 MCP 连接并完成握手。"""
-        from mcp import ClientSession, StdioServerParameters
+        from mcp import ClientSession
         from mcp.client.sse import sse_client
         from mcp.client.stdio import stdio_client
 
@@ -229,14 +316,7 @@ class MCPManager:
 
         try:
             if transport == "stdio":
-                command = getattr(server, "command", "")
-                if not command:
-                    raise ValueError(f"stdio 模式服务器 {server_name} 未配置 command")
-                params = StdioServerParameters(
-                    command=command,
-                    args=list(getattr(server, "args", []) or []),
-                    env=_resolve_env(getattr(server, "env", {}) or {}),
-                )
+                params = _build_stdio_params(server_name, server, self._config)
                 read_stream, write_stream = await stack.enter_async_context(stdio_client(params))
             elif transport == "sse":
                 url = getattr(server, "url", "")
@@ -256,15 +336,50 @@ class MCPManager:
             await stack.aclose()
             raise
 
-        tools = [
+        raw_definitions = [
             MCPToolDefinition.from_remote(
                 server_name,
                 {"name": tool.name, "description": tool.description, "inputSchema": _schema_of(tool)},
             )
             for tool in getattr(raw_tools, "tools", [])
         ]
-        logger.info(f"[MCP] 服务器 {server_name} 握手完成（{transport}），暴露 {len(tools)} 个工具")
+        tools, rejected = self._vet_definitions(raw_definitions)
+        self._rejected[server_name] = rejected
+
+        logger.info(
+            f"[MCP] 服务器 {server_name} 握手完成（{transport}），"
+            f"暴露 {len(raw_definitions)} 个工具，通过消毒 {len(tools)} 个"
+            + (f"，拒绝 {len(rejected)} 个" if rejected else "")
+        )
         return _Connection(server_name=server_name, session=session, stack=stack, tools=tools)
+
+    def _vet_definitions(
+        self,
+        definitions: List[MCPToolDefinition],
+    ) -> tuple[List[MCPToolDefinition], List[Dict[str, Any]]]:
+        """对远端工具定义做消毒（数据面治理，见 ``09`` §3.5.1）。
+
+        Args:
+            definitions: ``tools/list`` 转译后的定义列表。
+
+        Returns:
+            ``(通过定义, 拒绝记录)``。
+        """
+        accepted: List[MCPToolDefinition] = []
+        rejected: List[Dict[str, Any]] = []
+        for definition in definitions:
+            outcome = vet_tool_definition(
+                definition,
+                max_description_chars=int(getattr(self._config, "max_description_chars", 1000)),
+                reject_on_injection=bool(getattr(self._config, "reject_on_injection", True)),
+            )
+            if outcome.accepted:
+                accepted.append(outcome.definition)
+            else:
+                rejected.append(
+                    {"name": definition.namespaced_name, "reasons": list(outcome.reasons)}
+                )
+        return accepted, rejected
 
     async def _drop_connection(self, server_name: str, *, reason: str) -> None:
         """丢弃并释放一条失效连接。"""

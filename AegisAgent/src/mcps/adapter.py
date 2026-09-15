@@ -4,6 +4,9 @@
 "如果是 MCP 工具就换个调用方式"这种分支。适配器负责把命名空间化的调用
 还原为 MCP 的 ``call_tool(server, tool, args)``，并把返回内容压平成
 统一的 :class:`ToolResult`。
+
+**信任级**：``trust = "untrusted"`` —— 远端工具来自第三方过程。
+它**不会**因为写在配置里就自动获得主工具表席位，必须显式授权。
 """
 
 from __future__ import annotations
@@ -29,6 +32,11 @@ class MCPToolAdapter(AegisTool):
         manager: MCP 连接管理器。
         task_id: 当前任务 ID（用于产物命名与观测）。
     """
+
+    #: MCP 工具来自**第三方**过程，返回值与行为均不可信。
+    #: 因此它默认进不了主工具表，必须经 ``ToolRegistry(untrusted_allowlist=...)``
+    #: 逐名授权（见 ``09_mcp_integration_and_governance.md`` §3.5.2）。
+    trust = "untrusted"
 
     def __init__(self, definition: Any, manager: "MCPManager", task_id: str = "") -> None:
         self.name = definition.namespaced_name

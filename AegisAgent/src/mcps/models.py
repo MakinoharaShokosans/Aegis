@@ -75,6 +75,15 @@ class MCPToolDefinition(BaseModel):
         default_factory=lambda: {"type": "object", "properties": {}},
         description="JSON Schema 形式的入参定义（来自 MCP inputSchema）",
     )
+    schema_ok: bool = Field(
+        default=True,
+        description=(
+            "原始 inputSchema 是否为合法对象。"
+            "为了让 mcps/vetting 能**看见并拒绝**畸形 Schema，"
+            "这里保留原始判定结果而不是静默替换成默认值——"
+            "否则一个畸形/恶意的工具定义会被悄悄洗白。"
+        ),
+    )
 
     @classmethod
     def from_remote(
@@ -92,11 +101,19 @@ class MCPToolDefinition(BaseModel):
             本地工具定义。
         """
         original_name = str(raw_tool.get("name", ""))
-        schema = raw_tool.get("inputSchema") or raw_tool.get("input_schema") or {}
+        raw_schema = raw_tool.get("inputSchema")
+        if raw_schema is None:
+            raw_schema = raw_tool.get("input_schema")
+        # 关键：不静默洗白畸形 Schema，只做兜底赋值并如实记录原始判定
+        schema_ok = raw_schema is None or isinstance(raw_schema, Mapping)
+        schema: Dict[str, Any] = (
+            dict(raw_schema) if isinstance(raw_schema, Mapping) else {"type": "object", "properties": {}}
+        )
         return cls(
             server_name=server_name,
             original_name=original_name,
             namespaced_name=to_namespaced_name(server_name, original_name),
             description=str(raw_tool.get("description") or ""),
-            input_schema=dict(schema) if isinstance(schema, Mapping) else {"type": "object", "properties": {}},
+            input_schema=schema,
+            schema_ok=schema_ok,
         )
