@@ -154,8 +154,13 @@ def build_executor_node(
             if pruned.artifact_path and pruned.artifact_id:
                 artifacts[pruned.artifact_id] = pruned.artifact_path
 
+            wrapped_observation = (
+                f"<tool_observation tool=\"{dispatched.tool_name}\">\n"
+                f"{pruned.summary}\n"
+                f"</tool_observation>"
+            )
             tool_messages.append(
-                ToolMessage(content=pruned.summary, tool_call_id=dispatched.tool_call_id)
+                ToolMessage(content=wrapped_observation, tool_call_id=dispatched.tool_call_id)
             )
 
             if recorder is not None:
