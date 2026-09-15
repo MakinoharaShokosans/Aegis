@@ -9,28 +9,31 @@ requires-python = ">=3.11"
 dependencies = [
     # 1. Agent Runtime 核心编排与模型接入
     "langgraph>=1.2.11,<2.0.0",
+    # AsyncSqliteSaver：LangGraph 状态快照与断点续跑（04 §4）
+    "langgraph-checkpoint-sqlite>=3.1.1,<4.0.0",
     "openai>=3.14.0,<4.0.0",
     "pydantic>=2.13.5,<3.0.0",
     "pydantic-settings>=2.15.0,<3.0.0",
     "tiktoken>=0.14.0,<1.0.0",
     "tenacity>=9.1.4,<10.0.0",
 
-    # 2. 关系数据库与状态快照持久化
+    # 2. 关系数据库与任务元数据持久化
     "aiosqlite>=0.22.1,<1.0.0",
-    # 说明：LangGraph 断点续跑所需的 AsyncSqliteSaver 位于独立包
-    # `langgraph-checkpoint-sqlite`（当前 lock 中不存在，故此处不声明）。
-    # 实现 workflow.py 的 Checkpointing 时执行：
-    #   uv add "langgraph-checkpoint-sqlite"
 
-    # 3. 异步网络客户端 (用于调用远端 RAG/Web 服务)
+    # 3. HTTP 接入层与微服务通信 (Agent API :8000 / sidecar :8001-8003)
+    "fastapi>=0.141.1,<1.0.0",
+    "uvicorn[standard]>=0.53.0,<1.0.0",
     "httpx>=0.28.1,<1.0.0",
 
-    # 4. Web 搜索与正文清洗 (Agent 工具层)
+    # 4. MCP 协议客户端 (外部工具服务器托管，见 09)
+    "mcp>=2.2.0,<3.0.0",
+
+    # 5. Web 搜索与正文清洗 (Agent 工具层)
     "duckduckgo-search>=8.1.1,<9.0.0",
     "trafilatura>=2.2.0,<3.0.0",
     "tavily-python>=0.8.3,<1.0.0",
 
-    # 5. 可观测性与追踪
+    # 6. 可观测性与追踪
     "loguru>=0.7.3,<1.0.0",
     "langfuse>=4.15.2,<5.0.0",
 ]

@@ -9,11 +9,11 @@ Aegis 系统全局强类型配置加载器 (config.py)
 
 import os
 from pathlib import Path
-from typing import List, Optional, Tuple, Type
+from typing import Dict, List, Literal, Optional, Tuple, Type
 import tomllib
 
 from loguru import logger
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
@@ -130,7 +130,70 @@ class ServicesConfig(BaseModel):
 
 
 # ==============================================================================
-# 8. 全局配置根对象 (AegisConfig)
+# 8. Agent HTTP API 接入层配置（唯一用户入口）
+#    契约：documents/agent_runtime/11_http_api.md
+# ==============================================================================
+
+class ServerConfig(BaseModel):
+    """Agent HTTP API 接入层配置"""
+    host: str = Field(default="127.0.0.1", description="监听地址（安全红线：仅允许回环）")
+    port: int = Field(default=8000, description="监听端口")
+    max_concurrent_tasks: int = Field(default=1, description="同时运行的任务上限，超出返回 429")
+    cors_allow_origins: List[str] = Field(default_factory=list, description="CORS 白名单来源")
+    sse_heartbeat_sec: float = Field(default=15.0, description="SSE 心跳间隔（秒）")
+    sse_buffer_events: int = Field(default=1000, description="SSE 断线重连环形缓冲条数")
+    artifact_preview_chars: int = Field(default=200, description="产物预览字符数")
+
+    @model_validator(mode="after")
+    def _guard_loopback(self) -> "ServerConfig":
+        """
+        安全护栏：拒绝非回环监听地址。
+        本 API 的工具链包含受控命令执行能力，等价于对本机工程目录的读写与执行权限，
+        对外暴露属于高危配置，因此在配置加载阶段即 fail-closed。
+        """
+        if self.host not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError(
+                f"server.host 必须为回环地址，当前为 {self.host!r}。"
+                "Aegis 工具链含受控命令执行能力，禁止对外暴露。"
+            )
+        return self
+
+
+# ==============================================================================
+# 9. MCP 外部扩展服务器配置
+#    规范：documents/agent_runtime/09_mcp_integration_and_governance.md
+# ==============================================================================
+
+class MCPServerConfig(BaseModel):
+    """单个 MCP 服务器配置"""
+    name: str = Field(default="", description="服务器标识（由 servers 字典键回填）")
+    enabled: bool = Field(default=False, description="是否启用（默认关闭：会拉起外部子进程）")
+    transport: Literal["stdio", "sse"] = Field(default="stdio", description="传输模式")
+    command: str = Field(default="", description="stdio 模式：可执行文件")
+    args: List[str] = Field(default_factory=list, description="stdio 模式：启动参数")
+    env: Dict[str, str] = Field(default_factory=dict, description='环境变量，敏感值以 "env:XXX" 引用 .env')
+    url: str = Field(default="", description="sse 模式：服务地址")
+    timeout_sec: float = Field(default=60.0, description="单次调用超时（秒）")
+
+
+class MCPConfig(BaseModel):
+    """MCP 集成总配置"""
+    enabled: bool = Field(default=True, description="MCP 总开关（关闭后忽略全部 servers）")
+    connection_timeout_sec: float = Field(default=30.0, description="连接握手超时（秒）")
+    call_timeout_sec: float = Field(default=60.0, description="单次调用超时上限（秒）")
+    servers: Dict[str, MCPServerConfig] = Field(default_factory=dict, description="服务器注册表")
+
+    @model_validator(mode="after")
+    def _fill_server_names(self) -> "MCPConfig":
+        """以字典键回填服务器名，避免在 TOML 中重复书写 name 字段"""
+        for key, server in self.servers.items():
+            if not server.name:
+                server.name = key
+        return self
+
+
+# ==============================================================================
+# 10. 全局配置根对象 (AegisConfig)
 # ==============================================================================
 
 class AegisConfig(BaseSettings):
@@ -147,6 +210,8 @@ class AegisConfig(BaseSettings):
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
     models: ModelsConfig = Field(default_factory=ModelsConfig)
     services: ServicesConfig = Field(default_factory=ServicesConfig)
+    server: ServerConfig = Field(default_factory=ServerConfig)
+    mcp: MCPConfig = Field(default_factory=MCPConfig)
 
     @classmethod
     def settings_customise_sources(

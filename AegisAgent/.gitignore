@@ -49,6 +49,10 @@ storage/traces/*
 !storage/traces/.gitkeep
 storage/artifacts/*
 !storage/artifacts/.gitkeep
+# 日志目录：上方 `logs/` 规则会连目录一起排除，必须先重新纳入目录再放行 .gitkeep
+!storage/logs/
+storage/logs/*
+!storage/logs/.gitkeep
 storage/*.db
 storage/*.db-wal
 storage/*.db-shm

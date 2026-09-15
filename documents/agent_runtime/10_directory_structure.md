@@ -105,7 +105,7 @@ AegisAgent/src/agent_runtime/
 ```text
 AegisAgent/
 ├── config/
-│   └── config.toml                        ✅ 已有（待补 [server] 与 [mcp] 段）
+│   └── config.toml                        ✅ 已有（含 [server] 与 [mcp] 段）
 ├── pyproject.toml  uv.lock  README.md
 ├── .env.example  .gitignore  .python-version
 │
@@ -259,7 +259,19 @@ packages = [
 ]
 ```
 
-**非 `.py` 资源打包**：`src/agent_runtime/prompts/*.md` 与 `src/skills/**/SKILL.md` 等必须在 wheel 中保留，否则 `uv sync`/安装后提示词与技能包会丢失。需要显式声明包含规则（hatchling 的 `include` 或 `force-include`），并在安装后加一条冒烟测试：`importlib.resources` 能读到 `prompts/system.md`。
+**非 `.py` 资源打包（已实测验证，无需额外配置）**：`src/agent_runtime/prompts/*.md` 与 `src/skills/**` 下的 `SKILL.md` / 脚本必须随 wheel 分发，否则安装后提示词与技能包会丢失。
+
+**hatchling 对 `packages` 列出的目录默认打包其下全部文件（含 `.md` / `.sh`），无需 `include` 或 `force-include`。** 该结论已在构建 `aegis_agent-0.1.0-py3-none-any.whl` 时实测确认：
+
+| 资源 | wheel 内路径 | 结果 |
+|:---|:---|:---|
+| 提示词 | `agent_runtime/prompts/{system,planner,executor,evaluator,compactor}.md` | ✓ 已打包 |
+| 技能 SOP | `skills/<name>/SKILL.md` | ✓ 已打包 |
+| 技能脚本 | `skills/<name>/scripts/*.sh` | ✓ 已打包 |
+
+**唯一例外**：被 `.gitignore` 排除的文件不会被 hatchling 打包（hatchling 默认遵循 VCS ignore）。因此技能脚本切勿放入被忽略的路径模式（如 `*.log`、`__pycache__/`）。
+
+**发布前冒烟断言**：用 `importlib.resources` 读取 `agent_runtime/prompts/system.md` 与任一 `SKILL.md` 必须成功。
 
 **提示词与技能路径解析**：运行时**禁止**写死相对路径；统一通过 `importlib.resources` 或"包内相对路径 + 项目根回退"双策略解析（现有 `compactor.py::_resolve_default_prompt_path` 已是该模式，新代码须沿用）。
 
@@ -268,7 +280,7 @@ packages = [
 ## 7. 命名与占位约定
 
 - **任务标识**：一律 `task_id`（UUID）。产物路径 `storage/artifacts/{task_id}/`，轨迹 `storage/traces/{task_id}.jsonl`。
-- **未实现文件**：本规范中用 `＋` 标记的文件均**尚未创建**；`✅` 为已实现。
+- **实现状态标记**：`✅` = 已实现并有单测；`＋` = **已有骨架占位**（仅模块 docstring 记录规范出处，零逻辑），尚未实现。骨架已按本规范落地，后续实现直接填充占位文件即可，无需再建目录。
 - **空目录占位**：需要入库的空目录一律放 `.gitkeep`（`storage/` 与 `src/services/*` 已有先例），并在本文件登记。
 - **`__init__.py` 策略**：所有 Python 包目录必须有 `__init__.py`（含 `src/skills/`，即使它是内容目录——保持 hatchling `packages` 解析稳定）。
 
@@ -307,8 +319,13 @@ packages = [
 
 ---
 
-## 10. 待办（尚未落地，仅供追踪）
+## 10. 落地状态台账
 
-- `pyproject.toml` 需新增运行依赖：`fastapi`、`uvicorn[standard]`（裁决项③与⑩）、`langgraph-checkpoint-sqlite`（断点续跑）、`mcp`（`09`）。
-- `config.toml` 需新增 `[server]`（host/port/CORS）与 `[mcp]` 段。
-- 上述依赖与 `uv.lock` 必须在同一次变更中同步刷新。
+| 项 | 状态 |
+|:---|:---|
+| `pyproject.toml` 新增 `fastapi` / `uvicorn[standard]` / `mcp` / `langgraph-checkpoint-sqlite`，并同步刷新 `uv.lock` | ✅ 已完成（`uv lock --check` 通过，114 包） |
+| `config.toml` 新增 `[server]` 与 `[mcp]` 段 | ✅ 已完成 |
+| `config.py` 新增 `ServerConfig` / `MCPServerConfig` / `MCPConfig` 强类型模型（含非回环地址 fail-closed 护栏） | ✅ 已完成 |
+| 本规范 §2/§3 的全部骨架目录与占位模块 | ✅ 已完成（19 个包、28 个占位模块导入通过、wheel 资源打包已实测） |
+| `storage/logs/` 占位与 `.gitignore` 放行规则 | ✅ 已完成 |
+| 各模块的**实际实现** | ⬜ 待办（按 `03`–`09`、`11` 逐模块填充） |

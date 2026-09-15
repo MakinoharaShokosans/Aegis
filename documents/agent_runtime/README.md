@@ -98,8 +98,8 @@
 ### 3.2 依赖基线
 
 - 依赖唯一真源为 `AegisAgent/pyproject.toml` + `AegisAgent/uv.lock`（RAG 侧同理），**文档中的版本号仅为视图**，不得作为安装依据。
-- 断点续跑所依赖的 `AsyncSqliteSaver` 位于独立包 **`langgraph-checkpoint-sqlite`**，当前**未声明、未锁定**；实现 `workflow.py` 前须执行 `uv add "langgraph-checkpoint-sqlite"`（详见 `04` §4.1）。
-- HTTP API 接入层（步骤八）需要新增 `fastapi`、`uvicorn[standard]`；MCP 集成（步骤四）需要 `mcp`。三者都必须在同一次变更中同步刷新 `uv.lock`。
+- 断点续跑所依赖的 `AsyncSqliteSaver` 位于独立包 **`langgraph-checkpoint-sqlite`** —— **已声明并锁定**（`>=3.1.1,<4.0.0`），详见 `04` §4.1。
+- HTTP API 接入层（步骤八）所需的 `fastapi`、`uvicorn[standard]`，与 MCP 集成（步骤四）所需的 `mcp` —— **均已声明并锁定**。以上四项在同一次变更中刷新了 `uv.lock`，`uv lock --check` 通过（114 包）。
 
 ### 3.3 实施进度对照
 

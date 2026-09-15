@@ -180,15 +180,11 @@ def build_agent_graph() -> StateGraph:
 
 ## 4. 编译与执行入口
 
-### 4.1 依赖缺口警示（重要）
+### 4.1 Checkpoint 依赖说明
 
-`03`/`04` 早期草稿引用的 `AsyncSqliteSaver` **不属于** `langgraph` 主包，而位于独立包 **`langgraph-checkpoint-sqlite`**。该包目前**未安装、也未在 `uv.lock` 中锁定**，因此断点续跑能力当前**不可用**。
+`AsyncSqliteSaver` **不属于** `langgraph` 主包，而位于独立包 **`langgraph-checkpoint-sqlite`**。
 
-实现 Checkpointing 前必须先补依赖：
-
-```bash
-uv add "langgraph-checkpoint-sqlite"
-```
+**状态（已闭环）**：该依赖已在 `pyproject.toml` 声明并锁定于 `uv.lock`（`langgraph-checkpoint-sqlite>=3.1.1,<4.0.0`）。断点续跑的依赖条件已具备，待 `workflow.py` 实现后即可启用。
 
 > 导入路径与构造函数以该包**当前版本**的官方 API 为准（历史上 `AsyncSqliteSaver` 的导入路径与连接方式发生过变更），本规范不锁定具体签名，避免再次产生文档与实现漂移。
 

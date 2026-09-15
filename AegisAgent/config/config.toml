@@ -102,3 +102,50 @@ rag_url = "http://127.0.0.1:8001"
 shell_url = "http://127.0.0.1:8002"
 web_url = "http://127.0.0.1:8003"
 timeout_sec = 60
+
+# ------------------------------------------------------------------------------
+# 8. Agent HTTP API 接入层 (唯一用户入口)
+#    契约：documents/agent_runtime/11_http_api.md
+# ------------------------------------------------------------------------------
+[server]
+host = "127.0.0.1"                  # 安全红线：严禁改为 0.0.0.0（工具链含命令执行能力）
+port = 8000
+max_concurrent_tasks = 1            # 单机串行化资源治理，超出返回 429
+cors_allow_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+sse_heartbeat_sec = 15
+sse_buffer_events = 1000
+artifact_preview_chars = 200
+
+# ------------------------------------------------------------------------------
+# 9. MCP (Model Context Protocol) 外部扩展服务器
+#    规范：documents/agent_runtime/09_mcp_integration_and_governance.md
+#    说明：MCP 会拉起外部子进程，因此所有 server 默认 enabled = false，须显式开启。
+#          敏感凭据一律以 "env:XXX" 形式引用 .env，禁止明文写入本文件。
+# ------------------------------------------------------------------------------
+[mcp]
+enabled = true                      # 总开关（关闭后忽略全部 servers）
+connection_timeout_sec = 30
+call_timeout_sec = 60
+
+# 本地 stdio 模式服务器（示例：路径按实际工作区填写后再启用）
+[mcp.servers.filesystem]
+enabled = false
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "<ABSOLUTE_WORKSPACE_PATH>"]
+env = {}
+
+# 带敏感 Token 的 stdio 服务器（凭据引用自 .env）
+[mcp.servers.github]
+enabled = false
+transport = "stdio"
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_TOKEN" }
+
+# 远程 HTTP/SSE 模式服务器
+[mcp.servers.remote_doc]
+enabled = false
+transport = "sse"
+url = "http://127.0.0.1:8005/sse"
+env = {}

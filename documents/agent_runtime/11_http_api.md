@@ -287,7 +287,10 @@ data: {"task_id":"9b1e...","seq":42,"ts":0.0,"tool_call_id":"c1","tool_name":"ba
 
 ---
 
-## 8. 配置项（`config.toml` 待补）
+## 8. 配置项（`config.toml`，已落地）
+
+> `[server]` 段已写入 `AegisAgent/config/config.toml`，并由 `config.py::ServerConfig` 强类型加载。
+> 其中 `host` 设有 **fail-closed 护栏**：非回环地址在配置加载阶段即抛错，防止误将本服务对外暴露。
 
 ```toml
 [server]
