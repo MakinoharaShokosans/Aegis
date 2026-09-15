@@ -134,8 +134,9 @@ class AgentState(TypedDict):
     fingerprint_history: List[str]
 
     # --------------------------------------------------------------------------
-    # 5. 执行控制标记
+    # 5. 安全防御与执行控制标记
     # --------------------------------------------------------------------------
+    canary_token: str
     should_terminate: bool
     termination_reason: str
 
@@ -164,6 +165,7 @@ class ExecutionContext(TypedDict):
     total_tokens: int
     consecutive_errors: int
     fingerprint_history: List[str]
+    canary_token: str
     should_terminate: bool
     termination_reason: str
 

@@ -22,6 +22,7 @@ from loguru import logger
 
 from agent_runtime.context import ContextManager
 from agent_runtime.errors import LLMUnavailableError
+from agent_runtime.guardrails.canary import detect_canary_leak
 from agent_runtime.llm.client import LLMGateway
 from agent_runtime.nodes.base import (
     NodeFn,
@@ -69,6 +70,30 @@ def build_planner_node(
         except LLMUnavailableError as exc:
             logger.error(f"[Planner] LLM 全链路不可用: {exc}")
             return {"should_terminate": True, "termination_reason": f"LLM 不可用: {exc}"}
+
+        tokens_after = int(state.get("total_tokens", 0)) + response.total_tokens
+
+        # ------------------------------------------------------------------
+        # 安全防御：Canary Token 泄露检测
+        # ------------------------------------------------------------------
+        canary_token = str(state.get("canary_token") or "")
+        if canary_token and detect_canary_leak(response.content, canary_token):
+            logger.critical("[Planner] 安全熔断：检测到 Canary Token 泄露！")
+            if recorder is not None:
+                await recorder.record(
+                    record_type="guard",
+                    node="planner",
+                    phase="planning",
+                    thought="[SECURITY] Canary Token leak detected in planner response",
+                    ok=False,
+                    step_count=int(state.get("step_count", 0)),
+                    total_tokens=tokens_after,
+                )
+            return {
+                "should_terminate": True,
+                "termination_reason": "[SECURITY] Prompt leak detected via canary token",
+                "total_tokens": tokens_after,
+            }
 
         verdict = extract_json_object(response.content) or {}
         if not verdict and response.content:

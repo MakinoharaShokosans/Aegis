@@ -19,6 +19,7 @@ from typing import Any, Dict, List, Mapping, Optional, Sequence
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from loguru import logger
 
+from agent_runtime.guardrails.canary import generate_canary_token, sanitize_canary
 from agent_runtime.memory.manager import MemoryManager
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.state import AgentState, FailedAttempt, Milestone
@@ -52,6 +53,7 @@ def build_initial_state(
     session_id: str,
     task_goal: str,
     task_id: Optional[str] = None,
+    canary_token: Optional[str] = None,
     active_turns: Sequence[Any] = (),
     rolling_summary: str = "",
     confirmed_facts: Optional[Sequence[str]] = None,
@@ -67,6 +69,7 @@ def build_initial_state(
         session_id: 会话标识。
         task_goal: 任务目标（永久锚定，不被修剪）。
         task_id: 任务 ID；缺省自动生成 UUID。
+        canary_token: 任务 Canary Token；缺省自动生成高熵随机 Token。
         active_turns: 低水位线以上的活跃对话轮次。
         rolling_summary: 会话已压缩摘要。
         confirmed_facts: 会话已确认事实。
@@ -92,6 +95,7 @@ def build_initial_state(
         total_tokens=0,
         consecutive_errors=0,
         fingerprint_history=[],
+        canary_token=canary_token or generate_canary_token(),
         should_terminate=False,
         termination_reason="",
     )
@@ -125,13 +129,15 @@ class ExecutionContextManager:
             last_action_target: 本轮核心修改实体（文件/符号句柄）。
         """
         task_id = str(state.get("task_id", ""))
+        canary_token = str(state.get("canary_token") or "")
+        safe_delivery = sanitize_canary(delivery, canary_token) if canary_token else delivery
 
         await self._recorder.record(
             record_type="final",
             node="workflow",
             phase="reflecting",
             thought=str(state.get("termination_reason") or ""),
-            observation_summary=delivery[:1000],
+            observation_summary=safe_delivery[:1000],
             ok=bool(state.get("should_terminate")),
             step_count=int(state.get("step_count", 0)),
             total_tokens=int(state.get("total_tokens", 0)),
@@ -142,7 +148,7 @@ class ExecutionContextManager:
             await self._memory.record_turn_and_maybe_compact(
                 session_id=str(state.get("session_id", "")),
                 user_query=str(state.get("task_goal", "")),
-                agent_delivery=delivery,
+                agent_delivery=safe_delivery,
                 last_action_target=last_action_target,
                 workspace_id=str(state.get("workspace_id", "default")),
             )
@@ -157,7 +163,7 @@ class ExecutionContextManager:
 
     @staticmethod
     def extract_delivery(state: Mapping[str, Any]) -> str:
-        """从终态中抽取最后一条面向用户的交付文本。
+        """从终态中抽取最后一条面向用户的交付文本（自动脱敏 Canary Token）。
 
         Args:
             state: 终态 ``AgentState``。
@@ -165,10 +171,18 @@ class ExecutionContextManager:
         Returns:
             最后一条 AIMessage 的文本内容；不存在时回退为终止原因。
         """
+        canary_token = str(state.get("canary_token") or "")
+        delivery = ""
         for message in reversed(list(state.get("messages") or [])):
             if isinstance(message, AIMessage) and message.content:
-                return str(message.content)
-        return str(state.get("termination_reason") or "任务结束")
+                delivery = str(message.content)
+                break
+        if not delivery:
+            delivery = str(state.get("termination_reason") or "任务结束")
+
+        if canary_token:
+            delivery = sanitize_canary(delivery, canary_token)
+        return delivery
 
     @staticmethod
     def collect_failed_attempts(state: Mapping[str, Any]) -> List[FailedAttempt]:

@@ -23,6 +23,7 @@ from loguru import logger
 
 from agent_runtime.context import ContextManager
 from agent_runtime.errors import LLMUnavailableError
+from agent_runtime.guardrails.canary import detect_canary_leak
 from agent_runtime.guardrails.loop_detector import (
     build_replan_notice,
     is_fingerprint_loop,
@@ -99,6 +100,34 @@ def build_executor_node(
 
         specs = to_tool_call_specs(response.tool_calls)
         tokens_after_llm = base_tokens + response.total_tokens
+
+        # ------------------------------------------------------------------
+        # 安全防御：Canary Token 泄露检测（阻断任何提示词窃取或工具外带注入）
+        # ------------------------------------------------------------------
+        canary_token = str(state.get("canary_token") or "")
+        if canary_token:
+            leak_in_content = detect_canary_leak(response.content, canary_token)
+            leak_in_tools = detect_canary_leak(response.tool_calls, canary_token)
+            if leak_in_content or leak_in_tools:
+                logger.critical(
+                    f"[Executor] 安全熔断：检测到 Canary Token 泄露！"
+                    f"（content_leak={leak_in_content}, tools_leak={leak_in_tools}）"
+                )
+                if recorder is not None:
+                    await recorder.record(
+                        record_type="guard",
+                        node="executor",
+                        phase="executing",
+                        thought="[SECURITY] Canary Token leak detected in LLM response or tool calls",
+                        ok=False,
+                        step_count=step_index,
+                        total_tokens=tokens_after_llm,
+                    )
+                return {
+                    "should_terminate": True,
+                    "termination_reason": "[SECURITY] Prompt leak detected via canary token",
+                    "total_tokens": tokens_after_llm,
+                }
 
         # 没有工具调用：记录 planner 指令的落地文字即可，不计为错误
         if not specs:

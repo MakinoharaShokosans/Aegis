@@ -19,6 +19,7 @@ from typing import Any, List, Mapping, Optional, Sequence
 from langchain_core.messages import BaseMessage, SystemMessage
 from loguru import logger
 
+from agent_runtime.guardrails.canary import build_canary_directive
 from agent_runtime.memory.models import Workspace, WorkspaceMemory
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.skills.registry import SkillsRegistry
@@ -171,6 +172,12 @@ class ContextManager:
         sections.append(self._workspace_section())
 
         if state is not None:
+            canary_token = str(state.get("canary_token") or "")
+            if canary_token:
+                canary_directive = build_canary_directive(canary_token)
+                if canary_directive:
+                    sections.append(canary_directive)
+
             session_section = self._session_section(state)
             if session_section:
                 sections.append(session_section)

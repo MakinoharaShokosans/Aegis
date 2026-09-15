@@ -9,6 +9,12 @@
 * :mod:`~agent_runtime.guardrails.observation_pruner` —— 观察值离线卸载与蒸馏
 """
 
+from agent_runtime.guardrails.canary import (
+    build_canary_directive,
+    detect_canary_leak,
+    generate_canary_token,
+    sanitize_canary,
+)
 from agent_runtime.guardrails.loop_detector import (
     build_replan_notice,
     compute_fingerprint,
@@ -24,10 +30,14 @@ __all__ = [
     "ObservationPruner",
     "PhysicalBudgetGuard",
     "PrunedObservation",
+    "build_canary_directive",
     "build_replan_notice",
     "compute_fingerprint",
+    "detect_canary_leak",
+    "generate_canary_token",
     "is_failure_observation",
     "is_fingerprint_loop",
     "register_fingerprints",
+    "sanitize_canary",
     "update_consecutive_errors",
 ]
