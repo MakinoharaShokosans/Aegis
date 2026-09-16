@@ -45,6 +45,7 @@ class ShellExecuteRequest(BaseModel):
         command: 待执行命令。
         timeout_sec: 本次执行硬超时（秒）；``None`` 时取服务端默认值。
         queue_wait_sec: 允许等待内存池配额的秒数；``0`` 表示池满立即返回 QUEUED。
+        estimated_mb: 预估内存占用（MB）；``None`` 时由服务端按 RLIMIT_AS 上限估算。
         write_paths: 调用方显式声明的写入/删除目标（额外越界校验）。
     """
 
@@ -57,6 +58,11 @@ class ShellExecuteRequest(BaseModel):
     command: str = Field(min_length=1, description="待执行命令")
     timeout_sec: Optional[float] = Field(default=None, gt=0, description="硬超时（秒），可选")
     queue_wait_sec: float = Field(default=0.0, ge=0, description="允许等待内存池配额的秒数")
+    estimated_mb: Optional[int] = Field(
+        default=None,
+        gt=0,
+        description="预估内存占用（MB）；缺省按 rlimit_as_mb 计（即按最坏情况占用内存池）",
+    )
     write_paths: List[str] = Field(default_factory=list, description="显式写入目标（越界校验）")
 
 
@@ -166,7 +172,8 @@ def create_app() -> FastAPI:
         "/api/v1/shell/execute",
         response_model=ShellExecutionResult,
         responses={
-            400: {"description": "命令审计拒绝（AUDIT_REJECTED）"},
+            400: {"description": "请求体校验失败（VALIDATION_ERROR）"},
+            403: {"description": "命令审计拒绝（AUDIT_REJECTED）"},
             422: {"description": "路径越界（PATH_ESCAPE_DETECTED）或工作区非法（WORKSPACE_INVALID）"},
         },
     )
@@ -181,7 +188,7 @@ def create_app() -> FastAPI:
             强类型执行结果；配额不足且等待预算耗尽时 ``status == "QUEUED"``。
 
         Raises:
-            AuditRejected: 高危命令（由处理器转 400）。
+            AuditRejected: 高危命令（由处理器转 403）。
             PathEscapeError: 写入目标越界（由处理器转 422）。
             WorkspaceInvalidError: 工作区根目录非法（由处理器转 422）。
         """
@@ -200,6 +207,7 @@ def create_app() -> FastAPI:
             step_id=payload.step_id,
             timeout_sec=payload.timeout_sec,
             queue_wait_sec=payload.queue_wait_sec,
+            estimated_mb=payload.estimated_mb,
             write_paths=payload.write_paths,
             settings=settings,
             audit=audit,
@@ -208,18 +216,20 @@ def create_app() -> FastAPI:
 
     @application.exception_handler(AuditRejected)
     async def handle_audit_rejected(request: Request, exc: AuditRejected) -> JSONResponse:
-        """将审计拒绝映射为 ``400`` + 结构化错误体。
+        """将审计拒绝映射为 ``403`` + 结构化错误体。
+
+        语义：请求本身合法，但被**安全策略**拒绝——因此用 403 而非 400。
 
         Args:
             request: FastAPI 请求对象。
             exc: 审计拒绝异常。
 
         Returns:
-            HTTP 400 结构化错误响应。
+            HTTP 403 结构化错误响应。
         """
         logger.bind(rule=exc.rule, path=request.url.path).warning("命令被审计拒绝：{}", exc.reason)
         return JSONResponse(
-            status_code=400,
+            status_code=403,
             content=_structured_error("AUDIT_REJECTED", exc.reason, **exc.to_dict()),
         )
 

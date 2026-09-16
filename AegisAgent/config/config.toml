@@ -172,6 +172,13 @@ memory_pool_mb = 8192               # 全局内存池总量（并发配额）
 max_concurrent = 4                  # 并发执行上限
 artifacts_dir = "storage/artifacts" # 全量日志离线落盘根目录
 
+# ---- 可选调优项：不填则使用 settings.py 内置默认值 ----
+stream_chunk_bytes = 65536          # 管道流式读取分块大小（字节）
+distill_head_lines = 20             # 成功态保留头部行数
+distill_tail_lines = 30             # 成功/失败态保留尾部行数
+distill_max_keyword_lines = 200     # 失败态关键字命中行上限（防刷屏）
+structured_sniff_max_bytes = 262144 # 结构化输出完整性嗅探缓冲上限（字节）
+
 # ------------------------------------------------------------------------------
 # 11. web_search 子系统（同工程独立进程 :8003）
 #     规范：documents/技术选型/web_search.md

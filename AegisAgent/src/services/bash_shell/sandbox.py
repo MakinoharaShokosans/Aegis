@@ -752,7 +752,7 @@ async def run_command(
         命令执行结果；配额不足且超出等待预算时 ``status == "QUEUED"``。
 
     Raises:
-        AuditRejected: 命令命中高危黑名单时抛出（HTTP 层转 400）。
+        AuditRejected: 命令命中高危黑名单时抛出（HTTP 层转 403）。
         PathEscapeError: 写入目标越界时抛出（HTTP 层转 422）。
         WorkspaceInvalidError: 工作区根目录非法时抛出（HTTP 层转 422）。
     """

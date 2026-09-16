@@ -6,7 +6,7 @@
    对 ``/etc/passwd`` 等敏感系统路径的写操作、``chmod -R 777 /`` 等破坏性指令；
 2. **路径越界校验**：``ensure_within_root`` 用 ``Path.resolve()`` 规范化（含符号链接）
    后判断目标是否位于工作区 ``root`` 子树内，越界即抛 ``PathEscapeError``；
-3. **强类型错误**：``AuditRejected`` 携带 ``reason`` 等结构化字段，供 HTTP 层转 400。
+3. **强类型错误**：``AuditRejected`` 携带 ``rule`` 与 ``reason`` 等结构化字段，供 HTTP 层转 403。
 
 本模块为纯函数式确定性逻辑，不做任何 I/O、不依赖配置，可离线单测。
 
