@@ -20,14 +20,14 @@ import time
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Deque, Dict, List, Optional, Set
+from typing import Any, AsyncIterator, Deque, Dict, List, Mapping, Optional, Set
 
 from loguru import logger
 
-from agent_runtime.api.schemas import TaskOut
+from agent_runtime.api.schemas import ApprovalRequestOut, TaskOut
 from agent_runtime.errors import TaskAlreadyRunningError, TaskNotFoundError, TaskQueueFullError
 from agent_runtime.state import AgentState, TaskStatus
-from agent_runtime.workflow import RuntimeDeps, resume_agent, run_streaming
+from agent_runtime.workflow import RuntimeDeps, TaskOutcome, resume_agent, run_streaming
 
 __all__ = ["TaskHandle", "TaskRegistry"]
 
@@ -58,6 +58,10 @@ class TaskHandle:
     subscribers: Set[asyncio.Queue] = field(default_factory=set)
     runner: Optional[asyncio.Task] = None
     seq: int = 0
+    #: 处于 waiting_for_approval 时的待审批请求
+    approval_request: Optional[Dict[str, Any]] = None
+    #: 会话权限基线（用于状态快照展示）
+    permission_level: str = "workspace_write"
 
     def oldest_seq(self) -> int:
         """缓冲区中最旧事件的序号（空缓冲返回 0）。"""
@@ -76,6 +80,10 @@ class TaskHandle:
             workspace_id=self.workspace_id,
             task_goal=self.task_goal,
             status=self.status,
+            permission_level=self.permission_level,  # type: ignore[arg-type]
+            approval_request=(
+                ApprovalRequestOut(**self.approval_request) if self.approval_request else None
+            ),
             milestones=milestones,
             current_milestone_idx=int(state.get("current_milestone_idx", 0) or 0),
             step_count=int(state.get("step_count", 0) or 0),
@@ -104,6 +112,9 @@ class TaskRegistry:
         self._tasks: Dict[str, TaskHandle] = {}
         self._running: Set[str] = set()
         self._lock = asyncio.Lock()
+        #: 会话级"永久放行"指纹集合：``session_id -> {action_signature}``。
+        #: 放在注册表而非任务运行时，是为了让 ``always`` 决策**跨 resume 存活**。
+        self._session_approvals: Dict[str, Set[str]] = {}
 
     # ==========================================================================
     # 查询
@@ -123,6 +134,10 @@ class TaskRegistry:
     def find(self, task_id: str) -> Optional[TaskHandle]:
         """按 ID 取句柄（不存在返回 ``None``）。"""
         return self._tasks.get(task_id)
+
+    def _allowlist_for(self, session_id: str) -> Set[str]:
+        """取该会话的永久放行集合（不存在则创建并持有其引用）。"""
+        return self._session_approvals.setdefault(session_id, set())
 
     def list_by_session(self, session_id: str) -> List[TaskHandle]:
         """列出某会话下的全部任务（按创建时间倒序）。"""
@@ -148,6 +163,7 @@ class TaskRegistry:
         workspace_id: str,
         session_id: str,
         task_goal: str,
+        permission_level: Optional[str] = None,
     ) -> TaskHandle:
         """登记并在后台启动任务。
 
@@ -156,6 +172,7 @@ class TaskRegistry:
             workspace_id: 工作区标识。
             session_id: 会话标识。
             task_goal: 任务目标。
+            permission_level: 可选，覆盖会话权限基线。
 
         Returns:
             新建的任务句柄（此时状态为 ``queued``）。
@@ -184,6 +201,7 @@ class TaskRegistry:
                 session_id=session_id,
                 workspace_id=workspace_id,
                 task_goal=task_goal,
+                permission_level=str(permission_level or deps.config.permissions.default_level),
                 events=deque(maxlen=self._buffer_size),
             )
             self._tasks[handle.task_id] = handle
@@ -215,9 +233,81 @@ class TaskRegistry:
             self._running.add(task_id)
             handle.status = "queued"
             handle.finished_at = None
+            handle.approval_request = None
 
         handle.runner = asyncio.create_task(self._run(deps, handle, resume=True))
         logger.info(f"[TaskRegistry] 已恢复任务 {task_id}")
+        return handle
+
+    async def submit_decision(
+        self,
+        deps: RuntimeDeps,
+        task_id: str,
+        *,
+        approved: bool,
+        scope: str = "once",
+        reason: str = "",
+        approval_id: str = "",
+    ) -> TaskHandle:
+        """提交人工审批决策并恢复被挂起的图执行。
+
+        Args:
+            deps: 进程级运行时。
+            task_id: 任务 ID。
+            approved: 是否批准。
+            scope: ``once`` 或 ``always``（后者写入会话白名单）。
+            reason: 拒绝理由（作为观察值驱动重规划）。
+            approval_id: 回传的审批标识（可选，用于校验与审计）。
+
+        Returns:
+            任务句柄（状态已置为 ``queued``）。
+
+        Raises:
+            TaskNotFoundError: 任务不存在。
+            TaskAlreadyRunningError: 任务不在等待审批状态。
+        """
+        handle = self.get(task_id)
+        if handle.status != "waiting_for_approval" or handle.approval_request is None:
+            raise TaskAlreadyRunningError(
+                "任务当前不处于等待审批状态",
+                context={"task_id": task_id, "status": handle.status},
+            )
+
+        expected_id = str(handle.approval_request.get("approval_id") or "")
+        if approval_id and expected_id and approval_id != expected_id:
+            raise TaskAlreadyRunningError(
+                "审批标识不匹配（可能已被其它决策消费）",
+                context={"expected": expected_id, "received": approval_id},
+            )
+
+        decision: Dict[str, Any] = {"approved": bool(approved)}
+        if approved:
+            decision["scope"] = "always" if str(scope) == "always" else "once"
+        else:
+            decision["reason"] = reason or "用户拒绝该操作"
+
+        await self.emit(
+            task_id,
+            {
+                "event": "task.approved" if approved else "task.rejected",
+                "approval_id": expected_id,
+                "decision": decision.get("scope") or "reject",
+                "reason": decision.get("reason", ""),
+            },
+        )
+
+        handle.approval_request = None
+        handle.status = "queued"
+        handle.finished_at = None
+        async with self._lock:
+            self._running.add(task_id)
+        handle.runner = asyncio.create_task(
+            self._run(deps, handle, resume=True, approval_decision=decision)
+        )
+        logger.info(
+            f"[TaskRegistry] 已提交审批决策 task={task_id} "
+            f"approved={approved} scope={decision.get('scope') or '-'}"
+        )
         return handle
 
     async def cancel(self, task_id: str) -> None:
@@ -236,7 +326,25 @@ class TaskRegistry:
             handle.finished_at = time.time()
             logger.info(f"[TaskRegistry] 已请求取消任务 {task_id}")
 
-    async def _run(self, deps: RuntimeDeps, handle: TaskHandle, *, resume: bool = False) -> None:
+    async def _apply_outcome(self, handle: TaskHandle, outcome: TaskOutcome) -> None:
+        """把图执行产出落到任务句柄（含"挂起待审批"这一特殊终态）。"""
+        handle.state = outcome.state
+        handle.approval_request = outcome.approval_request
+        handle.status = "waiting_for_approval" if outcome.waiting_for_approval else self._derive_status(outcome.state)
+        if outcome.waiting_for_approval:
+            await self.emit(
+                handle.task_id,
+                {"event": "task.waiting_for_approval", **(outcome.approval_request or {})},
+            )
+
+    async def _run(
+        self,
+        deps: RuntimeDeps,
+        handle: TaskHandle,
+        *,
+        resume: bool = False,
+        approval_decision: Optional[Mapping[str, Any]] = None,
+    ) -> None:
         """任务执行体（后台协程）。"""
         handle.status = "running"
         handle.started_at = time.time()
@@ -244,25 +352,28 @@ class TaskRegistry:
 
         try:
             if resume:
-                final_state = await resume_agent(
+                outcome = await resume_agent(
                     deps,
                     task_id=handle.task_id,
                     workspace_id=handle.workspace_id,
                     session_id=handle.session_id,
                     task_goal=handle.task_goal,
+                    approval_decision=approval_decision,
+                    approval_allowlist=self._allowlist_for(handle.session_id),
                     event_sink=lambda event: self.emit(handle.task_id, event),
                 )
             else:
-                final_state = await run_streaming(
+                outcome = await run_streaming(
                     deps,
                     workspace_id=handle.workspace_id,
                     session_id=handle.session_id,
                     task_goal=handle.task_goal,
                     task_id=handle.task_id,
+                    permission_level=handle.permission_level,
+                    approval_allowlist=self._allowlist_for(handle.session_id),
                     event_sink=lambda event: self.emit(handle.task_id, event),
                 )
-            handle.state = final_state
-            handle.status = self._derive_status(final_state)
+            self._apply_outcome(handle, outcome)
         except asyncio.CancelledError:
             handle.status = "cancelled"
             handle.finished_at = time.time()
@@ -278,6 +389,9 @@ class TaskRegistry:
         finally:
             handle.finished_at = handle.finished_at or time.time()
             self._running.discard(handle.task_id)
+            # 挂起待审批不是终态：不发 task.finished，避免前端误判任务已结束
+            if handle.status == "waiting_for_approval":
+                return
             await self.emit(
                 handle.task_id,
                 {

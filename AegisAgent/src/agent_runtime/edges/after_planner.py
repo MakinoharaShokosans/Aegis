@@ -5,7 +5,7 @@
 1. **硬熔断** → ``END``（如 LLM 全链路不可用）；
 2. **存在里程碑且全部完成** → ``evaluator``：任务的"自我声明完成"必须经过
    独立复核，不能由 planner 一句话就结束；
-3. 其余 → ``budget_guard``：继续执行主循环。
+3. 其余 → ``budget_guard``：继续执行主循环（``budget_guard → executor → tool_runner → planner``）。
 """
 
 from __future__ import annotations

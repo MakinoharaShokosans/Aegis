@@ -8,6 +8,7 @@
 * :mod:`~agent_runtime.guardrails.physical_budget` —— 物理预算硬熔断
 * :mod:`~agent_runtime.guardrails.observation_pruner` —— 观察值离线卸载与蒸馏
 * :mod:`~agent_runtime.guardrails.canary` —— 金丝雀令牌派生、指令构造与外泄熔断
+* :mod:`~agent_runtime.guardrails.permission` —— 三级权限分级与越级判定（HITL 判定核心）
 * :mod:`~agent_runtime.guardrails.injection_guard` —— 注入样态标注（纵深防御，非安全边界）
 
 注：``canary``（防外泄）与 ``injection_guard``（防注入执行）是**互补**的两种机制，
@@ -38,23 +39,37 @@ from agent_runtime.guardrails.loop_detector import (
     update_consecutive_errors,
 )
 from agent_runtime.guardrails.observation_pruner import ObservationPruner, PrunedObservation
+from agent_runtime.guardrails.permission import (
+    LEVEL_ORDER,
+    PermissionDecision,
+    action_signature,
+    check_permission,
+    normalize_level,
+    required_level_for,
+)
 from agent_runtime.guardrails.physical_budget import PhysicalBudgetGuard
 
 __all__ = [
     "InjectionMatch",
     "InjectionScan",
+    "LEVEL_ORDER",
     "ObservationPruner",
+    "PermissionDecision",
     "PhysicalBudgetGuard",
     "PrunedObservation",
+    "action_signature",
     "build_canary_directive",
     "build_replan_notice",
+    "check_permission",
     "compute_fingerprint",
     "derive_session_canary",
     "detect_canary_leak",
     "generate_canary_token",
     "is_failure_observation",
     "is_fingerprint_loop",
+    "normalize_level",
     "register_fingerprints",
+    "required_level_for",
     "sanitize_canary",
     "update_consecutive_errors",
 ]

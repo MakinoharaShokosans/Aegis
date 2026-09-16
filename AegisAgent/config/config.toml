@@ -229,3 +229,42 @@ allow_workspace = false             # 工作区覆盖 <repo>/.aegis/skills（不
 max_description_chars = 200         # 清单中单条描述的长度上限
 max_triggers = 12                   # 单技能触发词条数上限
 high_privilege_tools = ["bash", "write_file"]   # 高风险工具名单（用于标注，不用于拦截）
+
+# ------------------------------------------------------------------------------
+# 14. 三级权限分级与越级人工审核（HITL）
+#     规范：documents/技术选型/bash_shell.md §2.3、agent_runtime/04 §4.5
+#     说明：命中"需全权限"模式的命令会挂起任务，等待 /approve 或 /reject。
+#           正则使用单引号字面量，反斜杠无需转义。
+# ------------------------------------------------------------------------------
+[permissions]
+default_level = "workspace_write"      # 新任务默认基线：read_only | workspace_write | full_permissions
+unknown_tool_level = "full_permissions" # 未知工具（第三方 MCP）保守处理，需显式审批
+read_only_tools = ["view_file", "rag_search", "load_skill", "delegate_research"]
+workspace_write_tools = ["write_file"]
+full_permission_tools = []
+bash_tools = ["bash"]
+
+full_permission_patterns = [
+    '\bgit\s+push\b',                       # 推送远端
+    '\b(curl|wget)\b',                       # 网络外联
+    '\b(ssh|scp|rsync)\b',
+    '\bpip3?\s+install\b',                  # 依赖安装（全局环境）
+    '\bnpm\s+(install|i|ci)\b',
+    '\b(yarn|pnpm)\s+(add|install)\b',
+    '\b(apt|apt-get|yum|dnf|apk)\s+(install|upgrade|remove)\b',
+    '\bsudo\b',                              # 特权提升
+    '\b(docker|docker-compose|kubectl|helm)\b',
+]
+
+workspace_write_patterns = [
+    '>>?\s*\S',                             # 输出重定向（写文件）
+    '\b(rm|mv|cp|mkdir|rmdir|touch|ln)\b',
+    '\b(sed|perl)\s+-i\b',                  # 原地编辑
+    '\b(chmod|chown)\b',
+    '\bgit\s+(add|commit|checkout|switch|merge|rebase|reset|stash|tag|clean)\b',
+    '\b(make|cmake|ninja)\b',                # 构建
+    '\b(gcc|g\+\+|clang|clang\+\+|rustc|cargo|go\s+(build|test))\b',
+    '\b(pytest|python\s+-m\s+pytest)\b',   # 测试
+    '\b(npm|yarn|pnpm)\s+(run|test)\b',
+    '\btee\b',
+]

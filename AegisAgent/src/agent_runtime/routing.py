@@ -17,6 +17,7 @@ from agent_runtime.edges import (
     after_evaluator,
     after_executor,
     after_planner,
+    after_tool_runner,
 )
 from agent_runtime.edges.base import RouterFn
 
@@ -26,12 +27,14 @@ __all__ = [
     "route_after_evaluator",
     "route_after_executor",
     "route_after_planner",
+    "route_after_tool_runner",
 ]
 
 route_after_planner: RouterFn = after_planner.route_after_planner
 route_after_budget_guard: RouterFn = after_budget_guard.route_after_budget_guard
 route_after_executor: RouterFn = after_executor.route_after_executor
 route_after_evaluator: RouterFn = after_evaluator.route_after_evaluator
+route_after_tool_runner: RouterFn = after_tool_runner.route_after_tool_runner
 
 #: 图装配表：``节点名 -> (路由函数, 目标映射)``。
 #: ``workflow.build_agent_graph`` 直接遍历本表挂载条件边，新增边无需改图构建代码。
@@ -39,5 +42,6 @@ EDGE_TABLE: Dict[str, Tuple[RouterFn, Mapping[str, str]]] = {
     "planner": (route_after_planner, after_planner.TARGETS),
     "budget_guard": (route_after_budget_guard, after_budget_guard.TARGETS),
     "executor": (route_after_executor, after_executor.TARGETS),
+    "tool_runner": (route_after_tool_runner, after_tool_runner.TARGETS),
     "evaluator": (route_after_evaluator, after_evaluator.TARGETS),
 }

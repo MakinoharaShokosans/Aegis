@@ -137,6 +137,8 @@
 
 ### 4.4 任务 Tasks 与人机协同审核（HITL）
 
+> **实现状态：✅ 已落地**（`/approve`、`/reject`、`waiting_for_approval` 状态与三个 SSE 事件均已实现）。
+
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
 | POST | `/api/v1/sessions/{session_id}/tasks` | 提交任务，立即返回 `202`，后台执行 |

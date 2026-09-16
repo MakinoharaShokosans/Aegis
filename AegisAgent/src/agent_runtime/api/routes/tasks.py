@@ -20,7 +20,13 @@ from loguru import logger
 from sse_starlette.sse import EventSourceResponse
 
 from agent_runtime.api.deps import ConfigDep, RegistryDep, RuntimeDep
-from agent_runtime.api.schemas import TaskOut, TaskSubmit, TimelineItem
+from agent_runtime.api.schemas import (
+    ApproveRequest,
+    RejectRequest,
+    TaskOut,
+    TaskSubmit,
+    TimelineItem,
+)
 from agent_runtime.api.task_registry import TaskRegistry
 
 __all__ = ["router"]
@@ -139,6 +145,7 @@ async def submit_task(
         workspace_id=session.workspace_id,
         session_id=session_id,
         task_goal=payload.task_goal,
+        permission_level=payload.permission_level,
     )
     return handle.to_out()
 
@@ -147,6 +154,80 @@ async def submit_task(
 async def get_task(task_id: str, registry: RegistryDep) -> TaskOut:
     """返回任务状态快照（**不是** AgentState）。"""
     return registry.get(task_id).to_out()
+
+
+@router.post(
+    "/tasks/{task_id}/approve",
+    status_code=status.HTTP_200_OK,
+    summary="批准越级操作并恢复执行（HITL）",
+)
+async def approve_task(
+    task_id: str,
+    payload: ApproveRequest,
+    runtime: RuntimeDep,
+    registry: RegistryDep,
+) -> Dict[str, Any]:
+    """批准挂起中的越级操作。
+
+    Args:
+        task_id: 任务 ID。
+        payload: ``decision`` 为 ``once``（仅本次）或 ``always``（加入会话白名单）。
+        runtime: 进程级运行时。
+        registry: 任务注册表。
+
+    Returns:
+        ``{"task_id", "status", "message"}``；图执行在后台恢复。
+    """
+    handle = await registry.submit_decision(
+        runtime,
+        task_id,
+        approved=True,
+        scope=payload.decision,
+        approval_id=payload.approval_id or "",
+    )
+    return {
+        "task_id": task_id,
+        "status": handle.status,
+        "message": "Approval granted, resuming execution.",
+    }
+
+
+@router.post(
+    "/tasks/{task_id}/reject",
+    status_code=status.HTTP_200_OK,
+    summary="拒绝越级操作并反馈重规划（HITL）",
+)
+async def reject_task(
+    task_id: str,
+    payload: RejectRequest,
+    runtime: RuntimeDep,
+    registry: RegistryDep,
+) -> Dict[str, Any]:
+    """拒绝挂起中的越级操作。
+
+    拒绝理由会作为工具观察值回灌给模型，驱动其给出合规的替代方案。
+
+    Args:
+        task_id: 任务 ID。
+        payload: 拒绝理由。
+        runtime: 进程级运行时。
+        registry: 任务注册表。
+
+    Returns:
+        ``{"task_id", "status", "message"}``。
+    """
+    handle = await registry.submit_decision(
+        runtime,
+        task_id,
+        approved=False,
+        reason=payload.reason,
+        approval_id=payload.approval_id or "",
+    )
+    return {
+        "task_id": task_id,
+        "status": handle.status,
+        "message": "Rejection feedback sent to planner, resuming execution.",
+    }
 
 
 @router.post("/tasks/{task_id}/resume", response_model=TaskOut, status_code=status.HTTP_202_ACCEPTED, summary="续跑任务")

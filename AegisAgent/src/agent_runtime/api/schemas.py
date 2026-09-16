@@ -30,6 +30,9 @@ __all__ = [
     "TurnOut",
     "WorkspaceCreate",
     "WorkspaceOut",
+    "ApprovalRequestOut",
+    "ApproveRequest",
+    "RejectRequest",
     "WorkspaceUpdate",
 ]
 
@@ -171,13 +174,58 @@ class TaskSubmit(BaseModel):
 
     task_goal: str = Field(description="任务目标（自然语言）")
     parent_task_id: Optional[str] = Field(default=None, description="可选，父任务 ID")
+    permission_level: Optional[
+        Literal["read_only", "workspace_write", "full_permissions"]
+    ] = Field(default=None, description="可选，覆盖会话权限基线（缺省取服务端配置）")
+
+
+class ApprovalRequestOut(BaseModel):
+    """越级操作的待审批请求（人工审核卡片的数据源）。"""
+
+    approval_id: str = Field(description="审批标识，提交 approve/reject 时回传")
+    required_level: Literal["read_only", "workspace_write", "full_permissions"] = Field(
+        description="该动作所需的最低权限级别"
+    )
+    current_level: Literal["read_only", "workspace_write", "full_permissions"] = Field(
+        description="当前会话授权级别"
+    )
+    action_type: str = Field(description="动作类型：network_egress / global_env / privileged / unknown …")
+    command: str = Field(default="", description="待执行动作摘要（含关键命令），供人工审阅")
+    reason: str = Field(default="", description="越级判定原因")
+    escalation_count: int = Field(default=1, description="本批越级动作总数")
+    related_actions: List[str] = Field(default_factory=list, description="同批其它越级动作摘要")
+
+
+class ApproveRequest(BaseModel):
+    """批准越级操作。"""
+
+    approval_id: Optional[str] = Field(default=None, description="回传审批标识（校验用）")
+    decision: Literal["once", "always"] = Field(
+        default="once", description="once=仅本次放行；always=加入当前会话白名单免审"
+    )
+
+
+class RejectRequest(BaseModel):
+    """拒绝越级操作并反馈理由。"""
+
+    approval_id: Optional[str] = Field(default=None, description="回传审批标识（校验用）")
+    reason: str = Field(default="", description="拒绝理由，将作为观察值驱动模型重新规划")
 
 
 class TimelineItem(BaseModel):
     """执行时间线条目（AgentState.messages 的投影）。"""
 
     seq: int
-    type: Literal["plan", "thought", "tool_call", "tool_result", "system_notice", "milestone", "guard_warning"]
+    type: Literal[
+        "plan",
+        "thought",
+        "tool_call",
+        "tool_result",
+        "system_notice",
+        "milestone",
+        "guard_warning",
+        "approval_request",
+    ]
     role: str = ""
     summary: str = ""
     artifact_id: Optional[str] = None
@@ -201,7 +249,21 @@ class TaskOut(BaseModel):
     session_id: str
     workspace_id: str
     task_goal: str
-    status: Literal["queued", "running", "succeeded", "failed", "cancelled", "terminated"]
+    status: Literal[
+        "queued",
+        "running",
+        "waiting_for_approval",
+        "succeeded",
+        "failed",
+        "cancelled",
+        "terminated",
+    ]
+    permission_level: Literal["read_only", "workspace_write", "full_permissions"] = Field(
+        default="workspace_write", description="会话权限基线"
+    )
+    approval_request: Optional[ApprovalRequestOut] = Field(
+        default=None, description="处于 waiting_for_approval 时的待审批请求"
+    )
     milestones: List[Dict[str, Any]] = Field(default_factory=list)
     current_milestone_idx: int = 0
     step_count: int = 0

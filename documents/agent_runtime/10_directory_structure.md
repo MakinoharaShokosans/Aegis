@@ -77,7 +77,8 @@ AegisAgent/src/agent_runtime/
 │   ├── base.py                            NodeFn 契约 + 结构化解析/合并等纯辅助
 │   ├── planner.py                         reasoning 层：宏观规划 + 里程碑计划 + 反思重规划
 │   ├── budget_guard.py                    薄节点：包装 PhysicalBudgetGuard
-│   ├── executor.py                        fast 层：生成 tool_calls + 并发派发 + 观察值治理
+│   ├── executor.py                        fast 层：生成 tool_calls（不执行）+ 金丝雀熔断
+│   ├── tool_runner.py                     ★ 权限闸门（HITL 挂起点）+ 并发派发 + 观察值治理
 │   └── evaluator.py                       reasoning 层：里程碑独立验收 + 事实沉淀
 │
 ├── guardrails/                 ✅         纯确定性策略（零 LLM、零 I/O）
@@ -85,7 +86,8 @@ AegisAgent/src/agent_runtime/
 │   ├── loop_detector.py                   MD5 指纹队列 + 连续错误计数 + 重规划通知文本
 │   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
 │   ├── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
-│   └── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
+│   ├── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
+│   └── permission.py                      ★ 三级权限分级与越级判定（HITL 判定核心，纯函数）
 │
 ├── research/                   ✅         研究子智能体：不可信外部数据的隔离区（12）
 │   ├── __init__.py
@@ -225,6 +227,8 @@ AegisAgent/
 | ⑯ | 研究子智能体用**子图**还是 **tool** | **用 tool**：接口为 `delegate_research`，内部是一条有界异步循环，**不引入 LangGraph 子图** | 子图会共享 `messages` 与 Checkpoint ⇒ 原始网页回流主上下文，隔离形同虚设；tool 天然把不可信内容的生命周期关在一次函数调用内 |
 | ⑰ | "主工具表不含 web_search" 只靠约定 | **`AegisTool.trust` + `ToolRegistry(allow_untrusted=False)` 构造期拒绝** | 把约定变成可执行不变量——想犯这个错都犯不了 |
 | ⑱ | 工作区技能包静默进入**系统提示词** | **按来源分级：`builtin`/`global` 可信、`workspace` 默认拒绝**；元数据做注入标注与长度截断；内容纳入 XML 定界信封 | 克隆恶意仓库即可注入是唯一"零交互可中招"的路径，必须默认拒绝（`08` §4.1–4.3） |
+| ⑳ | 人工审批的 `interrupt()` 放在哪个节点 | **新增 `tool_runner` 节点承载权限闸门，`executor` 只生成 `tool_calls`** | LangGraph 的 `interrupt()` 恢复时**重跑整个节点**；若闸门紧邻 fast 模型调用，审批后会让模型调用再发生一次——重复计费，且可能产生"用户批准的命令 ≠ 实际执行的命令"。拆开后重跑代价仅为纯函数判定 |
+| ㉑ | 三级权限在 bash_shell 还是 Agent 侧判定 | **统一在 Agent 工具层判定**（`tool_runner`），bash_shell 只保留绝对红线 `CommandAudit` | 避免两套分类器漂移；工具层同时知道工具名与参数，是唯一能统一判定所有工具（含 MCP）的位置 |
 | ⑲ | MCP 工具直接进主工具表 | **数据面与控制面分离**：描述消毒硬拒 + 结果标注；`trust="untrusted"` 且经 `untrusted_allowlist` **逐名授权**；stdio 子进程施加 setrlimit | 工具描述会进**工具 Schema**（位置高于观察值）；stdio server 是任意代码执行，只能靠 opt-in + 资源上限 + 审计（`09` §3.5） |
 
 ---
@@ -362,5 +366,5 @@ packages = [
 | 工作区技能包的不可信边界（信任分级 / 默认拒绝 / 披露信封） | ✅ 已完成（见 `08` §4.1–4.3，裁决⑱） |
 | MCP 工具的不可信边界（描述消毒 / 逐名授权 / 子进程资源上限） | ✅ 已完成（见 `09` §3.5，裁决⑲） |
 | 本地代码库（RAG 检索结果） | 视为可信（用户自己的工作区）；若将来索引外部仓库需重新评估 |
-| **三级权限分级 + 越级 HITL 人工审核**（bash 子系统） | 📋 **规划中，尚未实现**（设计见 `bash_shell/03` §2；需跨 `ShellExecuteRequest` → 判定引擎 → LangGraph `interrupt()` → Agent 审核端点 → 前端卡片） |
+| **三级权限分级 + 越级 HITL 人工审核** | ✅ 已完成：`guardrails/permission.py` 纯函数判定 + `nodes/tool_runner.py` 权限闸门（`interrupt`/`Command(resume)`）+ `/approve`、`/reject` 端点 + 会话级永久放行白名单 |
 | 自动化测试覆盖 | ⬜ 持续补齐中 |

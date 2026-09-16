@@ -25,7 +25,11 @@ graph TD
 
     EXEC --> EXEC_ROUTE{"should_terminate?"}
     EXEC_ROUTE -->|是| END_NODE
-    EXEC_ROUTE -->|否| PLAN
+    EXEC_ROUTE -->|否| RUNNER["tool_runner<br/>权限闸门(interrupt) + 并发派发"]
+
+    RUNNER --> RUNNER_ROUTE{"should_terminate?"}
+    RUNNER_ROUTE -->|是| END_NODE
+    RUNNER_ROUTE -->|否| PLAN
 
     EVAL --> EVAL_ROUTE{"全部里程碑达成?"}
     EVAL_ROUTE -->|是| END_NODE
@@ -35,7 +39,9 @@ graph TD
 **四条不变式**：
 
 1. 图内**不存在** `supervisor` 节点，也**不按 `cost_usd` 路由**（`05` §1/§2）。
-2. 只存在**一个** ReAct 主循环：`planner → budget_guard → executor → planner`。
+2. 只存在**一个** ReAct 主循环：`planner → budget_guard → executor → tool_runner → planner`。
+   `executor` 只生成 `tool_calls`，`tool_runner` 执行；后者的权限闸门会在越级时
+   调用 `interrupt()` 挂起（HITL），恢复后本节点重跑并继续派发。
 3. 进入 `evaluator` 由**确定性条件**触发（存在里程碑且全部 `completed`），不依赖 LLM 自述。
 4. 任何硬熔断（预算耗尽 / LLM 全链路不可用）都直达 `END`，不再经过任何节点。
 
@@ -265,6 +271,11 @@ async def resume_agent(task_id: str) -> AgentState:
 > **`start_time` 语义**：挂钟时间守卫的 `start_time` 由 `PhysicalBudgetGuard` 实例持有（`05` §2）。**任务恢复时必须重新实例化守卫**，否则挂钟预算会因进程重启而被"重置"——这是恢复路径上必须显式处理的已知语义点。
 
 ### 4.5 人机协同审核挂起与恢复（Human-in-the-Loop & `interrupt`）
+
+> **实现状态：✅ 已落地**。判定在 `guardrails/permission.py`（纯函数），
+> 挂起点在 `nodes/tool_runner.py`，恢复入口为 `POST /tasks/{id}/approve|reject`
+> （见 `11_http_api.md` §4.4）。会话级"永久放行"由 `TaskRegistry` 持有的
+> 指纹集合实现，跨 `resume` 存活。
 
 当 `executor` 或工具层检测到待执行动作超出当前会话已授权权限级别（如 `read_only` 下写文件、`workspace_write` 下跨区写或执行 `git push`）时，系统触发 LangGraph `interrupt()` 挂起状态图：
 

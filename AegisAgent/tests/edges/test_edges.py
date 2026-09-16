@@ -70,7 +70,7 @@ def test_route_after_executor():
 
     # 2. 正常回环到 planner 汇总观察值并安排下一步
     state_ok = {"should_terminate": False}
-    assert route_after_executor(state_ok) == "planner"
+    assert route_after_executor(state_ok) == "tool_runner"
 
 
 def test_route_after_evaluator():

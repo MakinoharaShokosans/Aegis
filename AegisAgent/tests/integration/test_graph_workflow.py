@@ -94,13 +94,15 @@ async def test_full_workflow_success_loop(test_config: AegisConfig, mock_gateway
         events.append(ev)
 
     try:
-        final_state = await run_streaming(
+        # run_streaming 返回 TaskOutcome（含终态与可能的待审批请求）
+        outcome = await run_streaming(
             deps,
             workspace_id=ws.workspace_id,
             session_id=session.session_id,
             task_goal="请帮我创建一个 hello.txt 文件并写入内容",
             event_sink=capture_event,
         )
+        final_state = outcome.state
 
         # 3. 校验最终状态与产物
         assert final_state["should_terminate"] is True

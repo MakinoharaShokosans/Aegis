@@ -58,6 +58,7 @@ def build_initial_state(
     rolling_summary: str = "",
     confirmed_facts: Optional[Sequence[str]] = None,
     failed_attempts: Optional[Sequence[FailedAttempt]] = None,
+    permission_level: str = "workspace_write",
 ) -> AgentState:
     """构造任务的初始 ``AgentState``（Spawn 阶段）。
 
@@ -75,6 +76,7 @@ def build_initial_state(
         rolling_summary: 会话已压缩摘要。
         confirmed_facts: 会话已确认事实。
         failed_attempts: 会话踩坑记录。
+        permission_level: 会话权限基线（三级分级管控）。
 
     Returns:
         全新的 :class:`AgentState`。
@@ -93,6 +95,7 @@ def build_initial_state(
         rolling_summary=rolling_summary,
         confirmed_facts=list(confirmed_facts or []),
         failed_attempts=list(failed_attempts or []),
+        permission_level=permission_level,  # type: ignore[typeddict-item]
         artifacts={},
         step_count=0,
         total_tokens=0,

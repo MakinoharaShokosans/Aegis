@@ -33,12 +33,24 @@ MilestoneStatus = Literal["pending", "in_progress", "completed", "failed"]
 StepPhase = Literal["planning", "executing", "reflecting"]
 """执行步骤所处阶段。"""
 
-TaskStatus = Literal["queued", "running", "succeeded", "failed", "cancelled", "terminated"]
+PermissionLevel = Literal["read_only", "workspace_write", "full_permissions"]
+"""会话权限基线（三级分级管控，见 ``guardrails/permission.py``）。"""
+
+TaskStatus = Literal[
+    "queued",
+    "running",
+    "waiting_for_approval",
+    "succeeded",
+    "failed",
+    "cancelled",
+    "terminated",
+]
 """任务对外可见的生命周期状态。
 
 迁移关系::
 
-    queued ──► running ──┬──► succeeded    (evaluator 判定里程碑全部达成)
+    queued ──► running ──┬──► waiting_for_approval ──► running   (POST /approve 或 /reject)
+                         ├──► succeeded    (evaluator 判定里程碑全部达成)
                          ├──► terminated   (物理预算熔断)
                          ├──► failed       (不可恢复异常，如 LLM 全链路不可用)
                          └──► cancelled    (客户端主动取消)
@@ -176,6 +188,7 @@ __all__ = [
     "FailedAttempt",
     "Milestone",
     "MilestoneStatus",
+    "PermissionLevel",
     "StepPhase",
     "StepRecord",
     "TaskStatus",

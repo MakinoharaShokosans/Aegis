@@ -150,20 +150,13 @@ async def test_executor_circuit_breaker_on_canary_exfiltration(tmp_path: Path):
     )
 
     registry = ToolRegistry()
+    # executor 已瘦身为"只生成 tool_calls + 安全熔断判定"，
+    # 派发与观察值治理下沉到 tool_runner（HITL 引入的拆分）
     executor_node = build_executor_node(
         gateway=mock_gateway,
         registry=registry,
-        dispatcher=ToolDispatcher(registry),
-        pruner=ObservationPruner(
-            token_counter=lambda s: len(s) // 4,
-            max_tokens=1000,
-            head_lines=20,
-            tail_lines=20,
-            artifacts_dir=tmp_path / "artifacts",
-        ),
         prompts=PromptLibrary(),
         context=context,
-        guardrails_config=guardrails_cfg,
     )
 
     # 执行节点

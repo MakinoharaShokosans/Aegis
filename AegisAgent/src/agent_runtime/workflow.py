@@ -18,9 +18,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional
+from typing import Any, Awaitable, Callable, Dict, List, Mapping, Optional, Set
 
 from langgraph.graph import StateGraph
+from langgraph.types import Command
 from loguru import logger
 
 from agent_runtime import routing
@@ -37,6 +38,7 @@ from agent_runtime.nodes import (
     build_evaluator_node,
     build_executor_node,
     build_planner_node,
+    build_tool_runner_node,
 )
 from agent_runtime.nodes.base import NodeFn
 from agent_runtime.observability.trajectory import TrajectoryRecorder
@@ -55,6 +57,7 @@ from tools.core.registry import ToolRegistry
 
 __all__ = [
     "RuntimeDeps",
+    "TaskOutcome",
     "TaskRuntime",
     "build_agent_graph",
     "build_runtime",
@@ -67,6 +70,56 @@ __all__ = [
 
 #: 流式事件回调：接收结构化事件字典（供 API 层转发 SSE）
 EventSink = Callable[[Dict[str, Any]], Awaitable[None]]
+
+
+@dataclass(slots=True)
+class TaskOutcome:
+    """一次图执行的产出。
+
+    单独成契约的原因：**"任务挂起等待人工审批"是一个必须传给 API 层的事实**，
+    而它不是 ``AgentState`` 的一部分——``AgentState`` 只描述执行状态，
+    待审批信息由 LangGraph 的 interrupt 机制在 checkpoint 中维护。
+    把它塞进 state 会造成"同一事实两处存储"的漂移风险。
+
+    Attributes:
+        state: 执行终态（或挂起时的当前状态）。
+        approval_request: 待审批请求；``None`` 表示未处于待审批状态。
+    """
+
+    state: AgentState
+    approval_request: Optional[Dict[str, Any]] = None
+
+    @property
+    def waiting_for_approval(self) -> bool:
+        """是否正处于"等待人工审批"的挂起状态。"""
+        return self.approval_request is not None
+
+
+def _extract_pending_approval(snapshot: Any) -> Optional[Dict[str, Any]]:
+    """从 Checkpoint 快照中提取待审批请求。
+
+    Args:
+        snapshot: ``app.aget_state(...)`` 返回的 ``StateSnapshot``。
+
+    Returns:
+        审批请求字典；无挂起时返回 ``None``。
+    """
+    def _scan(interrupts: Any) -> Optional[Dict[str, Any]]:
+        for item in interrupts or ():
+            value = getattr(item, "value", None)
+            if isinstance(value, Mapping) and "approval_id" in value:
+                return dict(value)
+        return None
+
+    # 先看顶层（LangGraph 会把当前所有挂起中断聚合在这里），再兜底遍历任务
+    found = _scan(getattr(snapshot, "interrupts", None))
+    if found is not None:
+        return found
+    for task in getattr(snapshot, "tasks", ()) or ():
+        found = _scan(getattr(task, "interrupts", None))
+        if found is not None:
+            return found
+    return None
 
 
 # ==============================================================================
@@ -149,6 +202,8 @@ class TaskRuntime:
     pruner: ObservationPruner
     lifecycle: ExecutionContextManager
     service_clients: List[ServiceClient] = field(default_factory=list)
+    #: 会话级"永久放行"指纹集合（由 TaskRegistry 持有，跨 resume 存活）
+    approval_allowlist: Set[str] = field(default_factory=set)
 
 
 def _build_service_clients(config: AegisConfig) -> Dict[str, ServiceClient]:
@@ -168,6 +223,8 @@ async def prepare_task(
     session_id: str,
     task_goal: str,
     task_id: Optional[str] = None,
+    permission_level: Optional[str] = None,
+    approval_allowlist: Optional[Set[str]] = None,
 ) -> TaskRuntime:
     """装配单个任务的运行时上下文（Spawn 阶段）。
 
@@ -177,6 +234,8 @@ async def prepare_task(
         session_id: 会话标识。
         task_goal: 任务目标。
         task_id: 任务 ID；缺省自动生成。
+        permission_level: 会话权限基线；缺省取 ``config.permissions.default_level``。
+        approval_allowlist: 会话级永久放行集合（可变引用，由调用方持有）。
 
     Returns:
         已就绪的 :class:`TaskRuntime`。
@@ -199,6 +258,7 @@ async def prepare_task(
         rolling_summary=session_memory.summary,
         confirmed_facts=session_memory.confirmed_facts,
         failed_attempts=session_memory.failed_attempts,
+        permission_level=str(permission_level or cfg.permissions.default_level),
     )
 
     # 3. 任务级护栏与工具
@@ -292,6 +352,7 @@ async def prepare_task(
         pruner=pruner,
         lifecycle=ExecutionContextManager(deps.memory, recorder),
         service_clients=list(clients.values()),
+        approval_allowlist=approval_allowlist if approval_allowlist is not None else set(),
     )
 
 
@@ -330,15 +391,22 @@ def _compile_app(deps: RuntimeDeps, task: TaskRuntime) -> Any:
     nodes: Dict[str, NodeFn] = {
         "planner": build_planner_node(deps.gateway, task.context, deps.prompts, task.recorder),
         "budget_guard": build_budget_guard_node(task.guard),
+        # executor 只生成 tool_calls（不含 LLM 之外的副作用）
         "executor": build_executor_node(
             deps.gateway,
             task.registry,
-            task.dispatcher,
-            task.pruner,
             deps.prompts,
             task.context,
-            cfg.runtime.guardrails,
             task.recorder,
+        ),
+        # tool_runner 承担权限闸门（人工审批挂起点）+ 并发派发 + 观察值治理
+        "tool_runner": build_tool_runner_node(
+            task.dispatcher,
+            task.pruner,
+            cfg.runtime.guardrails,
+            cfg.permissions,
+            approval_allowlist=task.approval_allowlist,
+            recorder=task.recorder,
         ),
         "evaluator": build_evaluator_node(deps.gateway, task.context, deps.prompts, task.recorder),
     }
@@ -349,9 +417,9 @@ async def _drive_graph(
     deps: RuntimeDeps,
     task: TaskRuntime,
     app: Any,
-    graph_input: Optional[Mapping[str, Any]],
+    graph_input: Optional[Any],
     event_sink: Optional[EventSink] = None,
-) -> AgentState:
+) -> TaskOutcome:
     """驱动图执行并回收终态。
 
     使用 ``stream_mode="updates"`` 逐节点推送事件（用于 SSE），
@@ -362,7 +430,8 @@ async def _drive_graph(
         deps: 进程级依赖。
         task: 任务运行时。
         app: 已编译的图。
-        graph_input: 初始状态；``None`` 表示从 Checkpoint 续跑。
+        graph_input: 初始状态；``None`` 表示从 Checkpoint 续跑；
+            亦可是 :class:`~langgraph.types.Command`（如 ``Command(resume=...)`` 提交审批决策）。
         event_sink: 可选事件回调。
 
     Returns:
@@ -388,12 +457,15 @@ async def _drive_graph(
 
     snapshot = await app.aget_state(run_config)
     final_state: AgentState = dict(snapshot.values)  # type: ignore[assignment]
+    approval = _extract_pending_approval(snapshot)
+
     logger.info(
-        f"[Workflow] 任务 {task.state['task_id']} 执行结束: "
+        f"[Workflow] 任务 {task.state['task_id']} "
+        f"{'挂起等待审批' if approval else '执行结束'}: "
         f"步数={final_state.get('step_count')} Token={final_state.get('total_tokens')} "
         f"原因={final_state.get('termination_reason') or '（未标注）'}"
     )
-    return final_state
+    return TaskOutcome(state=final_state, approval_request=approval)
 
 
 async def run_streaming(
@@ -403,8 +475,10 @@ async def run_streaming(
     session_id: str,
     task_goal: str,
     task_id: Optional[str] = None,
+    permission_level: Optional[str] = None,
+    approval_allowlist: Optional[Set[str]] = None,
     event_sink: Optional[EventSink] = None,
-) -> AgentState:
+) -> TaskOutcome:
     """提交并执行一个新任务（支持流式事件回调）。
 
     Args:
@@ -413,10 +487,12 @@ async def run_streaming(
         session_id: 会话标识。
         task_goal: 任务目标。
         task_id: 任务 ID（由调用方预分配，便于先返回给客户端）。
+        permission_level: 会话权限基线。
+        approval_allowlist: 会话级永久放行集合。
         event_sink: 事件回调（SSE 推送）。
 
     Returns:
-        终态 ``AgentState``。
+        :class:`TaskOutcome`。
     """
     task = await prepare_task(
         deps,
@@ -424,20 +500,24 @@ async def run_streaming(
         session_id=session_id,
         task_goal=task_goal,
         task_id=task_id,
+        permission_level=permission_level,
+        approval_allowlist=approval_allowlist,
     )
     app = _compile_app(deps, task)
 
     try:
-        final_state = await _drive_graph(deps, task, app, task.state, event_sink)
+        outcome = await _drive_graph(deps, task, app, task.state, event_sink)
     finally:
         for client in task.service_clients:
             await client.aclose()
 
-    await task.lifecycle.finalize(
-        final_state,
-        ExecutionContextManager.extract_delivery(final_state),
-    )
-    return final_state
+    # 挂起等待审批时**不**做交付收尾：任务尚未结束，会话记忆不应记入未完成的结论
+    if not outcome.waiting_for_approval:
+        await task.lifecycle.finalize(
+            outcome.state,
+            ExecutionContextManager.extract_delivery(outcome.state),
+        )
+    return outcome
 
 
 async def run_agent(
@@ -448,14 +528,15 @@ async def run_agent(
     task_goal: str,
     task_id: Optional[str] = None,
 ) -> AgentState:
-    """同步等待任务完成（无事件流）。"""
-    return await run_streaming(
+    """同步等待任务完成（无事件流），返回终态状态。"""
+    outcome = await run_streaming(
         deps,
         workspace_id=workspace_id,
         session_id=session_id,
         task_goal=task_goal,
         task_id=task_id,
     )
+    return outcome.state
 
 
 async def resume_agent(
@@ -465,9 +546,11 @@ async def resume_agent(
     workspace_id: str,
     session_id: str,
     task_goal: str,
+    approval_decision: Optional[Mapping[str, Any]] = None,
+    approval_allowlist: Optional[Set[str]] = None,
     event_sink: Optional[EventSink] = None,
-) -> AgentState:
-    """从最近一次 Checkpoint 续跑任务。
+) -> TaskOutcome:
+    """从最近一次 Checkpoint 续跑任务（亦用于提交人工审批决策）。
 
     .. note::
        **挂钟预算语义**：``PhysicalBudgetGuard`` 会随本函数重新实例化，
@@ -480,10 +563,13 @@ async def resume_agent(
         workspace_id: 工作区标识。
         session_id: 会话标识。
         task_goal: 任务目标（用于重建上下文与记忆回写）。
+        approval_decision: 审批决策（``{"approved": bool, "scope": "once|always", "reason": str}``）。
+            为 ``None`` 时按普通断点续跑处理。
+        approval_allowlist: 会话级永久放行集合。
         event_sink: 事件回调。
 
     Returns:
-        终态 ``AgentState``。
+        :class:`TaskOutcome`。
     """
     task = await prepare_task(
         deps,
@@ -491,14 +577,25 @@ async def resume_agent(
         session_id=session_id,
         task_goal=task_goal,
         task_id=task_id,
+        approval_allowlist=approval_allowlist,
     )
     app = _compile_app(deps, task)
 
+    # 有决策 → Command(resume=...) 让被挂起的 interrupt() 返回该值；
+    # 无决策 → None，表示纯粹的断点续跑
+    graph_input: Optional[Any] = (
+        Command(resume=dict(approval_decision)) if approval_decision is not None else None
+    )
+
     try:
-        # graph_input=None 表示"从该 thread 的最近 Checkpoint 继续"
-        final_state = await _drive_graph(deps, task, app, None, event_sink)
+        outcome = await _drive_graph(deps, task, app, graph_input, event_sink)
     finally:
         for client in task.service_clients:
             await client.aclose()
 
-    return final_state
+    if not outcome.waiting_for_approval:
+        await task.lifecycle.finalize(
+            outcome.state,
+            ExecutionContextManager.extract_delivery(outcome.state),
+        )
+    return outcome

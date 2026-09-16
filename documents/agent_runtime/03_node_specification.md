@@ -18,9 +18,13 @@
 | `state.user_query` / `state.last_observation` / `state.max_steps` | 改为 `task_goal` / `messages[-1]` / 由配置对象注入的守卫实例 | `02` §2 |
 | `planner` 直接产出 `tool_calls`，`executor` 纯派发 | `planner`(reasoning) 产出**决策指令**；`executor`(fast) 生成**具体 `tool_calls`** 并并发派发 | `01` §4.1/§4.2、`05` §3 |
 
-> 节点集合最终定为 **`planner` / `budget_guard` / `executor` / `evaluator`** 四个，与 `README.md` 索引及 `01` 的 `Planner -> Executor -> Evaluator` 拓扑一致。
+> 节点集合最终定为 **`planner` / `budget_guard` / `executor` / `tool_runner` / `evaluator`** 五个。
+> 其中 `executor`（fast 层生成 `tool_calls`）与 `tool_runner`（权限闸门 + 并发派发 + 观察值治理）
+> 是 HITL 引入后的拆分：LangGraph 的 `interrupt()` 恢复时会重跑整个节点，
+> 把人工审批放在不含 LLM 调用的 `tool_runner` 里，可避免审批后重复调用模型
+> （详见 `10_directory_structure.md` 裁决项⑳）。
 >
-> **实现位置**：每个节点一个模块（`agent_runtime/nodes/{planner,budget_guard,executor,evaluator}.py`），
+> **实现位置**：每个节点一个模块（`agent_runtime/nodes/{planner,budget_guard,executor,tool_runner,evaluator}.py`），
 > 公共契约与纯辅助在 `nodes/base.py`；与之对称的**条件边**在 `agent_runtime/edges/after_*.py`，
 > 路由决策的完整定义见 `04_routing_and_control_flow.md`。
 
@@ -188,7 +192,14 @@ async def budget_guard(state: AgentState) -> Dict[str, Any]:
 
 ---
 
-### 4.3 `executor` — 动作生成与并发工具派发
+### 4.3 `executor` / `tool_runner` — 动作生成与工具执行（已拆分）
+
+> **本节原描述的是"生成 + 派发"合一的 `executor`。HITL 引入后拆为两个节点**：
+> `executor` 只调用 fast 模型产出 `tool_calls`（含金丝雀泄露熔断），
+> `tool_runner` 承担**权限闸门**（越级时 `interrupt()` 挂起等待人工审批）、
+> 指纹死循环拦截、`asyncio.gather` 并发派发、观察值治理与瞬态护栏。
+> 拆分理由见 `10` 裁决项⑳；权限判定逻辑见 `guardrails/permission.py`。
+> 下方 `execute_single_tool` 契约中"权限判定 + 派发"的部分现归属 `tool_runner`。
 
 **模型**：`models.fast`（如 DeepSeek-V3），`temperature = 0.2`。**这是 fast 层的主战场**（`01` §4.2、`05` §3）。
 
@@ -229,8 +240,8 @@ async def executor(state: AgentState) -> Dict[str, Any]:
         if tool is None:
             return tc.id, f"未知工具: {tc.name}"
         
-        # 权限边界与越级判定（HITL 挂起）
-        if not check_permission(state["permission_level"], tool, tc.args):
+        # 权限边界与越级判定（HITL 挂起）——现位于 nodes/tool_runner.py
+        if not check_permission(state["permission_level"], tc.name, tc.args, permissions_config):
             decision = interrupt({
                 "approval_id": generate_uuid(),
                 "action": tc.name,

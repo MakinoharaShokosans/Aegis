@@ -251,7 +251,81 @@ class SkillsConfig(BaseModel):
 
 
 # ==============================================================================
-# 13. 全局配置根对象 (AegisConfig)
+# 13. 三级权限分级配置（HITL 越级人工审核）
+#     规范：documents/技术选型/bash_shell.md §2.3、agent_runtime/04 §4.5
+# ==============================================================================
+
+class PermissionsConfig(BaseModel):
+    """
+    工具调用的权限分级与越级判定配置。
+
+    判定逻辑本身是确定性纯函数（``guardrails/permission.py``），
+    本配置只提供**分类表与正则模式**，便于按团队习惯调整而不改代码。
+    """
+    default_level: Literal["read_only", "workspace_write", "full_permissions"] = Field(
+        default="workspace_write", description="新任务的默认权限基线"
+    )
+    read_only_tools: List[str] = Field(
+        default_factory=lambda: ["view_file", "rag_search", "load_skill", "delegate_research"],
+        description="只读类工具（免审批）",
+    )
+    workspace_write_tools: List[str] = Field(
+        default_factory=lambda: ["write_file"],
+        description="工作区写入类工具",
+    )
+    full_permission_tools: List[str] = Field(
+        default_factory=list,
+        description="显式要求全权限的工具",
+    )
+    unknown_tool_level: Literal["read_only", "workspace_write", "full_permissions"] = Field(
+        default="full_permissions",
+        description=(
+            "未知工具（如第三方 MCP 工具）的保守级别。"
+            "默认 full_permissions：无法静态推理副作用时一律要求人工审批；"
+            "信任某类工具时可下调或在 workspace_write_tools 中显式列出。"
+        ),
+    )
+    bash_tools: List[str] = Field(
+        default_factory=lambda: ["bash"],
+        description="需要按命令内容做三分类的工具名",
+    )
+    # ---- 命令分类正则 ----
+    # 注意：这里的默认值必须与 config.toml 的 [permissions] 保持一致且**非空**。
+    # 若默认给空列表，任何"程序化构造配置"的场景（单测、嵌入式调用）都会得到
+    # 一个"永远不触发升级"的权限系统——这是不安全默认值，故内置一份保守集合。
+    full_permission_patterns: List[str] = Field(
+        default_factory=lambda: [
+            r"\bgit\s+push\b",
+            r"\b(curl|wget)\b",
+            r"\b(ssh|scp|rsync)\b",
+            r"\bpip3?\s+install\b",
+            r"\bnpm\s+(install|i|ci)\b",
+            r"\b(yarn|pnpm)\s+(add|install)\b",
+            r"\b(apt|apt-get|yum|dnf|apk)\s+(install|upgrade|remove)\b",
+            r"\bsudo\b",
+            r"\b(docker|docker-compose|kubectl|helm)\b",
+        ],
+        description="命中即需全权限的命令正则（网络外联、依赖安装、全局环境变更）",
+    )
+    workspace_write_patterns: List[str] = Field(
+        default_factory=lambda: [
+            r">>?\s*\S",
+            r"\b(rm|mv|cp|mkdir|rmdir|touch|ln)\b",
+            r"\b(sed|perl)\s+-i\b",
+            r"\b(chmod|chown)\b",
+            r"\bgit\s+(add|commit|checkout|switch|merge|rebase|reset|stash|tag|clean)\b",
+            r"\b(make|cmake|ninja)\b",
+            r"\b(gcc|g\+\+|clang|clang\+\+|rustc|cargo|go\s+(build|test))\b",
+            r"\b(pytest|python\s+-m\s+pytest)\b",
+            r"\b(npm|yarn|pnpm)\s+(run|test)\b",
+            r"\btee\b",
+        ],
+        description="命中即需工作区写入权限的命令正则",
+    )
+
+
+# ==============================================================================
+# 14. 全局配置根对象 (AegisConfig)
 # ==============================================================================
 
 class AegisConfig(BaseSettings):
@@ -272,6 +346,7 @@ class AegisConfig(BaseSettings):
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
+    permissions: PermissionsConfig = Field(default_factory=PermissionsConfig)
 
     @classmethod
     def settings_customise_sources(
