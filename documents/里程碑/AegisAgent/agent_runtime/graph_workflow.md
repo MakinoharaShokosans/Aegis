@@ -55,3 +55,7 @@
 - [x] [x] **双执行驱动模式**
   - [x] [x] `run_agent`：标准异步执行，驱动至终态返回最终 `AgentState`
   - [x] [x] `run_streaming`：异步生成器流式驱动，向 `event_sink` 实时派发节点步骤与状态增量
+- [x] [ ] **人机协同审核与挂起恢复机制（Human-in-the-Loop / `interrupt`）**
+  - [x] [x] 越级操作触发 `waiting_for_approval` 挂起与状态快照保存
+  - [x] [ ] 接收外部审批结果（批准/放行/拒绝）无缝恢复图状态流转（Resume）
+

@@ -224,10 +224,23 @@ async def executor(state: AgentState) -> Dict[str, Any]:
     loop_detected = is_fingerprint_loop(fingerprint_history, cfg.identical_fingerprint_limit)
 
     async def execute_single_tool(tc) -> tuple[str, str]:
-        """单个工具：带超时，异常包装为观察值，绝不 raise"""
+        """单个工具：权限判定、带超时、异常包装为观察值，绝不 raise"""
         tool = tools_registry.get(tc.name)
         if tool is None:
             return tc.id, f"未知工具: {tc.name}"
+        
+        # 权限边界与越级判定（HITL 挂起）
+        if not check_permission(state["permission_level"], tool, tc.args):
+            decision = interrupt({
+                "approval_id": generate_uuid(),
+                "action": tc.name,
+                "args": tc.args,
+                "current_level": state["permission_level"],
+                "reason": "操作超出当前授权级别，等待用户人工审批",
+            })
+            if not decision.get("approved"):
+                return tc.id, f"用户已拒绝该操作: {decision.get('reason', '未说明原因')}"
+
         try:
             result = await asyncio.wait_for(tool.ainvoke(tc.args), timeout=tool.timeout_sec)
             return tc.id, result

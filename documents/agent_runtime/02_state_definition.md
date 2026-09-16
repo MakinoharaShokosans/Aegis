@@ -88,8 +88,9 @@ class AgentState(TypedDict):
     fingerprint_history: List[str]                       # 最近 N 次工具参数 MD5 哈希历史 (防死循环)
     
     # --------------------------------------------------------------------------
-    # 5. 执行控制标记 (Flow Control)
+    # 5. 执行控制与权限级别 (Flow Control & Permissions)
     # --------------------------------------------------------------------------
+    permission_level: Literal["read_only", "workspace_write", "full_permissions"] # 当前会话权限基线
     should_terminate: bool                               # 终止熔断开关
     termination_reason: str                              # 终止原因描述
 ```

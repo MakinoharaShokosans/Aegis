@@ -135,13 +135,15 @@
 }
 ```
 
-### 4.4 任务 Tasks
+### 4.4 任务 Tasks 与人机协同审核（HITL）
 
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
 | POST | `/api/v1/sessions/{session_id}/tasks` | 提交任务，立即返回 `202`，后台执行 |
-| GET | `/api/v1/tasks/{task_id}` | 任务状态快照（DTO，非 AgentState） |
+| GET | `/api/v1/tasks/{task_id}` | 任务状态快照（DTO，非 AgentState，含审核请求信息） |
 | GET | `/api/v1/tasks/{task_id}/stream` | **SSE** 实时事件流（§6） |
+| POST | `/api/v1/tasks/{task_id}/approve` | **人机审核批准**：批准处于 `waiting_for_approval` 的越级操作，恢复图执行 |
+| POST | `/api/v1/tasks/{task_id}/reject` | **人机审核拒绝**：拒绝越级操作并反馈拒绝理由，驱动模型重新规划 |
 | POST | `/api/v1/tasks/{task_id}/resume` | 从最近 Checkpoint 续跑（`04` §4.4） |
 | POST | `/api/v1/tasks/{task_id}/cancel` | 请求终止（置位 `should_terminate`，节点边界生效） |
 | GET | `/api/v1/tasks/{task_id}/timeline` | 执行时间线（分页，`TimelineItem`） |
@@ -157,6 +159,32 @@
 
 // 202 响应
 { "task_id": "9b1e...", "status": "queued", "stream_url": "/api/v1/tasks/9b1e.../stream" }
+```
+
+`POST /api/v1/tasks/{task_id}/approve` 请求体与响应：
+
+```json
+// 请求
+{
+  "approval_id": "appr_7f8a...",
+  "decision": "once"          // "once" (单次批准) | "always" (加入当前会话白名单免审)
+}
+
+// 200 响应
+{ "task_id": "9b1e...", "status": "running", "message": "Approval granted, resuming execution." }
+```
+
+`POST /api/v1/tasks/{task_id}/reject` 请求体与响应：
+
+```json
+// 请求
+{
+  "approval_id": "appr_7f8a...",
+  "reason": "禁止推送远端，请仅在本地创建 git 补丁文件"
+}
+
+// 200 响应
+{ "task_id": "9b1e...", "status": "running", "message": "Rejection feedback sent to planner, resuming execution." }
 ```
 
 **提交语义**：`POST /tasks` 只登记并在事件循环中调度（`asyncio.create_task`），**不阻塞**等待完成。任务完成后由 `MemoryManager.record_turn_and_maybe_compact()` 回写会话流水并驱动水位压缩（`06` §5）。
@@ -182,7 +210,16 @@
   "session_id": "4c7a...",
   "workspace_id": "ws_...",
   "task_goal": "定位并修复 connection.c 的内存泄漏",
-  "status": "running",
+  "status": "waiting_for_approval",
+  "permission_level": "workspace_write",
+  "approval_request": {
+    "approval_id": "appr_7f8a...",
+    "required_level": "full_permissions",
+    "current_level": "workspace_write",
+    "action_type": "network_egress",
+    "command": "git push origin main",
+    "reason": "检测到跨网络外联推送操作，超出当前工作区写入权限"
+  },
   "milestones": [ { "id": 1, "title": "复现崩溃", "description": "...", "status": "completed" } ],
   "current_milestone_idx": 1,
   "step_count": 7,
@@ -201,7 +238,8 @@
 `status` 取值与迁移：
 
 ```text
-queued ──► running ──┬──► succeeded    (evaluator 判定里程碑全部达成)
+queued ──► running ──┬──► waiting_for_approval ──► running  (POST /approve 或 POST /reject)
+                     ├──► succeeded    (evaluator 判定里程碑全部达成)
                      ├──► terminated   (物理预算熔断：步数/Token/挂钟时间)
                      ├──► failed       (LLM 全链路不可用等不可恢复异常)
                      └──► cancelled    (客户端主动取消)
@@ -222,7 +260,7 @@ terminated / failed ──► running   (POST /resume)
 }
 ```
 
-`type` ∈ `plan` | `thought` | `tool_call` | `tool_result` | `system_notice` | `milestone` | `guard_warning`。
+`type` ∈ `plan` | `thought` | `tool_call` | `tool_result` | `system_notice` | `milestone` | `guard_warning` | `approval_request`。
 
 **约束**：单条 `summary` 上限 2000 字符；被 Pruner 截断的完整内容只以 `artifact_id` 引用（`05` §4），前端按需调用 artifact 端点拉取。
 
@@ -257,6 +295,9 @@ data: {"task_id":"9b1e...","seq":42,"ts":0.0,"tool_call_id":"c1","tool_name":"ba
 | `plan` | planner 产出决策指令 | `summary` |
 | `tool.call` | 工具派发（并发时逐个推送） | `tool_call_id`, `tool_name`, `args_digest` |
 | `tool.result` | 工具返回 | `tool_call_id`, `ok`, `exit_code`, `summary`, `artifact_id` |
+| `task.waiting_for_approval` | 越级行为触发挂起审核 | `approval_id`, `required_level`, `command`, `reason` |
+| `task.approved` | 用户批准操作，恢复执行 | `approval_id`, `decision` |
+| `task.rejected` | 用户拒绝操作，恢复重规划 | `approval_id`, `reason` |
 | `milestone.updated` | 里程碑状态变化 | `milestone_id`, `status` |
 | `guard.warning` | 90% 预算告警 / 指纹死循环拦截 | `kind`, `detail` |
 | `task.finished` | 正常结束 | `status`, `termination_reason`, `step_count`, `total_tokens` |

@@ -264,6 +264,19 @@ async def resume_agent(task_id: str) -> AgentState:
 
 > **`start_time` 语义**：挂钟时间守卫的 `start_time` 由 `PhysicalBudgetGuard` 实例持有（`05` §2）。**任务恢复时必须重新实例化守卫**，否则挂钟预算会因进程重启而被"重置"——这是恢复路径上必须显式处理的已知语义点。
 
+### 4.5 人机协同审核挂起与恢复（Human-in-the-Loop & `interrupt`）
+
+当 `executor` 或工具层检测到待执行动作超出当前会话已授权权限级别（如 `read_only` 下写文件、`workspace_write` 下跨区写或执行 `git push`）时，系统触发 LangGraph `interrupt()` 挂起状态图：
+
+1. **挂起（Suspend）**：
+   - 当前节点中断执行，LangGraph 自动保存当前快照到 SQLite Checkpoint；
+   - 任务状态流转为 `waiting_for_approval`，向 SSE 推送 `task.waiting_for_approval` 事件及审批详情（包含待执行指令、越级类型与判定原因）；
+2. **用户审批注入（Resume with Decision）**：
+   - 用户通过 Web UI 审查后调用 `POST /api/v1/tasks/{task_id}/approve` 或 `POST /api/v1/tasks/{task_id}/reject`；
+   - 服务端使用 `app.astream(Command(resume=decision), run_config)` 向中断点注入审批决策：
+     - **批准（Approve Once / Always Allow）**：原动作继续受控执行；
+     - **拒绝（Reject）**：动作被安全取消，将拒绝说明构造为反馈消息传递给 `planner` 重新规划替代方案。
+
 ---
 
 ## 5. 路由验证

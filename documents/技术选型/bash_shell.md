@@ -68,13 +68,19 @@ SIGTERM (等待 2s) -> SIGKILL              │
   - **资源回收与释放**：任务完成后立即释放占用的配额，唤醒队列中的下一个任务；
   - 确保本地单机环境下多个 Agent 任务有序执行，避免资源争抢导致系统崩溃。
 
-### 2.3 工作区沙箱与前置命令审计（Workspace Sandbox）
+### 2.3 工作区沙箱、三级权限管控与越级人工审核（Workspace Sandbox & HITL）
 
 * **治理方案**：
   1. **工作目录绑定工作区（Workspace-bound CWD）**：执行前将子进程 `cwd` 设置为**该任务所属工作区的 `root_path`**（目标工程绝对路径），使 `make`、`git`、编译器能够真实作用于用户工程。工作目录由 Agent 随请求下发并通过 `workspace_id` 反查校验，服务端**不得**接受任意客户端路径；
   2. **路径越界防护（Path Escape Guard）**：所有显式的写入/删除目标路径在派发前规范化（`Path.resolve()`），若最终路径不在 `root_path` 子树内，立即拒绝并返回 `422 PATH_ESCAPE_DETECTED`，防止逃逸到其他工作区或系统目录；
   3. **产物落盘隔离**：日志与产物一律写入 Aegis 自身的 `storage/artifacts/{task_id}/`，**与 cwd 解耦**，避免污染用户工程的工作区（用户工程内只应出现 Agent 有意修改的源码与补丁）；
-  4. **高危指令正则黑名单（CommandAudit）**：在命令派发前进行前置语法拦截（拦截 `rm -rf /`、`mkfs`、敏感系统文件改动等），直接返回强类型安全警告，引导模型更换合规命令。
+  4. **三级权限分级管控与越级人工审核（Human-in-the-Loop, HITL）**：
+     - **`read_only`（只读巡检）**：仅允许只读探测（`cat`, `grep`, `git log`），任何写文件、编译等产生副作用的操作均需人工审核；
+     - **`workspace_write`（工作区写入，默认）**：允许工作区内文件读写、修改、编译与测试，但跨工作区写、全局包安装、网络外联与代码推送（`git push`, `curl`）需触发人工审核；
+     - **`full_permissions`（全权限）**：允许全自动化 CI/CD 与网络依赖安装，仅硬红线指令被系统级拦截；
+     - **越级挂起与恢复**：当命令所需权限超出当前会话已授权级别时，通过 LangGraph `interrupt()` 挂起任务至 `waiting_for_approval`，由用户交互选择单次放行（Approve Once）、会话永久放行（Always Allow）或拒绝（Reject 并驱动 LLM 重新规划）；
+  5. **绝对高危红线硬拦截（CommandAudit）**：针对不可逆灾难性破坏（`rm -rf /`、Fork 炸弹、宿主机系统入侵），无论任何权限级别，均在命令派发前进行正则硬拦截并返回 403 阻断告警。
+
 
 ### 2.4 海量输出治理与离线卸载（Observation Offloading & Distillation）
 
