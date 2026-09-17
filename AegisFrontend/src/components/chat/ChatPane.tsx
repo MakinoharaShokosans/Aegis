@@ -14,12 +14,15 @@ import {
   Plus,
   Paperclip,
   ArrowUp,
-  Sparkles,
   Layers,
   Activity,
   Zap,
   BarChart3,
   Flame,
+  AlertTriangle,
+  CheckCircle2,
+  Droplet,
+  Download,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -35,8 +38,9 @@ export const ChatPane: React.FC = () => {
   const { openTab } = useWorkspaceStore();
 
   const [inputVal, setInputVal] = useState('');
-  const [selectedModel, setSelectedModel] = useState('DeepSeek V4.1 Flash High');
+  const [selectedModel, setSelectedModel] = useState('Reasoning: DeepSeek-R1');
   const [permissionLevel, setPermissionLevel] = useState<'readonly' | 'workspace_write' | 'full_access'>('workspace_write');
+  const [approvalDecision, setApprovalDecision] = useState<string | null>(null);
 
   const currentTask = currentTaskId ? tasks[currentTaskId] : null;
 
@@ -65,24 +69,24 @@ export const ChatPane: React.FC = () => {
           {
             id: `msg-${Date.now() + 1}`,
             role: 'assistant',
-            content: `### 正在分析与执行任务\n\n已成功启动智能体编排流水线。正在扫描相关模块和工作区上下文。\n\n- [x] 解析用户需求意图\n- [x] 分派子代理进行代码架构检索\n- [ ] 生成并应用改动补丁`,
+            content: `### 正在执行任务编排 (LangGraph State Machine)\n\n已成功启动 AegisAgent 核心调度宿主。调用 **Fast 动作层模型** 并行分派专用子智能体。\n\n- [x] **里程碑 1**：构造复现用例并触发 AddressSanitizer\n- [x] **里程碑 2**：调用 \`delegate_code_search\` 检索连接池释放逻辑 (命中有界行号白名单)\n- [ ] **里程碑 3**：生成修复补丁并在隔离沙箱验证测试`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             durationMs: 1420,
             fileMutations: [
               {
-                path: 'AegisAgent/event_bus.py',
+                path: 'AegisAgent/src/agent_runtime/event_bus.py',
                 action: 'modify',
-                summary: '任务事件总线：扩展叶子工具广播及子智能体状态事件',
+                summary: '任务事件总线：扩展叶子工具广播及子智能体状态事件 (subagent.*)',
               },
               {
-                path: 'AegisAgent/api/auth.py',
+                path: 'AegisAgent/src/agent_runtime/api/auth.py',
                 action: 'modify',
-                summary: '接入层三道安全闸门：Host 防重绑定与恒定时间令牌',
+                summary: '接入层三道安全闸门：Host 防重绑定、Origin 校验与恒定时间令牌',
               },
               {
-                path: 'documents/11_http_api.md',
-                action: 'create',
-                summary: 'API 契约：新增任务鉴权与 SSE 端点定义',
+                path: 'documents/agent_runtime/11_http_api.md',
+                action: 'modify',
+                summary: 'HTTP API 契约：更新任务鉴权、HITL 审批与 SSE 事件流契约',
               },
             ],
           },
@@ -97,21 +101,28 @@ export const ChatPane: React.FC = () => {
           },
           {
             id: 'trace-2',
-            node: 'subagent',
+            node: 'tool_runner',
             step: 2,
-            durationMs: 1000,
+            durationMs: 1100,
+            timestamp: new Date().toISOString(),
+          },
+          {
+            id: 'trace-3',
+            node: 'subagent',
+            step: 3,
+            durationMs: 2300,
             timestamp: new Date().toISOString(),
           },
         ],
         subagents: [
-          { id: 'sub-1', name: 'Codebase Researcher', role: '代码检索', status: 'completed', stepCount: 4 },
-          { id: 'sub-2', name: 'Security Auditor', role: '安全审计', status: 'running', stepCount: 2 },
+          { id: 'sub-1', name: 'Code Search Subagent', role: '源码检索 (3轮有界RAG)', status: 'completed', stepCount: 3 },
+          { id: 'sub-2', name: 'Research Subagent', role: '外部网页隔离研究', status: 'idle', stepCount: 0 },
         ],
         telemetry: {
-          rounds: 1,
-          steps: 6,
+          rounds: 3,
+          steps: 12,
           tokenSpeed: 271,
-          totalTokens: 14850,
+          totalTokens: 24850,
           cacheHitRate: 0.998,
         },
       });
@@ -133,34 +144,37 @@ export const ChatPane: React.FC = () => {
       filePath: mutation.path,
       title: mutation.path.split('/').pop() || mutation.path,
       language: mutation.path.endsWith('.py') ? 'python' : mutation.path.endsWith('.md') ? 'markdown' : 'plaintext',
-      content: `# ${mutation.path}\n\n// 查看文件变更内容：\n// ${mutation.summary || '无摘要说明'}`,
+      content: `# ${mutation.path}\n\n// AegisAgent 工作区改动实时加载：\n// ${mutation.summary || '无摘要说明'}`,
     });
   };
 
   return (
-    <div className="flex flex-col h-screen bg-canvas-primary border-r border-border-subtle relative">
+    <div className="flex flex-col h-screen bg-canvas-primary border-r border-border-subtle relative select-none">
       {/* 1. Top Header Bar */}
       <header className="flex items-center justify-between px-4 py-2.5 border-b border-border-subtle bg-white shrink-0">
         <div className="flex items-center gap-2 min-w-0">
           <h2 className="font-semibold text-xs text-gray-800 truncate max-w-md">
-            {currentTask?.title || '新会话 - 探索项目完成度与架构定位'}
+            {currentTask?.title || '会话主线 - 内存泄漏排查与接入层三道安全闸门'}
           </h2>
           {/* Subagent Count Badge */}
           <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-blue-50 text-brand-700 text-[11px] font-medium border border-blue-200 shrink-0">
             <Users className="w-3 h-3" />
-            <span>{currentTask?.subagents.length || 6} 个子代理</span>
+            <span>{currentTask?.subagents.length || 2} 个子代理 (CodeSearch / Research)</span>
           </div>
-          {/* Mode Badge */}
-          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[11px] font-medium border border-gray-200 shrink-0">
-            <Sparkles className="w-3 h-3 text-amber-500" />
-            <span>标准模式</span>
+          {/* Permission Level Badge */}
+          <div className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-guard-bg text-guard-text text-[11px] font-medium border border-guard-border shrink-0">
+            <Shield className="w-3 h-3" />
+            <span>工作区写入</span>
           </div>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-1 text-gray-500">
-          <button className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition" title="复制对话">
+          <button className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition" title="复制全量对话">
             <Copy className="w-3.5 h-3.5" />
+          </button>
+          <button className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition" title="导出因果轨迹 (ndjson)">
+            <Download className="w-3.5 h-3.5" />
           </button>
           <button className="p-1.5 hover:bg-gray-100 rounded text-gray-600 transition" title="分享">
             <Share2 className="w-3.5 h-3.5" />
@@ -171,7 +185,7 @@ export const ChatPane: React.FC = () => {
         </div>
       </header>
 
-      {/* 2. View Switcher Tabs (Chat vs Trace) */}
+      {/* 2. View Switcher Tabs (Chat vs Trace vs Context Inspector) */}
       <div className="flex items-center px-4 border-b border-border-subtle bg-canvas-secondary shrink-0">
         <button
           onClick={() => setActiveView('chat')}
@@ -182,7 +196,7 @@ export const ChatPane: React.FC = () => {
           }`}
         >
           <Bot className="w-3.5 h-3.5" />
-          <span>对话</span>
+          <span>对话流水</span>
         </button>
         <button
           onClick={() => setActiveView('trace')}
@@ -193,7 +207,7 @@ export const ChatPane: React.FC = () => {
           }`}
         >
           <Activity className="w-3.5 h-3.5" />
-          <span>轨迹</span>
+          <span>执行轨迹 (Trace)</span>
           {currentTask?.traceSteps && currentTask.traceSteps.length > 0 && (
             <span className="px-1.5 py-0.2 rounded-full bg-gray-200 text-[10px] text-gray-700 font-mono">
               {currentTask.traceSteps.length}
@@ -209,9 +223,11 @@ export const ChatPane: React.FC = () => {
             {/* If no current task messages */}
             {!currentTask || currentTask.messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-64 text-center text-gray-400 space-y-2">
-                <Bot className="w-10 h-10 text-gray-300" />
-                <p className="text-sm font-medium text-gray-600">输入任务以启动智能体协同执行</p>
-                <p className="text-xs text-gray-400">支持多子代理委派、代码检索、全自动测试与产物审查</p>
+                <Shield className="w-10 h-10 text-brand-500 mb-1" />
+                <p className="text-sm font-semibold text-gray-700">AegisAgent 确定性工程化运行时</p>
+                <p className="text-xs text-gray-500 max-w-sm">
+                  支持多子代理委派、3轮有界代码检索、接入层三道安全闸门与物理预算确定性守卫
+                </p>
               </div>
             ) : (
               currentTask.messages.map((msg) => (
@@ -226,7 +242,7 @@ export const ChatPane: React.FC = () => {
                         <Bot className="w-3 h-3" />
                       </div>
                     )}
-                    <span className="text-gray-900 font-semibold">{msg.role === 'user' ? '你' : 'Aegis Agent'}</span>
+                    <span className="text-gray-900 font-semibold">{msg.role === 'user' ? '用户 (User)' : 'Aegis Agent'}</span>
                     <span className="text-[11px] text-gray-400">{msg.timestamp}</span>
                   </div>
 
@@ -279,6 +295,46 @@ export const ChatPane: React.FC = () => {
                         </div>
                       </div>
                     )}
+
+                    {/* HITL Approval Card (Interactive Demo) */}
+                    <div className="mt-3 p-3 rounded-lg border border-amber-300 bg-amber-50/70 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-semibold text-amber-900">
+                        <div className="flex items-center gap-1.5">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          <span>🛡 人机协同权限越级审批 (HITL Approval Required)</span>
+                        </div>
+                        <span className="text-[10px] text-amber-700 font-mono">ID: appr_7f8a19b</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800">
+                        检测到高危网络外联命令: <code className="bg-amber-100 px-1 py-0.5 rounded font-mono text-amber-900">git push origin main</code>。超出当前工作区写入基线权限。
+                      </p>
+                      <div className="flex items-center gap-2 pt-1">
+                        <button
+                          onClick={() => setApprovalDecision('once')}
+                          className="px-2.5 py-1 rounded bg-brand-600 hover:bg-brand-700 text-white font-medium text-xs shadow-xs transition"
+                        >
+                          批准本次 (Once)
+                        </button>
+                        <button
+                          onClick={() => setApprovalDecision('always')}
+                          className="px-2.5 py-1 rounded bg-white hover:bg-gray-50 text-gray-800 border border-gray-300 font-medium text-xs shadow-2xs transition"
+                        >
+                          当前会话免审 (Always)
+                        </button>
+                        <button
+                          onClick={() => setApprovalDecision('rejected')}
+                          className="px-2.5 py-1 rounded bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 font-medium text-xs transition"
+                        >
+                          拒绝并改道 (Reject)
+                        </button>
+                        {approvalDecision && (
+                          <span className="text-[11px] text-emerald-700 font-medium ml-auto flex items-center gap-1">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            已提交决策: {approvalDecision}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Message Actions */}
@@ -313,10 +369,10 @@ export const ChatPane: React.FC = () => {
             <div className="text-xs font-semibold text-gray-700 flex items-center justify-between pb-2 border-b border-border-subtle">
               <span className="flex items-center gap-1.5">
                 <Layers className="w-4 h-4 text-brand-600" />
-                执行流轨迹追踪 (Execution Trace)
+                LangGraph 状态图执行轨迹 (Execution Trace)
               </span>
               <span className="text-[11px] text-gray-400 font-mono">
-                {currentTask?.traceSteps.length || 0} 个步骤
+                {currentTask?.traceSteps.length || 0} 个节点
               </span>
             </div>
 
@@ -334,8 +390,9 @@ export const ChatPane: React.FC = () => {
                     </span>
                     <span className="text-[11px] text-gray-400 font-mono">{step.durationMs}ms</span>
                   </div>
-                  <div className="text-[11px] text-gray-600 bg-canvas-secondary p-2 rounded font-mono">
-                    Node: {step.node} | Timestamp: {step.timestamp}
+                  <div className="text-[11px] text-gray-600 bg-canvas-secondary p-2 rounded font-mono flex items-center justify-between">
+                    <span>Node: {step.node} | Dual-Tier: {step.node === 'planner' ? 'Reasoning' : 'Fast'}</span>
+                    <span className="text-gray-400">{step.timestamp.slice(11, 19)}</span>
                   </div>
                 </div>
               ))
@@ -357,7 +414,7 @@ export const ChatPane: React.FC = () => {
                 handleSend();
               }
             }}
-            placeholder="发送消息创建任务，/ 调用指令，@ 文件或对话"
+            placeholder="输入任务目标，/ 调用指令，@ 引用工作区文件或记忆"
             className="w-full h-16 p-3 text-xs text-gray-900 bg-transparent resize-none outline-none placeholder:text-gray-400"
           />
 
@@ -365,10 +422,10 @@ export const ChatPane: React.FC = () => {
           <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100">
             {/* Left Controls */}
             <div className="flex items-center gap-1.5">
-              <button className="p-1 hover:bg-gray-100 rounded text-gray-500" title="添加上下文">
+              <button className="p-1 hover:bg-gray-100 rounded text-gray-500" title="添加工作区上下文">
                 <Plus className="w-4 h-4" />
               </button>
-              <button className="p-1 hover:bg-gray-100 rounded text-gray-500" title="上传附件">
+              <button className="p-1 hover:bg-gray-100 rounded text-gray-500" title="上传附件或截图">
                 <Paperclip className="w-4 h-4" />
               </button>
               {/* Permission Badge Selector */}
@@ -383,7 +440,7 @@ export const ChatPane: React.FC = () => {
                 <Shield className="w-3 h-3" />
                 <span>
                   {permissionLevel === 'workspace_write'
-                    ? '🛡 工作区内修改'
+                    ? '🛡 工作区修改'
                     : permissionLevel === 'full_access'
                     ? '⚡ 全权限模式'
                     : '🔒 只读免审批'}
@@ -398,9 +455,9 @@ export const ChatPane: React.FC = () => {
                 onChange={(e) => setSelectedModel(e.target.value)}
                 className="text-[11px] font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1 outline-none cursor-pointer"
               >
-                <option value="DeepSeek V4.1 Flash High">DeepSeek V4.1 Flash High</option>
-                <option value="DeepSeek Reasoner (R1)">DeepSeek Reasoner (R1)</option>
-                <option value="DeepSeek Chat (V3)">DeepSeek Chat (V3)</option>
+                <option value="Reasoning: DeepSeek-R1">Reasoning: DeepSeek-R1</option>
+                <option value="Fast: DeepSeek-V3">Fast: DeepSeek-V3</option>
+                <option value="OpenAI: o1 / 4o-mini">OpenAI: o1 / 4o-mini</option>
               </select>
 
               <button
@@ -423,7 +480,7 @@ export const ChatPane: React.FC = () => {
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
               <RotateCw className="w-3 h-3 text-gray-400" />
-              {currentTask?.telemetry.rounds || 22} 轮 {currentTask?.telemetry.steps || 634} 步
+              {currentTask?.telemetry.rounds || 7} 轮 {currentTask?.telemetry.steps || 18} 步
             </span>
             <span>|</span>
             <span className="flex items-center gap-1 text-amber-600">
@@ -433,12 +490,17 @@ export const ChatPane: React.FC = () => {
             <span>|</span>
             <span className="flex items-center gap-1">
               <BarChart3 className="w-3 h-3" />
-              {currentTask?.telemetry.totalTokens ? `${(currentTask.telemetry.totalTokens / 1000000).toFixed(1)}M` : '109M'} tok
+              {currentTask?.telemetry.totalTokens ? `${(currentTask.telemetry.totalTokens / 1000).toFixed(1)}k` : '41.8k'} tok
             </span>
             <span>|</span>
             <span className="flex items-center gap-1 text-emerald-600 font-medium">
               <Flame className="w-3 h-3" />
               缓存命中 {currentTask?.telemetry.cacheHitRate ? `${(currentTask.telemetry.cacheHitRate * 100).toFixed(1)}%` : '99.8%'}
+            </span>
+            <span>|</span>
+            <span className="flex items-center gap-1 text-blue-600 font-medium" title="会话上下文水位 (80% 触发动态压缩)">
+              <Droplet className="w-3 h-3" />
+              水位 38% / 80%
             </span>
           </div>
         </div>
