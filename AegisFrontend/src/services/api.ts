@@ -1,72 +1,268 @@
 /**
- * REST API client for Aegis Backend
+ * Aegis Unified REST API Client
+ * Supports Workspaces, Sessions, Tasks, Files, and RAG endpoints with X-API-Token injection.
  */
 
-export interface CreateTaskPayload {
-  prompt: string;
-  permission_level?: 'readonly' | 'workspace_write' | 'full_access';
-  model?: string;
-  context_files?: string[];
-}
+import type {
+  Workspace,
+  WorkspaceCreatePayload,
+  WorkspaceUpdatePayload,
+  WorkspaceMemory,
+  Session,
+  SessionContextResponse,
+  FileNode,
+  RagHealth,
+  RagRetrieveResult,
+  PermissionLevel,
+} from '@/types';
 
-export const api = {
-  async createTask(payload: CreateTaskPayload) {
-    const res = await fetch('/api/v1/tasks', {
+class ApiClient {
+  private token: string = '';
+
+  constructor() {
+    this.token = localStorage.getItem('aegis_api_token') || '';
+  }
+
+  public setToken(token: string) {
+    this.token = token;
+    localStorage.setItem('aegis_api_token', token);
+  }
+
+  public getToken(): string {
+    return this.token;
+  }
+
+  private getHeaders(extraHeaders: Record<string, string> = {}): HeadersInit {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      ...extraHeaders,
+    };
+    if (this.token) {
+      headers['X-API-Token'] = this.token;
+    }
+    return headers;
+  }
+
+  private async request<T>(url: string, options: RequestInit = {}): Promise<T> {
+    const res = await fetch(url, {
+      ...options,
+      headers: this.getHeaders(options.headers as Record<string, string>),
+    });
+
+    if (!res.ok) {
+      let errorMsg = res.statusText;
+      try {
+        const errorJson = await res.json();
+        errorMsg = errorJson.detail || errorJson.message || JSON.stringify(errorJson);
+      } catch {
+        // use statusText
+      }
+      throw new Error(`API Request Error [${res.status}]: ${errorMsg}`);
+    }
+
+    if (res.status === 204) {
+      return {} as T;
+    }
+
+    return res.json();
+  }
+
+  // ==========================================
+  // Workspaces API
+  // ==========================================
+  async listWorkspaces(): Promise<Workspace[]> {
+    return this.request<Workspace[]>('/api/v1/workspaces');
+  }
+
+  async createWorkspace(payload: WorkspaceCreatePayload): Promise<Workspace> {
+    return this.request<Workspace>('/api/v1/workspaces', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
       body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      throw new Error(`Failed to create task: ${res.statusText}`);
-    }
-    return res.json();
-  },
+  }
 
-  async getTask(taskId: string) {
-    const res = await fetch(`/api/v1/tasks/${taskId}`);
-    if (!res.ok) {
-      throw new Error(`Failed to fetch task: ${res.statusText}`);
-    }
-    return res.json();
-  },
+  async getWorkspace(workspaceId: string): Promise<Workspace> {
+    return this.request<Workspace>(`/api/v1/workspaces/${workspaceId}`);
+  }
 
-  async approveAction(taskId: string, actionId: string, options?: { alwaysAllow?: boolean }) {
-    const res = await fetch(`/api/v1/tasks/${taskId}/approve`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action_id: actionId, always_allow: options?.alwaysAllow }),
+  async updateWorkspace(workspaceId: string, payload: WorkspaceUpdatePayload): Promise<Workspace> {
+    return this.request<Workspace>(`/api/v1/workspaces/${workspaceId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
     });
-    if (!res.ok) {
-      throw new Error(`Failed to approve action: ${res.statusText}`);
-    }
-    return res.json();
-  },
+  }
 
-  async rejectAction(taskId: string, actionId: string, reason?: string) {
-    const res = await fetch(`/api/v1/tasks/${taskId}/reject`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ action_id: actionId, reason }),
+  async deleteWorkspace(workspaceId: string): Promise<{ success: boolean; deleted_id: string }> {
+    return this.request<{ success: boolean; deleted_id: string }>(`/api/v1/workspaces/${workspaceId}`, {
+      method: 'DELETE',
     });
-    if (!res.ok) {
-      throw new Error(`Failed to reject action: ${res.statusText}`);
-    }
-    return res.json();
-  },
+  }
 
-  async cancelTask(taskId: string) {
-    const res = await fetch(`/api/v1/tasks/${taskId}/cancel`, {
+  async getWorkspaceMemories(workspaceId: string): Promise<WorkspaceMemory[]> {
+    return this.request<WorkspaceMemory[]>(`/api/v1/workspaces/${workspaceId}/memories`);
+  }
+
+  async createWorkspaceMemory(
+    workspaceId: string,
+    payload: { category: string; title: string; content: string; pinned?: boolean }
+  ): Promise<WorkspaceMemory> {
+    return this.request<WorkspaceMemory>(`/api/v1/workspaces/${workspaceId}/memories`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async deleteWorkspaceMemory(workspaceId: string, memoryId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/workspaces/${workspaceId}/memories/${memoryId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  // ==========================================
+  // Sessions API
+  // ==========================================
+  async listSessions(workspaceId: string): Promise<Session[]> {
+    return this.request<Session[]>(`/api/v1/workspaces/${workspaceId}/sessions`);
+  }
+
+  async createSession(workspaceId: string, title?: string): Promise<Session> {
+    return this.request<Session>(`/api/v1/workspaces/${workspaceId}/sessions`, {
+      method: 'POST',
+      body: JSON.stringify({ title: title || '新会话' }),
+    });
+  }
+
+  async getSession(sessionId: string): Promise<Session> {
+    return this.request<Session>(`/api/v1/sessions/${sessionId}`);
+  }
+
+  async deleteSession(sessionId: string): Promise<{ success: boolean }> {
+    return this.request<{ success: boolean }>(`/api/v1/sessions/${sessionId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getSessionContext(sessionId: string): Promise<SessionContextResponse> {
+    return this.request<SessionContextResponse>(`/api/v1/sessions/${sessionId}/context`);
+  }
+
+  // ==========================================
+  // Tasks API
+  // ==========================================
+  async createTask(
+    sessionId: string,
+    payload: {
+      prompt: string;
+      permission_level?: PermissionLevel;
+      model?: string;
+    }
+  ): Promise<{ task_id: string; status: string; stream_url: string }> {
+    return this.request<{ task_id: string; status: string; stream_url: string }>(
+      `/api/v1/sessions/${sessionId}/tasks`,
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  }
+
+  async getTask(taskId: string): Promise<unknown> {
+    return this.request<unknown>(`/api/v1/tasks/${taskId}`);
+  }
+
+  async approveAction(
+    taskId: string,
+    payload: {
+      approval_id: string;
+      decision: 'once' | 'always';
+      feedback?: string;
+    }
+  ): Promise<{ success: boolean; task_status: string }> {
+    return this.request<{ success: boolean; task_status: string }>(`/api/v1/tasks/${taskId}/approve`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async rejectAction(
+    taskId: string,
+    payload: {
+      approval_id: string;
+      reason: string;
+    }
+  ): Promise<{ success: boolean; task_status: string }> {
+    return this.request<{ success: boolean; task_status: string }>(`/api/v1/tasks/${taskId}/reject`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
+  async cancelTask(taskId: string): Promise<{ success: boolean; task_status: string }> {
+    return this.request<{ success: boolean; task_status: string }>(`/api/v1/tasks/${taskId}/cancel`, {
       method: 'POST',
     });
-    if (!res.ok) {
-      throw new Error(`Failed to cancel task: ${res.statusText}`);
-    }
-    return res.json();
-  },
-};
+  }
+
+  // ==========================================
+  // Files API
+  // ==========================================
+  async getFileTree(workspaceId: string, maxDepth: number = 5): Promise<FileNode> {
+    return this.request<FileNode>(`/api/v1/workspaces/${workspaceId}/files/tree?max_depth=${maxDepth}`);
+  }
+
+  async getFileContent(workspaceId: string, relativePath: string): Promise<{ path: string; content: string; language: string }> {
+    const encoded = encodeURIComponent(relativePath);
+    return this.request<{ path: string; content: string; language: string }>(
+      `/api/v1/workspaces/${workspaceId}/files/content?path=${encoded}`
+    );
+  }
+
+  async saveFileContent(
+    workspaceId: string,
+    relativePath: string,
+    content: string
+  ): Promise<{ path: string; status: string; size: number }> {
+    return this.request<{ path: string; status: string; size: number }>(
+      `/api/v1/workspaces/${workspaceId}/files/content`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ path: relativePath, content }),
+      }
+    );
+  }
+
+  // ==========================================
+  // RAG Gateway API
+  // ==========================================
+  async getRagHealth(): Promise<RagHealth> {
+    return this.request<RagHealth>('/api/v1/rag/health');
+  }
+
+  async triggerRagIngest(payload: {
+    workspace_id?: string;
+    incremental?: boolean;
+    file_extensions?: string[];
+  }): Promise<{ task_id: string; status: string; total_files: number; total_chunks: number }> {
+    return this.request<{ task_id: string; status: string; total_files: number; total_chunks: number }>(
+      '/api/v1/rag/ingest',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    );
+  }
+
+  async queryRagRetrieve(payload: {
+    query: string;
+    top_k?: number;
+    dense_top_k?: number;
+    sparse_top_k?: number;
+  }): Promise<RagRetrieveResult> {
+    return this.request<RagRetrieveResult>('/api/v1/rag/retrieve', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+}
+
+export const api = new ApiClient();
