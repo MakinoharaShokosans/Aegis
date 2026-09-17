@@ -10,11 +10,21 @@ from agent_runtime.llm.client import LLMResponse
 
 @pytest.fixture
 async def api_client(test_config: AegisConfig):
-    """创建绑定 ASGI Lifespan 生命周期的测试客户端。"""
+    """创建绑定 ASGI Lifespan 生命周期的测试客户端。
+
+    接入层安全闸门（``api/auth.py``）开启后，业务端点必须携带令牌；
+    ``base_url`` 也改用真实回环地址，因为 Host 闸门只放行回环名
+    （``http://test`` 这类虚构主机会被 403，那正是它该有的行为）。
+    令牌由 lifespan 准备，因此这里在启动之后再拼请求头。
+    """
     app = create_app(test_config)
     async with app.router.lifespan_context(app):
         transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as client:
+        token = str(getattr(app.state, "api_token", "") or "")
+        headers = {"Authorization": f"Bearer {token}"} if token else {}
+        async with AsyncClient(
+            transport=transport, base_url="http://127.0.0.1:8000", headers=headers
+        ) as client:
             setattr(client, "app", app)
             yield client
 

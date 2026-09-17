@@ -39,7 +39,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Sequence, Set
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Set
 
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage, ToolMessage
 from loguru import logger
@@ -49,6 +49,7 @@ from agent_runtime.guardrails.budget_ledger import ChildBudget
 from agent_runtime.guardrails.permission import check_permission
 from agent_runtime.llm.client import LLMGateway
 from agent_runtime.nodes.base import to_tool_call_specs
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.structured_output import extract_json_object, truncate_text
 from agent_runtime.subagent.contracts import (
@@ -88,6 +89,8 @@ class SubagentRunner:
         prompts: 提示词库（读取固定协议 ``subagent``）。
         permissions_config: ``config.permissions``（三级权限分类表）。
         config: ``SubagentConfig``（各项硬上限）。
+        event_bus: 任务事件总线（可选）。中间步骤对节点级流式不可见，
+            因此由子智能体主动向总线发 ``subagent.*`` 事件（见 `11` §6）。
     """
 
     __slots__ = (
@@ -98,6 +101,7 @@ class SubagentRunner:
         "_permissions_config",
         "_config",
         "_protocol",
+        "_bus",
     )
 
     def __init__(
@@ -109,6 +113,7 @@ class SubagentRunner:
         prompts: PromptLibrary,
         permissions_config: Any,
         config: Any,
+        event_bus: Optional[TaskEventBus] = None,
     ) -> None:
         self._gateway = gateway
         self._tools = tools
@@ -117,6 +122,7 @@ class SubagentRunner:
         self._permissions_config = permissions_config
         self._config = config
         self._protocol = prompts.load("subagent")
+        self._bus = event_bus
 
     # ==========================================================================
     # 对外入口
@@ -139,6 +145,17 @@ class SubagentRunner:
         steps_used = 0
         tool_call_count = 0
         messages = self._initial_messages(request)
+
+        await self._emit(
+            {
+                "event": "subagent.started",
+                "role": request.role,
+                "depth": request.depth,
+                "assigned_tools": list(request.assigned_tools),
+                "token_budget": budget.max_tokens,
+                "max_steps": request.max_steps,
+            }
+        )
 
         for _ in range(max(1, int(request.max_steps))):
             if budget.exhausted:
@@ -164,8 +181,15 @@ class SubagentRunner:
                 break
 
             tool_call_count += len(specs)
+            await self._emit(
+                {
+                    "event": "subagent.step",
+                    "step": steps_used,
+                    "tools": [name for _, name, _ in specs],
+                }
+            )
             messages.extend(
-                await self._execute(specs, request.permission_level, accessed, warnings)
+                await self._execute(specs, request.permission_level, accessed, warnings, steps_used)
             )
 
         raw = await self._distill(messages, budget, warnings)
@@ -189,6 +213,19 @@ class SubagentRunner:
             f"工具调用={tool_call_count} tokens={budget.tokens} "
             f"耗时={budget.elapsed:.1f}s 结论={len(report.findings)} "
             f"已验证={sum(1 for item in report.findings if item.verified)}"
+        )
+        await self._emit(
+            {
+                "event": "subagent.finished",
+                "role": request.role,
+                "status": report.status,
+                "steps_used": steps_used,
+                "tool_calls": tool_call_count,
+                "tokens": budget.tokens,
+                "findings": len(report.findings),
+                "verified_findings": sum(1 for item in report.findings if item.verified),
+                "elapsed_sec": round(budget.elapsed, 2),
+            }
         )
         return report
 
@@ -219,6 +256,7 @@ class SubagentRunner:
         permission_level: str,
         accessed: Set[str],
         warnings: List[str],
+        step_index: int,
     ) -> List[ToolMessage]:
         """执行一轮工具调用（权限二次判定 → 并发派发 → 组装原子对）。
 
@@ -230,6 +268,7 @@ class SubagentRunner:
             permission_level: 子级权限级别。
             accessed: **原地累加**的实际访问资源集合（引用白名单来源）。
             warnings: **原地累加**的护栏标注。
+            step_index: 当前轮次（用于事件与轨迹）。
 
         Returns:
             与 ``specs`` 等长、顺序一致的 :class:`ToolMessage` 列表。
@@ -250,6 +289,18 @@ class SubagentRunner:
             logger.warning(
                 f"[Subagent] 越级调用被拒绝 tool={name} "
                 f"{decision.current_level}→{decision.required_level} [{decision.action_type}]"
+            )
+            # 越级被拒是**用户最需要看见**的事件：它解释了子智能体为何"做不成某件事"
+            await self._emit(
+                {
+                    "event": "subagent.blocked",
+                    "step": step_index,
+                    "tool": name,
+                    "required_level": decision.required_level,
+                    "current_level": decision.current_level,
+                    "action_type": decision.action_type,
+                    "reason": decision.action_summary,
+                }
             )
 
         dispatched = await self._dispatcher.dispatch(allowed)
@@ -274,8 +325,31 @@ class SubagentRunner:
             messages.append(
                 ToolMessage(content=observation(name, item.trust, content), tool_call_id=call_id)
             )
+            # 事件流只带**已裁剪摘要**（总线还会强制限长到 300 字符）；
+            # 原始正文仍不进入主状态、主 Checkpoint 与事件流
+            await self._emit(
+                {
+                    "event": "subagent.tool",
+                    "step": step_index,
+                    "tool": name,
+                    "ok": bool(item.result.ok),
+                    "duration_ms": int(item.result.duration_ms),
+                    "untrusted": item.trust == "untrusted",
+                    "summary": item.result.content,
+                }
+            )
 
         return messages
+
+    async def _emit(self, event: Mapping[str, Any]) -> None:
+        """向任务事件总线发送一条事件（未装配总线时为空操作）。
+
+        Args:
+            event: 事件字典，必须含 ``event`` 键。
+        """
+        if self._bus is None:
+            return
+        await self._bus.emit(event)
 
     async def _distill(
         self,

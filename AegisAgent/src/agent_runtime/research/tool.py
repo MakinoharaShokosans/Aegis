@@ -12,12 +12,13 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping
+from typing import Any, Dict, Mapping, Optional
 
 from loguru import logger
 
 from agent_runtime.errors import AgentError
 from agent_runtime.llm.client import LLMGateway
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research.contracts import ResearchRequest
 from agent_runtime.research.runner import ResearchRunner
@@ -133,6 +134,7 @@ def build_research_tool(
     prompts: PromptLibrary,
     config: Any,
     search_tool_name: str = "web_search",
+    event_bus: Optional[TaskEventBus] = None,
 ) -> DelegateResearchTool:
     """装配 ``delegate_research`` 工具。
 
@@ -143,6 +145,7 @@ def build_research_tool(
         prompts: 提示词库。
         config: ``ResearchConfig``。
         search_tool_name: 受限工具表中承担检索职责的工具名。
+        event_bus: 任务事件总线（把研究中间步骤接进 SSE 事件流）。
 
     Returns:
         可直接注册进主工具表的 :class:`DelegateResearchTool`。
@@ -153,6 +156,7 @@ def build_research_tool(
         prompts=prompts,
         config=config,
         search_tool_name=search_tool_name,
+        event_bus=event_bus,
     )
     logger.debug(
         f"[Research] 隔离区已装配，受限工具={research_tools.names()}，模型层级={config.model_tier}"

@@ -53,6 +53,7 @@ from loguru import logger
 from agent_runtime.guardrails.authority import TaskAuthority
 from agent_runtime.guardrails.budget_ledger import BudgetLedger, ChildBudget
 from agent_runtime.llm.client import LLMGateway
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.structured_output import truncate_text
 from agent_runtime.subagent.contracts import (
@@ -88,6 +89,7 @@ class SpawnSubagentTool(AegisTool):
         permissions_config: ``config.permissions``（子级逐次调用的权限分类表）。
         ledger: 父级预算账本（准入与结算）。
         authority: 任务授权窗口（父级权限级别的权威来源）。
+        event_bus: 任务事件总线（把子智能体中间步骤接进 SSE 事件流）。
         depth: 当前委派深度；主 Agent 持有的实例为 0。
     """
 
@@ -149,6 +151,7 @@ class SpawnSubagentTool(AegisTool):
         permissions_config: Any,
         ledger: BudgetLedger,
         authority: TaskAuthority,
+        event_bus: Optional[TaskEventBus] = None,
         depth: int = 0,
     ) -> None:
         self._gateway = gateway
@@ -158,6 +161,7 @@ class SpawnSubagentTool(AegisTool):
         self._permissions_config = permissions_config
         self._ledger = ledger
         self._authority = authority
+        self._bus = event_bus
         self._depth = max(0, int(depth))
 
         # 子级自己的预算先咬合，再让 dispatcher 的硬超时兜底
@@ -351,6 +355,7 @@ class SpawnSubagentTool(AegisTool):
             prompts=self._prompts,
             permissions_config=self._permissions_config,
             config=self._config,
+            event_bus=self._bus,
         )
         return await runner.run(request, budget)
 
@@ -364,6 +369,7 @@ def build_subagent_tool(
     permissions_config: Any,
     ledger: BudgetLedger,
     authority: TaskAuthority,
+    event_bus: Optional[TaskEventBus] = None,
 ) -> SpawnSubagentTool:
     """装配 ``spawn_subagent``（主 Agent 持有的实例，深度为 0）。
 
@@ -375,6 +381,7 @@ def build_subagent_tool(
         permissions_config: ``config.permissions``。
         ledger: 父级预算账本。
         authority: 任务授权窗口。
+        event_bus: 任务事件总线。
 
     Returns:
         可直接注册进主工具表的 :class:`SpawnSubagentTool`。
@@ -387,5 +394,6 @@ def build_subagent_tool(
         permissions_config=permissions_config,
         ledger=ledger,
         authority=authority,
+        event_bus=event_bus,
         depth=0,
     )

@@ -57,6 +57,11 @@ storage/logs/*
 storage/*.db
 storage/*.db-wal
 storage/*.db-shm
+
+# 接入层访问令牌（0600，绝不入版本库）
+storage/api_token
+storage/*.token
+
 *.db
 *.db-wal
 *.db-shm

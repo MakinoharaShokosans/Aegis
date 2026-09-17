@@ -15,10 +15,54 @@
 | 监听地址 | `127.0.0.1:8000`（**仅本地回环**，与 AegisRAG `:8001`、bash_shell `:8002`、web_search `:8003` 并列） |
 | 基础路径 | `/api/v1` |
 | 协议 | HTTP/1.1 + JSON；任务进度用 **SSE**（`text/event-stream`） |
-| 认证 | **v1 无认证**（单机单用户） |
+| 认证 | **默认开启**：Bearer / `X-API-Token` / `?token=` 令牌（见 §1.1） |
 | 并发 | 进程内单实例；默认同时只跑 **1 个**任务，超出返回 `429` |
 
-> ⚠️ **安全红线**：本 API 的工具链包含受控 Bash 执行能力，等价于对本机工程目录的读写与命令执行权限。**禁止**绑定 `0.0.0.0`、禁止置于反向代理后对外暴露；在引入认证与授权之前，任何非回环暴露都属于高危配置。
+> ⚠️ **安全红线**：本 API 的工具链包含受控 Bash 执行能力，等价于对本机工程目录的读写与命令执行权限。**禁止**绑定 `0.0.0.0`、禁止置于反向代理后对外暴露。当前只支持**单用户**（无 RBAC、无多租户）。
+
+### 1.1 三道闸门：Host → Origin → 令牌
+
+**为什么"只监听回环"不够**：用户浏览器里的**任意一个页面**都能向 `http://127.0.0.1:8000` 发请求。`POST /tasks/{id}/approve` 一旦被诱导调用，等于让攻击者**替用户批准**了一次高危操作，而用户看到的只是自己刚打开的那个网页。回环监听挡的是"对外暴露"，挡不住这条路径。
+
+`api/auth.py` 的 `SecurityGateMiddleware` 是**纯 ASGI 中间件**（不碰 body，对 SSE 长连接透明），按由外到内的顺序执行：
+
+| # | 闸门 | 规则 | 挡住什么 |
+|:--|:---|:---|:---|
+| ① | **Host** | `Host` 主机名必须属于 `{127.0.0.1, localhost, ::1}` ∪ `[server].allowed_hosts` | DNS rebinding（把恶意域名解析到 127.0.0.1） |
+| ② | **Origin** | 非安全方法（POST/PUT/PATCH/DELETE）若带 `Origin`，必须在 `cors_allow_origins` 内 | 跨站脚本/表单替用户提交 |
+| ③ | **令牌** | 恒定时间比较；`server.auth_enabled` 为真时必填 | 猜到端口就能用；远程与本机其它用户 |
+
+**为什么把这个校验放在中间件而不是各路由的依赖里**：中间件**无法被漏挂**。新增路由不需要做任何事就自动受保护，而依赖式写法一旦有人忘写就静默裸奔。
+
+**凭据载体（三选一）**：
+
+```http
+Authorization: Bearer <token>      # 首选
+X-API-Token: <token>
+GET /api/v1/tasks/{id}/stream?token=<token>
+```
+
+> `?token=` 不是偷懒：浏览器原生 `EventSource` **不能**自定义请求头，这是 SSE 唯一可行的传递方式。代价是它可能进入访问日志——在回环单用户场景下可接受。
+
+**令牌来源与存放**：
+
+1. 环境变量（名由 `[server].api_token_env` 指定，默认 `AEGIS_API_TOKEN`）；
+2. 否则读 `[server].api_token_file`（默认 `storage/api_token`）——**已存在则复用**，重启不会让前端掉线；
+3. 都不存在则生成 `secrets.token_urlsafe(32)` 并以 **0600** 写入该文件。
+
+**日志只打印文件路径，绝不打印令牌本身**（日志会被复制粘贴进 issue）。该文件已由 `.gitignore` 排除。
+
+**豁免路径**（无需凭据）：`/`、`/health`、`/api/v1/health`、`/docs`、`/redoc`、`/openapi.json`，以及全部 `OPTIONS` 预检（浏览器不会在预检里带凭据）。
+
+> 豁免是**精确匹配**，不是前缀匹配：`/api/v1/health/dependencies`（会暴露下游依赖地址与连通性）**仍需要令牌**。存活探针只需要 `/health`，因此这样划分既够用又不扩大暴露面。
+
+**失败语义**：`401 UNAUTHORIZED`（缺失/错误令牌，带 `WWW-Authenticate: Bearer`）、`403 HOST_NOT_ALLOWED`、`403 ORIGIN_NOT_ALLOWED`、`401 AUTH_MISCONFIGURED`（要求令牌但服务端取不到令牌 → **fail-closed 全拒**）。`server.auth_enabled = false` 时闸门③关闭，**①与②仍然生效**。
+
+### 1.2 本方案**不**提供的保证
+
+* **不防同用户的其它本地进程**：它能直接读令牌文件。本层防的是浏览器跨站与远程访问，不是本机进程隔离。
+* **不是多用户体系**：没有身份、没有 RBAC、没有按用户隔离的工作区。令牌是"持有即可用"的单一凭据。
+* **不做传输加密**：回环 HTTP 明文；这也是禁止非回环暴露的原因之一。
 
 **其它安全约束**：
 
@@ -304,7 +348,21 @@ data: {"task_id":"9b1e...","seq":42,"ts":0.0,"tool_call_id":"c1","tool_name":"ba
 | `guard.warning` | 90% 预算告警 / 指纹死循环拦截 | `kind`, `detail` |
 | `task.finished` | 正常结束 | `status`, `termination_reason`, `step_count`, `total_tokens` |
 | `task.error` | 不可恢复异常 | `code`, `message` |
+| `subagent.started` | 动态子智能体开始执行 | `role`, `depth`, `assigned_tools`, `token_budget`, `max_steps` |
+| `subagent.step` | 子智能体一轮模型决策 | `step`, `tools`（只列工具名） |
+| `subagent.tool` | 子智能体内部单次工具返回 | `step`, `tool`, `ok`, `duration_ms`, `untrusted`, `summary` |
+| `subagent.blocked` | 子智能体越级调用被拒（**解释"为何做不成某事"**） | `step`, `tool`, `required_level`, `current_level`, `action_type` |
+| `subagent.finished` | 子智能体收敛 | `status`, `steps_used`, `tool_calls`, `tokens`, `findings`, `verified_findings` |
+| `research.started` | 研究隔离区开始执行 | `topic`, `questions`, `max_sources` |
+| `research.round` | 研究第 N 轮检索完成 | `round`, `queries`, `fetched`, `evidence` |
+| `research.finished` | 研究收敛 | `rounds`, `sources`, `findings`, `version_facts`, `tokens` |
 | `heartbeat` | 每 `sse_heartbeat_sec`（默认 15s） | 无业务字段 |
+
+**子智能体事件为什么需要单独一类**：LangGraph 的节点级流式只暴露**节点边界**，而子智能体运行在 `tool_runner` 内部的**一个工具**里——没有这类事件时，前端只能看到一个长时间不动的"子任务进行中"。事件的产生路径是：叶子工具 → `observability/event_bus.py`（任务级总线）→ `TaskRegistry.emit` → 环形缓冲/广播，因此**自动获得** `id` 序号与断线重连能力。
+
+> ⚠️ **事件流不是新的信任边界，但也不是模型上下文**。带 `summary` 的事件内容是**已裁剪摘要**（总线强制限长 **300** 字符，`task_id`/`seq`/`ts` 由服务端补齐）；原始正文仍**不进入**主状态、主 Checkpoint 与事件流。若事件的 `untrusted: true`，说明该摘要源自不可信来源（外部网页 / 第三方 MCP），**前端必须转义后再渲染**（防 XSS），且不得把它当成用户指令。
+>
+> 事件名走**白名单**（`routes/tasks.py::_KNOWN_EVENTS`）：未登记的事件会被降级为 `message`，避免内部事件无意间进入前端契约。
 
 **断线重连**：客户端重连时携带 `Last-Event-ID`，服务端从进程内**环形缓冲区**（默认 1000 条，`[server].sse_buffer_events`）重放其后事件。若游标已滑出缓冲区，服务端立即推送 `task.error`（`code = STREAM_GAP`），客户端须改用 `GET /tasks/{task_id}` 与 `/timeline` 做全量重新同步。
 
@@ -318,9 +376,12 @@ data: {"task_id":"9b1e...","seq":42,"ts":0.0,"tool_call_id":"c1","tool_name":"ba
 
 1. 加载 `AegisConfig`（`config.py`）
 2. 初始化 `observability/logging.py`（Loguru JSONL）
-3. `SqliteMemoryStore.initialize()`（建表 + WAL）
-4. 装配 `PhysicalBudgetGuard` 工厂与 `TaskRegistry`
-5. `MCPManager` 仅加载静态配置与工具元数据缓存，**不拉起子进程**（懒加载，`09` §3.3）
+3. `provision_api_token()`（§1.1；环境变量未设置时生成并 0600 落盘）
+4. `SqliteMemoryStore.initialize()`（建表 + WAL）
+5. 装配 `PhysicalBudgetGuard` 工厂与 `TaskRegistry`
+6. `MCPManager` 仅加载静态配置与工具元数据缓存，**不拉起子进程**（懒加载，`09` §3.3）
+
+**中间件嵌套顺序**：`CORS（外）→ SecurityGate（内）→ 路由`。CORS 必须在外层，401/403 才能带上 CORS 头——否则浏览器里只会看到一个语焉不详的网络错误，而不是我们的错误体。
 
 **并发模型**：
 
@@ -344,6 +405,12 @@ cors_allow_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
 sse_heartbeat_sec = 15
 sse_buffer_events = 1000
 artifact_preview_chars = 200
+
+# 接入层安全闸门（§1.1）
+auth_enabled = true                                 # 关闭后 Host/Origin 闸门仍生效
+api_token_env = "AEGIS_API_TOKEN"                   # 优先级最高
+api_token_file = "storage/api_token"                # 0600，已在 .gitignore 中排除
+allowed_hosts = []                                  # 回环名始终允许
 ```
 
 ---
@@ -366,7 +433,7 @@ artifact_preview_chars = 200
 
 ## 10. v1 明确不做
 
-- 多用户、认证、RBAC、API Key 管理
+- 多用户、RBAC、按用户隔离的工作区（**单用户令牌已实现**，见 §1.1；但令牌是"持有即可用"，没有身份概念）
 - WebSocket（统一用 SSE + 轮询补拉）
 - RAG 文档入库端点（归 `AegisRAG`）
 - 评测触发端点（归 `src/evaluation/`，离线命令行驱动）

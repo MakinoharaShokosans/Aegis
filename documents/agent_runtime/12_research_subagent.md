@@ -45,8 +45,11 @@
 | 复杂度 | 嵌套图 + 路由 + checkpoint 交互 | 一条有界异步循环 |
 
 **唯一短板**：中间步骤对 SSE 不可见（子图节点会出现在事件流里）。
-解法：后续可给 tool 注入可选 `on_event` 回调发出 `research.*` 事件；v1 不实现，
-前端只显示"研究中…"占位。
+解法：已实现——`ResearchRunner` 通过任务事件总线（`observability/event_bus.py`）
+外发 `research.started` / `research.round` / `research.finished` 事件，
+前端可以看到"第 N 轮检索了哪些词、抓到了几个来源"。
+事件只带元数据与已裁剪摘要（总线强制限长 300 字符），**页面正文仍不进事件流**；
+详见 `13` §11.1 与 `11` §6。
 
 > 📌 **该决策已泛化为通则**（见 `10_directory_structure.md` 裁决⑯）：
 > 凡"内部要跑模型循环"的能力一律以 **tool** 形态接入，禁用子图。

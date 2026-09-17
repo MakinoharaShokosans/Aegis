@@ -126,6 +126,7 @@ AegisAgent/src/agent_runtime/
 │   ├── __init__.py
 │   ├── logging.py                         Loguru 控制台 + 结构化 JSONL 双 sink
 │   ├── trajectory.py                      Trajectory Store → storage/traces/{task_id}.jsonl
+│   ├── event_bus.py                       ★ 任务事件总线：叶子工具内部事件 → SSE 事件流
 │   └── langfuse_tracer.py                 Langfuse 回调（可失败旁路，未配置即跳过）
 │
 ├── api/                        ✅         交付层：HTTP + SSE（契约见 11_http_api.md）
@@ -134,6 +135,7 @@ AegisAgent/src/agent_runtime/
 │   ├── deps.py                            依赖注入（RuntimeDeps / TaskRegistry / MemoryManager）
 │   ├── schemas.py                         对外 DTO（与 AgentState 解耦）
 │   ├── errors.py                          领域异常 → HTTP 状态码映射 + 统一错误体
+│   ├── auth.py                            ★ 接入层安全闸门（纯 ASGI）：Host → Origin → 令牌
 │   ├── task_registry.py                   任务句柄 + SSE 环形缓冲 + 订阅广播 + 并发闸门
 │   ├── __main__.py                        uvicorn 入口（127.0.0.1:8000）
 │   └── routes/

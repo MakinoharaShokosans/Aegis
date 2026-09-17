@@ -18,7 +18,7 @@ from loguru import logger
 from agent_runtime import errors as domain_errors
 from agent_runtime.api.schemas import ErrorBody, ErrorDetail
 
-__all__ = ["install_exception_handlers", "trace_id_of"]
+__all__ = ["build_error_response", "install_exception_handlers", "trace_id_of"]
 
 #: 领域异常 → HTTP 状态码。未登记的具体子类回落到其基类，再回落到 500。
 _STATUS_MAP: Dict[Type[domain_errors.AgentError], int] = {
@@ -67,6 +67,31 @@ def _error_response(
         content=body.model_dump(),
         headers={_TRACE_HEADER: trace_id},
     )
+
+
+def build_error_response(
+    status_code: int,
+    code: str,
+    message: str,
+    details: dict,
+    trace_id: str,
+) -> JSONResponse:
+    """构造统一错误响应（**中间件等非路由场景的公开入口**）。
+
+    安全闸门（``api/auth.py``）是纯 ASGI 中间件，不走 FastAPI 的异常处理器，
+    因此需要直接拿到同一套响应形状，避免出现"两套错误体"。
+
+    Args:
+        status_code: HTTP 状态码。
+        code: 稳定错误码。
+        message: 面向人的说明。
+        details: 附加上下文。
+        trace_id: 链路追踪 ID。
+
+    Returns:
+        与领域异常处理器同构的 :class:`JSONResponse`。
+    """
+    return _error_response(status_code, code, message, details, trace_id)
 
 
 def _status_for(exc: domain_errors.AgentError) -> int:

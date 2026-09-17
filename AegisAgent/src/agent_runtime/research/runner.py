@@ -24,6 +24,7 @@ from loguru import logger
 from agent_runtime.errors import ToolExecutionError
 from agent_runtime.guardrails.budget_ledger import ChildBudget
 from agent_runtime.llm.client import LLMGateway
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research.contracts import (
     ResearchReport,
@@ -32,7 +33,6 @@ from agent_runtime.research.contracts import (
     build_report,
 )
 from agent_runtime.structured_output import extract_json_object, truncate_text
-from tools.core.protocol import ToolResult
 from tools.core.registry import ToolRegistry
 
 __all__ = ["Evidence", "ResearchRunner"]
@@ -68,9 +68,19 @@ class ResearchRunner:
         prompts: 提示词库。
         config: ``ResearchConfig``（各项硬上限）。
         search_tool_name: 受限工具表中承担检索职责的工具名。
+        event_bus: 任务事件总线（可选）。子智能体的中间步骤对节点级流式不可见，
+            因此由它主动向总线发 ``research.*`` 事件（见 `11` §6）。
     """
 
-    __slots__ = ("_gateway", "_tools", "_prompts", "_config", "_search_tool_name", "_search_tool")
+    __slots__ = (
+        "_gateway",
+        "_tools",
+        "_prompts",
+        "_config",
+        "_search_tool_name",
+        "_search_tool",
+        "_bus",
+    )
 
     def __init__(
         self,
@@ -79,6 +89,7 @@ class ResearchRunner:
         prompts: PromptLibrary,
         config: Any,
         search_tool_name: str = "web_search",
+        event_bus: Optional[TaskEventBus] = None,
     ) -> None:
         self._gateway = gateway
         self._tools = tools
@@ -86,6 +97,7 @@ class ResearchRunner:
         self._config = config
         self._search_tool_name = search_tool_name
         self._search_tool: Optional[Any] = None
+        self._bus = event_bus
 
     # ==========================================================================
     # 对外入口
@@ -108,6 +120,15 @@ class ResearchRunner:
         warnings: List[str] = []
         evidence: Dict[str, Evidence] = {}
         rounds_used = 0
+
+        await self._emit(
+            {
+                "event": "research.started",
+                "topic": request.topic,
+                "questions": len(request.questions),
+                "max_sources": int(request.max_sources or self._config.max_sources),
+            }
+        )
 
         try:
             queries = await self._plan_queries(request, list(evidence.values()), budget, followup=False)
@@ -137,6 +158,17 @@ class ResearchRunner:
                     break
                 evidence.setdefault(item.url, item)
 
+            # 检索词与来源数是可以安全外发的元数据；页面正文绝不进事件流
+            await self._emit(
+                {
+                    "event": "research.round",
+                    "round": rounds_used,
+                    "queries": list(queries),
+                    "fetched": len(fetched),
+                    "evidence": len(evidence),
+                }
+            )
+
             if budget.exhausted or len(evidence) >= max_sources:
                 if budget.exhausted:
                     warnings.append(budget.reason())
@@ -165,7 +197,29 @@ class ResearchRunner:
             f"tokens={budget.tokens} 耗时={budget.elapsed:.1f}s "
             f"结论={len(report.findings)} 版本={len(report.version_facts)}"
         )
+        await self._emit(
+            {
+                "event": "research.finished",
+                "topic": request.topic,
+                "rounds": rounds_used,
+                "sources": len(evidence),
+                "findings": len(report.findings),
+                "version_facts": len(report.version_facts),
+                "tokens": budget.tokens,
+                "elapsed_sec": round(budget.elapsed, 2),
+            }
+        )
         return report
+
+    async def _emit(self, event: Mapping[str, Any]) -> None:
+        """向任务事件总线发送一条事件（未装配总线时为空操作）。
+
+        Args:
+            event: 事件字典，必须含 ``event`` 键。
+        """
+        if self._bus is None:
+            return
+        await self._bus.emit(event)
 
     # ==========================================================================
     # 阶段实现

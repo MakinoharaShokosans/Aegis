@@ -144,6 +144,34 @@ class ServerConfig(BaseModel):
     sse_buffer_events: int = Field(default=1000, description="SSE 断线重连环形缓冲条数")
     artifact_preview_chars: int = Field(default=200, description="产物预览字符数")
 
+    auth_enabled: bool = Field(
+        default=True,
+        description=(
+            "接入层令牌校验总开关。默认开启：本 API 等价于对本机工程目录的读写与执行权限，"
+            "而回环监听挡不住浏览器发起的跨站请求（CSRF / DNS rebinding）——"
+            "用户浏览器里的任意页面都能 POST /approve 替用户批准高危操作。"
+            "关闭后 Host 与 Origin 闸门仍然生效"
+        ),
+    )
+    api_token_env: str = Field(
+        default="AEGIS_API_TOKEN",
+        description="令牌来源环境变量名（优先级最高；设置后不再读写令牌文件）",
+    )
+    api_token_file: str = Field(
+        default="storage/api_token",
+        description=(
+            "令牌落盘路径（0600）。环境变量未设置时：已存在则复用（重启不失效），"
+            "不存在则生成。该文件**绝不入版本库**（.gitignore 已排除），日志只打印路径不打印令牌"
+        ),
+    )
+    allowed_hosts: List[str] = Field(
+        default_factory=list,
+        description=(
+            "额外允许的 Host 主机名（防 DNS rebinding）。回环名称 127.0.0.1 / localhost / ::1 "
+            "始终允许，仅在通过反向代理或自定义本地域名访问时才需要补充"
+        ),
+    )
+
     @model_validator(mode="after")
     def _guard_loopback(self) -> "ServerConfig":
         """

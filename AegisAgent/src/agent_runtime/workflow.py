@@ -43,6 +43,7 @@ from agent_runtime.nodes import (
     build_tool_runner_node,
 )
 from agent_runtime.nodes.base import NodeFn
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research import build_research_tool
@@ -208,6 +209,8 @@ class TaskRuntime:
     ledger: BudgetLedger
     #: 任务授权窗口（父级权限级别的权威来源，供叶子工具只读）
     authority: TaskAuthority
+    #: 任务事件总线（叶子工具内部事件 → SSE 事件流的通道）
+    event_bus: TaskEventBus
     service_clients: List[ServiceClient] = field(default_factory=list)
     #: 会话级"永久放行"指纹集合（由 TaskRegistry 持有，跨 resume 存活）
     approval_allowlist: Set[str] = field(default_factory=set)
@@ -281,6 +284,9 @@ async def prepare_task(
         cfg.runtime.context, cfg.runtime.storage.artifacts_dir, count_tokens
     )
     recorder = TrajectoryRecorder(cfg.runtime.storage.traces_dir, state["task_id"])
+    # 事件总线在此创建但**不在此绑定**：本轮的事件回调是 run/resume 的入参，
+    # 由 _drive_graph 在执行前绑入（与账本、授权窗口同一套"父级推送"手法）
+    event_bus = TaskEventBus(state["task_id"])
 
     clients = _build_service_clients(cfg)
     # 技能以"目标工程"为工作区根，实现工作区级技能覆盖
@@ -334,6 +340,7 @@ async def prepare_task(
                 research_tools=research_tools,
                 prompts=deps.prompts,
                 config=cfg.research,
+                event_bus=event_bus,
             )
         )
     else:
@@ -356,6 +363,7 @@ async def prepare_task(
                 permissions_config=cfg.permissions,
                 ledger=ledger,
                 authority=authority,
+                event_bus=event_bus,
             )
         )
     else:
@@ -385,6 +393,7 @@ async def prepare_task(
         lifecycle=ExecutionContextManager(deps.memory, recorder),
         ledger=ledger,
         authority=authority,
+        event_bus=event_bus,
         service_clients=list(clients.values()),
         approval_allowlist=approval_allowlist if approval_allowlist is not None else set(),
     )
@@ -476,23 +485,30 @@ async def _drive_graph(
     run_config = {"configurable": {"thread_id": task.state["task_id"]}}
     seq = 0
 
-    async for chunk in app.astream(graph_input, run_config, stream_mode="updates"):
-        for node_name, delta in (chunk or {}).items():
-            if node_name == "__interrupt__":
-                continue
-            delta_dict = delta if isinstance(delta, dict) else {}
-            seq += 1
-            if event_sink is not None:
-                await event_sink(
-                    {
-                        "event": "node.finished",
-                        "node": node_name,
-                        "seq": seq,
-                        "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
-                        "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
-                        "should_terminate": bool(delta_dict.get("should_terminate", False)),
-                    }
-                )
+    # 叶子工具（子智能体）看不到本轮事件回调，因此在这里把 sink 推送给事件总线。
+    # 绑定必须在 astream 之前——事件是执行期产生的，晚绑就会丢掉开头的事件。
+    if event_sink is not None:
+        task.event_bus.bind(event_sink, task.state["task_id"])
+    try:
+        async for chunk in app.astream(graph_input, run_config, stream_mode="updates"):
+            for node_name, delta in (chunk or {}).items():
+                if node_name == "__interrupt__":
+                    continue
+                delta_dict = delta if isinstance(delta, dict) else {}
+                seq += 1
+                if event_sink is not None:
+                    await event_sink(
+                        {
+                            "event": "node.finished",
+                            "node": node_name,
+                            "seq": seq,
+                            "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
+                            "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
+                            "should_terminate": bool(delta_dict.get("should_terminate", False)),
+                        }
+                    )
+    finally:
+        task.event_bus.unbind()
 
     snapshot = await app.aget_state(run_config)
     final_state: AgentState = dict(snapshot.values)  # type: ignore[assignment]

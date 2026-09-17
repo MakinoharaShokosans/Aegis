@@ -27,7 +27,6 @@ from agent_runtime.api.schemas import (
     TaskSubmit,
     TimelineItem,
 )
-from agent_runtime.api.task_registry import TaskRegistry
 
 __all__ = ["router"]
 
@@ -37,6 +36,9 @@ router = APIRouter(tags=["tasks"])
 _STREAM_END = object()
 
 #: 事件名 → SSE event 字段的直通集合
+#:
+#: 不在本集合内的事件会被降级为 ``message``（**白名单而非黑名单**：
+#: 新增事件类型必须显式登记，避免内部事件意外泄漏到前端契约里）。
 _KNOWN_EVENTS = {
     "task.started",
     "node.started",
@@ -52,6 +54,15 @@ _KNOWN_EVENTS = {
     "task.finished",
     "task.error",
     "heartbeat",
+    # 子智能体中间步骤（叶子工具内部，节点级流式不可见 → 经事件总线外发）
+    "subagent.started",
+    "subagent.step",
+    "subagent.tool",
+    "subagent.blocked",
+    "subagent.finished",
+    "research.started",
+    "research.round",
+    "research.finished",
 }
 
 
