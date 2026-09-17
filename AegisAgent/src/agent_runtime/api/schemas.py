@@ -34,6 +34,15 @@ __all__ = [
     "ApproveRequest",
     "RejectRequest",
     "WorkspaceUpdate",
+    "FileItem",
+    "FileTreeResponse",
+    "FileContentOut",
+    "FileContentUpdate",
+    "RagIngestRequest",
+    "RagIngestResponse",
+    "RagRetrieveRequest",
+    "RagChunkResult",
+    "RagRetrieveResponse",
 ]
 
 
@@ -297,3 +306,99 @@ class HealthStatus(BaseModel):
     uptime_sec: float = 0.0
     metadata_db_ok: bool = True
     checkpoint_ok: bool = True
+
+
+# ==============================================================================
+# 工作区文件树与内容
+# ==============================================================================
+
+class FileItem(BaseModel):
+    """文件树节点。"""
+
+    path: str = Field(description="相对工作区根路径的 Posix 相对路径")
+    name: str = Field(description="文件名或目录名")
+    type: Literal["file", "directory"] = Field(description="节点类型")
+    size_bytes: int = Field(default=0, description="文件大小（字节）")
+    updated_at: float = Field(default=0.0, description="最近修改时间戳")
+    language: Optional[str] = Field(default=None, description="推断语言/格式标识")
+    children: Optional[List[FileItem]] = Field(default=None, description="子目录节点列表（若为目录）")
+
+
+class FileTreeResponse(BaseModel):
+    """工作区文件树响应。"""
+
+    workspace_id: str
+    root_path: str
+    items: List[FileItem]
+
+
+class FileContentOut(BaseModel):
+    """文件内容响应。"""
+
+    workspace_id: str
+    path: str
+    content: str
+    size_bytes: int
+    language: str
+    updated_at: float
+
+
+class FileContentUpdate(BaseModel):
+    """文件保存请求。"""
+
+    path: str = Field(description="目标相对路径")
+    content: str = Field(description="要写入的新文本内容")
+
+
+# ==============================================================================
+# RAG 知识检索与索引代理
+# ==============================================================================
+
+class RagIngestRequest(BaseModel):
+    """RAG 索引触发请求。"""
+
+    repo_name: Optional[str] = Field(default=None, description="仓库/知识库标识（缺省自动从工作区提取）")
+    repo_root: Optional[str] = Field(default=None, description="物理根路径（缺省使用工作区根路径）")
+    incremental: bool = Field(default=True, description="是否开启增量索引（按内容哈希比对）")
+
+
+class RagIngestResponse(BaseModel):
+    """RAG 索引统计响应。"""
+
+    indexed: int = 0
+    skipped: int = 0
+    deleted: int = 0
+    degraded_files: List[str] = Field(default_factory=list)
+    duration_ms: int = 0
+
+
+class RagRetrieveRequest(BaseModel):
+    """RAG 检索请求。"""
+
+    query: str = Field(description="查询问题或检索词")
+    top_k: Optional[int] = Field(default=5, description="精排返回最大数量")
+    mode: Literal["hybrid", "dense_only", "sparse_only", "hybrid_no_rerank"] = Field(
+        default="hybrid", description="检索模式"
+    )
+    language: Optional[str] = Field(default=None, description="可选语言过滤")
+
+
+class RagChunkResult(BaseModel):
+    """RAG 召回切片。"""
+
+    chunk_id: str
+    file_path: str
+    start_line: int
+    end_line: int
+    content: str
+    git_commit: Optional[str] = None
+    enclosing_scope: Optional[str] = None
+    score: float
+
+
+class RagRetrieveResponse(BaseModel):
+    """RAG 检索响应。"""
+
+    results: List[RagChunkResult] = Field(default_factory=list)
+    low_confidence: bool = False
+

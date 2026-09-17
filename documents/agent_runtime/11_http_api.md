@@ -244,6 +244,22 @@ GET /api/v1/tasks/{id}/stream?token=<token>
 | GET | `/api/v1/mcp/servers` | MCP 服务器列表、连接状态与各自暴露的工具 |
 | GET | `/api/v1/models` | 双模型分层配置（端点别名、模型名、`base_url`）——**不含任何密钥** |
 
+### 4.6 工作区文件与文档管理 Files
+
+| 方法 | 路径 | 说明 |
+|:---|:---|:---|
+| GET | `/api/v1/workspaces/{workspace_id}/files/tree` | 递归获取工作区文件与规范目录树（自动跳过忽略目录） |
+| GET | `/api/v1/workspaces/{workspace_id}/files/content?path={rel_path}` | 读取工作区内文档或源码文本内容（带 `root_path` 边界防越界校验） |
+| PUT | `/api/v1/workspaces/{workspace_id}/files/content` | 保存或修改工作区内文件/文档内容（原子写入） |
+
+### 4.7 RAG 知识库与检索网关代理 RAG
+
+| 方法 | 路径 | 说明 |
+|:---|:---|:---|
+| GET | `/api/v1/rag/health` | 检查 AegisRAG (:8001) 服务存活与向量模型就绪状态 |
+| POST | `/api/v1/rag/ingest` | 触发工作区文档与代码 RAG 语法分块与 Dense+Sparse 索引 |
+| POST | `/api/v1/rag/retrieve` | 执行 RAG 混合检索与 Cross-Encoder 精排调试 |
+
 ---
 
 ## 5. 核心 DTO

@@ -26,8 +26,10 @@ from agent_runtime.api.auth import SecurityGateMiddleware, provision_api_token
 from agent_runtime.api.errors import install_exception_handlers
 from agent_runtime.api.routes import (
     artifacts,
+    files,
     health,
     introspection,
+    rag,
     sessions,
     tasks,
     workspaces,
@@ -113,7 +115,7 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
 
     install_exception_handlers(app)
 
-    for module in (health, workspaces, sessions, tasks, artifacts, introspection):
+    for module in (health, workspaces, sessions, tasks, artifacts, introspection, files, rag):
         app.include_router(module.router, prefix=API_PREFIX)
 
     @app.get("/", include_in_schema=False)

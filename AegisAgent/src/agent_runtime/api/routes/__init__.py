@@ -6,11 +6,22 @@
 
 from agent_runtime.api.routes import (
     artifacts,
+    files,
     health,
     introspection,
+    rag,
     sessions,
     tasks,
     workspaces,
 )
 
-__all__ = ["artifacts", "health", "introspection", "sessions", "tasks", "workspaces"]
+__all__ = [
+    "artifacts",
+    "files",
+    "health",
+    "introspection",
+    "rag",
+    "sessions",
+    "tasks",
+    "workspaces",
+]
