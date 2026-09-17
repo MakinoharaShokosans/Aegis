@@ -13,6 +13,8 @@
 documents/
 ├── README.md                      # [当前文档] 全景总入口与实施导航
 ├── 技术栈.md                      # 全景技术栈清单 (Tech Stack BOM, 库/模型/版本/环境)
+├── 测试路线.md                    # 测试补齐路线图 (单元 → 组件 → API → 全链路，不含需人工介入场景)
+├── 深度测试路线.md                # 真实 LLM 驱动的深度测试路线 (Phase 9~15，需真实 TERRA_KEY/LUNA_KEY)
 │
 ├── 技术选型/                      # 架构决策记录 (ADRs) - 阐述"为什么选该技术"
 │   ├── README.md                  # ADR 导航与设计哲学
@@ -45,13 +47,23 @@ documents/
 │   ├── 04_output_governance_and_artifacts.md   # 流式分块读取、全量离线落盘与 Head/Tail 提炼
 │   └── 05_http_api_and_client_contract.md      # FastAPI 路由契约与 ToolLayer 客户端适配
 │
-└── web_search/                    # 【实施技术规范】网络检索与清洗 (AegisAgent/src/services/web_search/)
-    ├── README.md                  # 检索子系统实施规范索引与数据流拓扑
-    ├── 01_search_architecture_and_data_flow.md # 检索、抓取、清洗、去重、卸载全链路数据流
-    ├── 02_duckduckgo_provider_and_resilience.md# DuckDuckGoProvider 零 Key 实现与异步化封装
-    ├── 03_async_fetch_and_trafilatura_clean.md # httpx 并发池、WAF 快速降级与 trafilatura Markdown 清洗
-    ├── 04_content_dedup_and_artifacts_offloading.md # MD5 内容指纹去重与超长正文落盘卸载
-    └── 05_http_api_and_client_contract.md      # FastAPI 路由契约与 ToolLayer 客户端适配
+├── web_search/                    # 【实施技术规范】网络检索与清洗 (AegisAgent/src/services/web_search/)
+│   ├── README.md                  # 检索子系统实施规范索引与数据流拓扑
+│   ├── 01_search_architecture_and_data_flow.md # 检索、抓取、清洗、去重、卸载全链路数据流
+│   ├── 02_duckduckgo_provider_and_resilience.md# DuckDuckGoProvider 零 Key 实现与异步化封装
+│   ├── 03_async_fetch_and_trafilatura_clean.md # httpx 并发池、WAF 快速降级与 trafilatura Markdown 清洗
+│   ├── 04_content_dedup_and_artifacts_offloading.md # MD5 内容指纹去重与超长正文落盘卸载
+│   └── 05_http_api_and_client_contract.md      # FastAPI 路由契约与 ToolLayer 客户端适配
+│
+└── rag_retrieval/                 # 【实施技术规范】独立代码检索子系统 (AegisRAG/，📋 规划中，代码未实现)
+    ├── README.md                  # RAG 子系统实施规范索引与双流水线拓扑
+    ├── 01_architecture_overview.md            # Ingest/Retrieve 双流水线、独立子工程隔离纪律、双部署形态
+    ├── 02_chunking_and_parsing.md             # AST 语法切分、语言支持范围纠偏、索引触发时机、证据元数据 Schema
+    ├── 03_embedding_and_storage.md            # FastEmbed 双路向量化、Qdrant Schema、幂等写入与失效清理
+    ├── 04_hybrid_retrieval_and_rerank.md      # 双路召回、原生 RRF 融合、Cross-Encoder 精排、低置信度治理
+    ├── 05_http_api_and_client_contract.md     # FastAPI 路由契约与 rag_search.py 客户端字段对齐
+    ├── 06_evaluation_and_benchmarking.md      # 接入 rag_bench 评测 harness、消融矩阵，未来增强项的量化依据
+    └── 07_directory_structure.md              # 权威目录树、依赖矩阵、打包约定（裁决记录，含 rerank/ 独立成包）
 ```
 
 ---

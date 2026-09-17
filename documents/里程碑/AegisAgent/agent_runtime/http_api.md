@@ -28,13 +28,13 @@
 - [x] [x] **同步/异步任务提交与轮询**
   - [x] [x] `POST /api/v1/workspaces/{ws_id}/sessions/{sess_id}/tasks`：异步提交任务并返回 `task_id`
   - [x] [x] `GET /api/v1/tasks/{id}`：查询任务执行状态、步数、Token 消耗与终态结论
-- [x] [ ] **人机协同审核（HITL）交互端点**
-  - [x] [ ] `POST /api/v1/tasks/{id}/approve`：批准待审核越级操作（单次放行 / 会话永久放行）
-  - [x] [ ] `POST /api/v1/tasks/{id}/reject`：拒绝越级操作并向模型回传理由重新规划
+- [x] [x] **人机协同审核（HITL）交互端点**
+  - [x] [x] `POST /api/v1/tasks/{id}/approve`：批准待审核越级操作（单次放行 / 会话永久放行）
+  - [x] [x] `POST /api/v1/tasks/{id}/reject`：拒绝越级操作并向模型回传理由重新规划
 - [x] [x] **Server-Sent Events (SSE) 实时流式交互**
   - [x] [x] `GET /api/v1/tasks/{id}/stream`：订阅任务实时执行事件流
   - [x] [x] 实时推送 `task.started`、`node.started`、`tool.call`、`tool.result`、`milestone.updated`、`task.finished` 等核心事件流
-  - [x] [ ] 实时推送 `task.waiting_for_approval`、`task.approved`、`task.rejected` 审核事件流
+  - [x] [x] 实时推送 `task.waiting_for_approval`、`task.approved`、`task.rejected` 审核事件流
 
 
 ---

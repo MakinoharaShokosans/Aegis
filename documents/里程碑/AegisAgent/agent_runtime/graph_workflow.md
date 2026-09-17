@@ -40,7 +40,10 @@
   - [x] [x] 预算正常 ➔ 导向 `executor`
 - [x] [x] **`route_after_executor`**
   - [x] [x] 硬熔断（如金丝雀泄露）➔ 直接进入 `END`
-  - [x] [x] 工具派发完毕（无论成功、连续失败或死循环）➔ 回流 `planner` 触发下一步或重规划
+  - [x] [x] 正常 ➔ 导向 `tool_runner` 权限闸门与并发派发节点
+- [x] [x] **`route_after_tool_runner`**
+  - [x] [x] 硬熔断（`should_terminate=True`）➔ 直接进入 `END`
+  - [x] [x] 工具派发完毕（无论成功、连续失败或被拒绝）➔ 回流 `planner` 触发下一步或重规划
 - [x] [x] **`route_after_evaluator`**
   - [x] [x] 硬熔断或全部里程碑复核通过 ➔ 导向 `END`
   - [x] [x] 验收打回或仍有后续里程碑 ➔ 回流 `planner` 继续推进
@@ -55,7 +58,7 @@
 - [x] [x] **双执行驱动模式**
   - [x] [x] `run_agent`：标准异步执行，驱动至终态返回最终 `AgentState`
   - [x] [x] `run_streaming`：异步生成器流式驱动，向 `event_sink` 实时派发节点步骤与状态增量
-- [x] [ ] **人机协同审核与挂起恢复机制（Human-in-the-Loop / `interrupt`）**
+- [x] [x] **人机协同审核与挂起恢复机制（Human-in-the-Loop / `interrupt`）**
   - [x] [x] 越级操作触发 `waiting_for_approval` 挂起与状态快照保存
-  - [x] [ ] 接收外部审批结果（批准/放行/拒绝）无缝恢复图状态流转（Resume）
+  - [x] [x] 接收外部审批结果（批准/放行/拒绝）无缝恢复图状态流转（Resume）
 

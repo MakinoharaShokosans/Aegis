@@ -51,12 +51,12 @@
 
 * **决策理由**：
   1. **零 GPU 门槛与体积轻量**：传统 PyTorch + Transformers 环境动辄占用 5GB+ 空间，配置 CUDA 极易踩坑。Qdrant 官方维护的 `fastembed` 底层基于 ONNX Runtime，在单机 CPU 上几十毫秒即可完成批量向量计算；
-  2. **多模态模型原生支持**：
-     - 稠密向量：**默认 `BAAI/bge-small-en-v1.5`（384 维）**，与 `rag_config.toml` 的 `vector_size = 384` 严格一致；也可配置 OpenAI `text-embedding-3-small`；
-       - 中文语料为主时可换 `BAAI/bge-small-zh-v1.5`，但该模型为 **512 维**，必须同步修改 `[qdrant].vector_size` 并重建 Collection，否则写入即报维度不匹配；
-     - 稀疏向量：原生支持 `Qdrant/bm25`，直接输出用于倒排索引的权重字典。
+  2. **多模态与多语言模型原生支持**：
+     - 稠密向量：**默认 `BAAI/bge-m3`（1024 维）**，具备多语言（中/英/代码）强大的混合表征能力，与 `rag_config.toml` 的 `vector_size = 1024` 严格一致；也可配置 OpenAI `text-embedding-3-small` 等远端接口；
+     - 稀疏向量：原生支持 `Qdrant/bm25`，直接输出用于倒排索引的权重字典；
+     - 面包屑上下文富化（CCH）：在 Ingest 编码期利用 `MarkdownHeaderTextSplitter` 生成的标题面包屑富化待编码文本。
 
-> **一致性纪律**：`[embedding].model_name`、`[qdrant].vector_size` 与本文档三者必须始终一致，任何一方的改动都要同时修订另外两处。
+> **一致性纪律**：`[embedding.local].model_name`、`[qdrant].vector_size` 与本文档三者必须始终一致，任何一方的改动都要同时修订另外两处。
 
 ### 2.3 精排重塑：Cross-Encoder Reranker (`bge-reranker-base`)
 

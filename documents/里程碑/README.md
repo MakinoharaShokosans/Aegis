@@ -21,13 +21,15 @@ documents/里程碑/
 │   ├── mcp.md                                   # 2. MCP 协议接入、静态审查与 stdio 配额治理
 │   ├── research_subagent.md                     # 3. 外部不可信检索隔离与研究子智能体
 │   ├── guardrails.md                            # 4. 确定性护栏、会话级金丝雀 Token 与防注入体系
+│   ├── real_llm_deep_testing.md                 # 5. 真实前沿模型深度测试 (Phase 9~15) 与红队基线
 │   │
 │   ├── agent_runtime/                           # 🧠 Agent Runtime 核心引擎解耦子模块
 │   │   ├── state_and_domain.md                  # • 状态契约、物理度量与共享领域模型
 │   │   ├── global_context.md                    # • 全局多层上下文装配与 XML 沙箱协议
 │   │   ├── execution_context.md                 # • 微观执行上下文、SQLite 记忆与水位线压缩
 │   │   ├── graph_workflow.md                    # • LangGraph 状态机编排与确定性路由边
-│   │   └── http_api.md                          # • FastAPI 网关、任务流式推送与系统自省端点
+│   │   ├── http_api.md                          # • FastAPI 网关、任务流式推送与系统自省端点
+│   │   └── permissions_and_hitl.md              # • 三级权限偏序分级与人机协同审批 (HITL)
 │   │
 │   └── services/                                # 🛡️ Sidecar 微服务沙箱
 │       ├── bash_shell.md                        # • 受控 Bash Shell 沙箱微服务 (:8002)
@@ -43,7 +45,9 @@ documents/里程碑/
 
 | 模块名称 | 物理路径 | 代码状态 | 测试状态 | 对应里程碑文档 |
 | :--- | :--- | :---: | :---: | :--- |
+| **真实 LLM 深度测试与基线** | `AegisAgent/tests/real_llm/` | `[x]` | `[x]` | [`real_llm_deep_testing.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/real_llm_deep_testing.md) |
 | **确定性护栏体系** | `AegisAgent/src/agent_runtime/guardrails/` | `[x]` | `[x]` | [`guardrails.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/guardrails.md) |
+| **三级权限与 HITL 审批** | `AegisAgent/src/agent_runtime/guardrails/permission.py` | `[x]` | `[x]` | [`agent_runtime/permissions_and_hitl.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/agent_runtime/permissions_and_hitl.md) |
 | **状态与领域模型** | `AegisAgent/src/agent_runtime/state.py` | `[x]` | `[x]` | [`agent_runtime/state_and_domain.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/agent_runtime/state_and_domain.md) |
 | **全局上下文装配** | `AegisAgent/src/agent_runtime/context.py` | `[x]` | `[x]` | [`agent_runtime/global_context.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/agent_runtime/global_context.md) |
 | **微观上下文与记忆** | `AegisAgent/src/agent_runtime/execution_context.py` | `[x]` | `[x]` | [`agent_runtime/execution_context.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/agent_runtime/execution_context.md) |
@@ -52,6 +56,6 @@ documents/里程碑/
 | **受控 Bash 沙箱** | `AegisAgent/src/services/bash_shell/` | `[x]` | `[x]` | [`services/bash_shell.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/services/bash_shell.md) |
 | **免 Key 检索服务** | `AegisAgent/src/services/web_search/` | `[x]` | `[x]` | [`services/web_search.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/services/web_search.md) |
 | **Skills 技能系统** | `AegisAgent/src/agent_runtime/skills/` | `[x]` | `[x]` | [`skills.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/skills.md) |
-| **MCP 接入治理** | `AegisAgent/src/mcps/` | `[x]` | `[ ]` | [`mcp.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/mcp.md) |
-| **研究子智能体** | `AegisAgent/src/agent_runtime/research/` | `[x]` | `[ ]` | [`research_subagent.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/research_subagent.md) |
-| **AegisRAG 代码检索** | `AegisRAG/` | `[ ]` | `[ ]` | [`AegisRAG/rag_retrieval.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisRAG/rag_retrieval.md) |
+| **MCP 接入治理** | `AegisAgent/src/mcps/` | `[x]` | `[x]` | [`mcp.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/mcp.md) |
+| **研究子智能体** | `AegisAgent/src/agent_runtime/research/` | `[x]` | `[x]` | [`research_subagent.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisAgent/research_subagent.md) |
+| **AegisRAG 代码检索** | `AegisRAG/` | `[x]` | `[ ]` | [`AegisRAG/rag_retrieval.md`](file:///home/Skualeilu/Projects/Aegis/documents/里程碑/AegisRAG/rag_retrieval.md) |
