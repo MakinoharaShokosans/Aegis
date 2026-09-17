@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { PanelGroup, Panel, PanelResizeHandle } from 'react-resizable-panels';
 import { AppHeader } from './AppHeader';
+import { StatusBar } from './StatusBar';
 import { Sidebar } from '../sidebar/Sidebar';
 import { ChatPane } from '../chat/ChatPane';
 import { CanvasPane } from '../canvas/CanvasPane';
@@ -29,7 +30,7 @@ export const AppLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-slate-50">
       {/* Top Global Navigation Bar */}
       <AppHeader />
 
@@ -37,7 +38,7 @@ export const AppLayout: React.FC = () => {
       <div className="flex-1 flex min-h-0">
         <Sidebar />
 
-        <div className="flex-1 h-full min-w-0">
+        <div className="flex-1 h-full min-w-0 bg-white">
           <PanelGroup direction="horizontal">
             {/* Middle Stage: Chat & Trace */}
             <Panel defaultSize={50} minSize={30} className="h-full">
@@ -45,7 +46,7 @@ export const AppLayout: React.FC = () => {
             </Panel>
 
             {/* Resizable Divider */}
-            <PanelResizeHandle className="w-1 bg-border-subtle hover:bg-brand-500 transition-colors cursor-col-resize select-none" />
+            <PanelResizeHandle className="w-1 bg-slate-200 hover:bg-brand-500 transition-colors cursor-col-resize select-none" />
 
             {/* Right Stage: Canvas / Specs Reader / Editor */}
             <Panel defaultSize={50} minSize={25} className="h-full">
@@ -54,6 +55,9 @@ export const AppLayout: React.FC = () => {
           </PanelGroup>
         </div>
       </div>
+
+      {/* Bottom Status Bar */}
+      <StatusBar />
 
       {/* Global Modals & Drawers */}
       <WorkspaceModal />

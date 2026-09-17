@@ -1,4 +1,9 @@
-import React from 'react';
+/**
+ * Aegis Modern Minimalist Sidebar
+ * Supports segmented switching between Sessions, Files, and Memory Pools.
+ */
+
+import React, { useState } from 'react';
 import {
   PanelLeftClose,
   PanelLeft,
@@ -6,12 +11,13 @@ import {
   Settings,
   Shield,
   BrainCircuit,
-  Activity,
+  MessageSquare,
+  FolderTree,
+  Layers,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useTaskStore } from '@/stores/useTaskStore';
-import { Button } from '@/components/ui/Button';
 import { WorkspaceTree } from './WorkspaceTree';
 import { SessionList } from './SessionList';
 
@@ -19,25 +25,27 @@ export const Sidebar: React.FC = () => {
   const {
     sidebarOpen,
     toggleSidebar,
-    openWorkspaceModal,
     setSettingsModalOpen,
     setMemoryDrawerOpen,
+    setContextDrawerOpen,
   } = useUiStore();
 
   const {
-    workspaces,
-    activeWorkspaceId,
     sessions,
     activeSessionId,
     setActiveSession,
     createSession,
     deleteSession,
     memories,
+    activeWorkspaceId,
+    workspaces,
   } = useWorkspaceStore();
 
   const { setCurrentTaskId } = useTaskStore();
 
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
+  const [activeTab, setActiveTab] = useState<'sessions' | 'files' | 'memory'>('sessions');
+
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
 
   const handleNewSession = async () => {
     const newSess = await createSession('新任务会话');
@@ -47,107 +55,151 @@ export const Sidebar: React.FC = () => {
 
   if (!sidebarOpen) {
     return (
-      <div className="flex flex-col items-center py-3 px-2 border-r border-border-subtle bg-canvas-secondary w-12 h-screen select-none shrink-0">
+      <aside className="flex flex-col items-center py-3 px-2 border-r border-slate-200 bg-white w-12 h-screen select-none shrink-0 z-10 shadow-2xs">
         <button
           onClick={toggleSidebar}
-          className="p-1.5 rounded-md hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition"
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition"
           title="展开侧边栏"
         >
-          <PanelLeft className="w-5 h-5" />
+          <PanelLeft className="w-4 h-4" />
         </button>
+
         <button
           onClick={handleNewSession}
-          className="mt-4 p-1.5 rounded-md bg-brand-600 hover:bg-brand-700 text-white shadow-sm transition"
-          title="新建会话 (⌘N)"
+          className="mt-4 p-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition"
+          title="新建任务会话"
         >
           <Plus className="w-4 h-4" />
         </button>
+
+        <div className="my-3 w-6 h-[1px] bg-slate-200" />
+
+        <button
+          onClick={() => {
+            toggleSidebar();
+            setActiveTab('sessions');
+          }}
+          className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-brand-600 transition"
+          title="会话列表"
+        >
+          <MessageSquare className="w-4 h-4" />
+        </button>
+
+        <button
+          onClick={() => {
+            toggleSidebar();
+            setActiveTab('files');
+          }}
+          className="mt-1 p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-brand-600 transition"
+          title="工作区文件树"
+        >
+          <FolderTree className="w-4 h-4" />
+        </button>
+
         <button
           onClick={() => setMemoryDrawerOpen(true)}
-          className="mt-2 p-1.5 rounded-md hover:bg-purple-100 text-purple-600 transition"
-          title="工作区共享记忆"
+          className="mt-1 p-1.5 rounded-lg hover:bg-purple-50 text-purple-600 transition"
+          title="长期共享记忆池"
         >
           <BrainCircuit className="w-4 h-4" />
         </button>
+
         <div className="mt-auto flex flex-col items-center gap-2">
-          <div className="w-2 h-2 rounded-full bg-emerald-500" title="Sidecar 存活: :8001 / :8002 / :8003" />
           <button
             onClick={() => setSettingsModalOpen(true)}
-            className="p-1.5 rounded-md hover:bg-gray-200 text-gray-600 hover:text-gray-900 transition"
+            className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition"
             title="系统设置与安全闸门"
           >
-            <Settings className="w-5 h-5" />
+            <Settings className="w-4 h-4" />
           </button>
         </div>
-      </div>
+      </aside>
     );
   }
 
   return (
-    <aside className="flex flex-col w-64 h-screen border-r border-border-subtle bg-canvas-secondary select-none shrink-0">
-      {/* Brand Header */}
-      <div className="flex items-center justify-between px-3.5 py-3 border-b border-border-subtle">
+    <aside className="flex flex-col w-64 h-screen border-r border-slate-200 bg-white select-none shrink-0 z-10">
+      {/* Sidebar Header */}
+      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-100">
         <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-brand-600 flex items-center justify-center text-white text-xs font-bold shadow-xs">
+          <div className="w-6 h-6 rounded-lg bg-brand-600 flex items-center justify-center text-white shadow-2xs">
             <Shield className="w-3.5 h-3.5" />
           </div>
           <div className="flex flex-col">
-            <span className="font-bold text-sm tracking-tight text-gray-900">
-              Aegis<span className="text-brand-600 font-extrabold">Agent</span>
+            <span className="font-bold text-xs tracking-tight text-slate-900">
+              {activeWorkspace ? activeWorkspace.name : 'Aegis 工作区'}
             </span>
-            <span className="text-[10px] text-gray-400 font-mono leading-none">Runtime UI v4.0</span>
+            <span className="text-[10px] text-slate-400 font-mono leading-none">Workspace Console</span>
           </div>
         </div>
+
         <button
           onClick={toggleSidebar}
-          className="p-1 rounded hover:bg-gray-200 text-gray-500 hover:text-gray-800 transition"
+          className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
           title="折叠侧边栏"
         >
           <PanelLeftClose className="w-4 h-4" />
         </button>
       </div>
 
-      {/* New Session Action */}
-      <div className="p-3">
-        <Button
-          variant="primary"
-          size="sm"
+      {/* New Session Button */}
+      <div className="p-3 pb-2">
+        <button
           onClick={handleNewSession}
-          leftIcon={<Plus className="w-4 h-4" />}
-          rightIcon={<span className="text-[10px] text-blue-200 font-mono">⌘N</span>}
-          className="w-full justify-start"
+          className="w-full flex items-center justify-between px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium text-xs shadow-xs transition"
         >
-          <span className="flex-1 text-left">新建会话</span>
-        </Button>
+          <div className="flex items-center gap-2">
+            <Plus className="w-4 h-4" />
+            <span>新建任务会话</span>
+          </div>
+          <kbd className="px-1.5 py-0.5 bg-brand-700 text-[10px] rounded text-blue-100 font-mono">⌘N</kbd>
+        </button>
       </div>
 
-      {/* Workspace & Sessions Section */}
-      <div className="flex-1 flex flex-col min-h-0 px-3">
-        <WorkspaceTree
-          activeWorkspace={activeWorkspace}
-          onOpenCreate={() => openWorkspaceModal('create')}
-          onOpenEdit={() => openWorkspaceModal('edit')}
-          onOpenDelete={() => openWorkspaceModal('delete')}
-        />
-
-        {/* Workspace Shared Memory Entry */}
-        <div className="pl-3.5 py-1">
+      {/* Segmented View Switcher */}
+      <div className="px-3 py-1">
+        <div className="flex items-center p-0.5 bg-slate-100 rounded-lg text-xs font-medium text-slate-600">
           <button
-            onClick={() => setMemoryDrawerOpen(true)}
-            className="w-full flex items-center justify-between px-2 py-1 text-[11px] text-gray-600 hover:text-purple-700 hover:bg-purple-50 rounded transition"
+            onClick={() => setActiveTab('sessions')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md transition ${
+              activeTab === 'sessions'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'hover:text-slate-900'
+            }`}
           >
-            <span className="flex items-center gap-1.5">
-              <BrainCircuit className="w-3.5 h-3.5 text-purple-600" />
-              <span>工作区共享记忆</span>
-            </span>
-            <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-700 font-mono">
-              {memories.length}条定论
-            </span>
+            <MessageSquare className="w-3.5 h-3.5 text-brand-600" />
+            <span>会话</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('files')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md transition ${
+              activeTab === 'files'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <FolderTree className="w-3.5 h-3.5 text-amber-500" />
+            <span>文件</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('memory')}
+            className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md transition ${
+              activeTab === 'memory'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'hover:text-slate-900'
+            }`}
+          >
+            <BrainCircuit className="w-3.5 h-3.5 text-purple-600" />
+            <span>记忆</span>
           </button>
         </div>
+      </div>
 
-        {/* Sessions Tree Items */}
-        <div className="pl-3.5 flex-1 overflow-y-auto">
+      {/* Content Area */}
+      <div className="flex-1 flex flex-col min-h-0 p-3 pt-2">
+        {activeTab === 'sessions' && (
           <SessionList
             sessions={sessions}
             activeSessionId={activeSessionId}
@@ -156,31 +208,68 @@ export const Sidebar: React.FC = () => {
               setCurrentTaskId('task-mock-default');
             }}
             onDeleteSession={deleteSession}
+            onNewSession={handleNewSession}
           />
-        </div>
+        )}
+
+        {activeTab === 'files' && <WorkspaceTree />}
+
+        {activeTab === 'memory' && (
+          <div className="flex flex-col h-full space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-500 font-medium px-1">
+              <span>长期记忆池 ({memories.length})</span>
+              <button
+                onClick={() => setMemoryDrawerOpen(true)}
+                className="text-brand-600 hover:text-brand-700 text-[11px] font-semibold"
+              >
+                查看全部
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
+              {memories.length === 0 ? (
+                <div className="text-center py-8 text-xs text-slate-400 italic">暂无沉淀记忆</div>
+              ) : (
+                memories.slice(0, 6).map((m) => (
+                  <div
+                    key={m.id}
+                    onClick={() => setMemoryDrawerOpen(true)}
+                    className="p-2 rounded-lg bg-slate-50 hover:bg-purple-50/50 border border-slate-200/80 cursor-pointer transition text-xs"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="font-semibold text-slate-800 truncate">{m.title}</span>
+                      <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-mono">
+                        {m.category === 'confirmed_architecture' ? '架构' : m.category === 'project_conventions' ? '规范' : '教训'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">{m.content}</p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Sidecar Status & Footer Settings */}
-      <div className="p-3 border-t border-border-subtle space-y-2 bg-canvas-secondary">
-        {/* Sidecar Status Indicator */}
-        <div className="flex items-center justify-between px-1 text-[10px] text-gray-500 font-mono">
-          <span className="flex items-center gap-1">
-            <Activity className="w-3 h-3 text-emerald-600" />
-            Sidecars
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-emerald-700">RAG:8001 ●</span>
-            <span className="text-emerald-700">Shell:8002 ●</span>
-            <span className="text-emerald-700">Web:8003 ●</span>
+      {/* Footer Settings & Context Button */}
+      <div className="p-3 border-t border-slate-100 space-y-1.5 bg-slate-50/60">
+        <button
+          onClick={() => setContextDrawerOpen(true)}
+          className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition"
+        >
+          <div className="flex items-center gap-2">
+            <Layers className="w-4 h-4 text-emerald-600" />
+            <span>四层上下文透视</span>
           </div>
-        </div>
+          <span className="text-[10px] text-emerald-700 font-mono font-medium">80%/40%</span>
+        </button>
 
         <button
           onClick={() => setSettingsModalOpen(true)}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-gray-600 hover:bg-gray-200 hover:text-gray-900 rounded-md transition"
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 text-xs text-slate-600 hover:bg-slate-100 rounded-lg transition"
         >
-          <Settings className="w-4 h-4 text-gray-500" />
-          <span className="font-medium">系统配置与安全闸门</span>
+          <Settings className="w-4 h-4 text-slate-500" />
+          <span className="font-medium">安全闸门与配置</span>
         </button>
       </div>
     </aside>

@@ -1,4 +1,9 @@
-import React from 'react';
+/**
+ * Aegis Modern Message Bubble
+ * React.memo cached message item with rich markdown typography, milestone checklist, and mutation cards.
+ */
+
+import React, { useState } from 'react';
 import {
   Bot,
   User,
@@ -8,6 +13,9 @@ import {
   ThumbsDown,
   CheckSquare,
   FileCode2,
+  Copy,
+  Check,
+  Zap,
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -24,9 +32,17 @@ interface MessageBubbleProps {
 
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
   ({ message, onOpenFile }) => {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = () => {
+      navigator.clipboard.writeText(message.content);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    };
+
     if (message.role === 'user') {
       return (
-        <div className="flex items-start gap-3 justify-end select-none">
+        <div className="flex items-start gap-3 justify-end select-none animate-in fade-in duration-150">
           <div className="bg-brand-600 text-white rounded-2xl rounded-tr-xs px-4 py-2.5 max-w-[85%] text-xs leading-relaxed shadow-sm">
             {message.content}
           </div>
@@ -39,22 +55,23 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
 
     if (message.role === 'system') {
       return (
-        <div className="p-3 bg-gray-100 border border-gray-200 rounded-xl text-gray-700 text-xs flex items-center gap-2 select-none">
-          <Shield className="w-4 h-4 text-gray-500 shrink-0" />
-          <span>{message.content}</span>
+        <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex items-center gap-2.5 select-none shadow-2xs">
+          <Shield className="w-4 h-4 text-brand-600 shrink-0" />
+          <span className="leading-relaxed">{message.content}</span>
         </div>
       );
     }
 
     return (
-      <div className="flex items-start gap-3">
-        <div className="w-7 h-7 rounded-full bg-brand-50 border border-brand-200 text-brand-600 flex items-center justify-center shrink-0 text-xs font-bold shadow-xs select-none">
+      <div className="flex items-start gap-3 animate-in fade-in duration-150">
+        <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-brand-600 to-brand-500 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-2xs select-none">
           <Bot className="w-4 h-4" />
         </div>
-        <div className="flex-1 space-y-3.5 min-w-0">
-          <div className="bg-white border border-border-subtle rounded-2xl rounded-tl-xs p-4 text-xs leading-relaxed shadow-xs space-y-3.5">
+
+        <div className="flex-1 space-y-3 min-w-0">
+          <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-4 text-xs leading-relaxed shadow-xs space-y-3.5">
             {/* Markdown Main Text */}
-            <div className="prose prose-sm max-w-none text-gray-800">
+            <div className="prose prose-sm max-w-none text-slate-800 font-sans leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
                 {message.content}
               </ReactMarkdown>
@@ -62,12 +79,12 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
 
             {/* Milestones Checklist */}
             {message.milestones && message.milestones.length > 0 && (
-              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-200/70 space-y-2">
-                <div className="text-[11px] font-semibold text-gray-600 flex items-center gap-1.5 select-none">
+              <div className="p-3 bg-slate-50/80 rounded-xl border border-slate-200/80 space-y-2">
+                <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1.5 select-none">
                   <CheckSquare className="w-3.5 h-3.5 text-brand-600" />
                   <span>阶段目标与里程碑达成 (State Machine Milestones)</span>
                 </div>
-                <div className="space-y-0.5">
+                <div className="space-y-1">
                   {message.milestones.map((m) => (
                     <MilestoneItem key={m.id} milestone={m} />
                   ))}
@@ -87,8 +104,8 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
             {/* File Mutations Grid */}
             {message.fileMutations && message.fileMutations.length > 0 && (
               <div className="space-y-2 pt-1">
-                <div className="text-[11px] font-semibold text-gray-600 flex items-center gap-1 select-none">
-                  <FileCode2 className="w-3.5 h-3.5 text-blue-600" />
+                <div className="text-[11px] font-semibold text-slate-700 flex items-center gap-1 select-none">
+                  <FileCode2 className="w-3.5 h-3.5 text-brand-600" />
                   <span>本次工作区改动 ({message.fileMutations.length} 个文件)</span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
@@ -100,19 +117,33 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
             )}
 
             {/* Footer Meta */}
-            <div className="flex items-center justify-between text-[11px] text-gray-400 pt-2 border-t border-gray-100 select-none">
+            <div className="flex items-center justify-between text-[11px] text-slate-400 pt-2 border-t border-slate-100 select-none">
               <div className="flex items-center gap-3">
                 <span className="flex items-center gap-1">
                   <Clock className="w-3 h-3" />
                   {message.durationMs ? `${(message.durationMs / 1000).toFixed(1)}s` : '刚刚'}
                 </span>
-                {message.tokensUsed && <span>📊 {message.tokensUsed} tok</span>}
+                {message.tokensUsed && (
+                  <span className="flex items-center gap-1 font-mono">
+                    <Zap className="w-3 h-3 text-amber-500" />
+                    <span>{message.tokensUsed} tok</span>
+                  </span>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded" title="赞同">
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={handleCopy}
+                  className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded transition flex items-center gap-1 text-[10px]"
+                  title="复制内容"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-600" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? '已复制' : '复制'}</span>
+                </button>
+                <button className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="赞同">
                   <ThumbsUp className="w-3 h-3" />
                 </button>
-                <button className="p-1 hover:text-gray-700 hover:bg-gray-100 rounded" title="反馈">
+                <button className="p-1 hover:text-slate-700 hover:bg-slate-100 rounded transition" title="反馈">
                   <ThumbsDown className="w-3 h-3" />
                 </button>
               </div>
