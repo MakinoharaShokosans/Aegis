@@ -69,7 +69,7 @@ export const ChatPane: React.FC = () => {
           {
             id: `msg-${Date.now() + 1}`,
             role: 'assistant',
-            content: `### 正在执行任务编排 (LangGraph State Machine)\n\n已成功启动 AegisAgent 核心调度宿主。调用 **Fast 动作层模型** 并行分派专用子智能体。\n\n- [x] **里程碑 1**：构造复现用例并触发 AddressSanitizer\n- [x] **里程碑 2**：调用 \`delegate_code_search\` 检索连接池释放逻辑 (命中有界行号白名单)\n- [ ] **里程碑 3**：生成修复补丁并在隔离沙箱验证测试`,
+            content: `### 正在执行任务编排 (LangGraph State Machine)\n\n已成功启动 AegisAgent 核心调度宿主。调用 **Fast 动作层模型** 并行分派专用子智能体。\n\n- [x] **里程碑 1**：调用 \`delegate_doc_search\` 检索架构规范与 API 契约\n- [x] **里程碑 2**：在 auth.py 落地 Host -> Origin -> Token 三道安全闸门\n- [ ] **里程碑 3**：运行测试套件验证安全覆盖率与断线重连`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
             durationMs: 1420,
             fileMutations: [
@@ -115,7 +115,7 @@ export const ChatPane: React.FC = () => {
           },
         ],
         subagents: [
-          { id: 'sub-1', name: 'Code Search Subagent', role: '源码检索 (3轮有界RAG)', status: 'completed', stepCount: 3 },
+          { id: 'sub-1', name: 'Doc & Knowledge Search Subagent', role: '文档与技术规范检索 (3轮有界RAG)', status: 'completed', stepCount: 3 },
           { id: 'sub-2', name: 'Research Subagent', role: '外部网页隔离研究', status: 'idle', stepCount: 0 },
         ],
         telemetry: {

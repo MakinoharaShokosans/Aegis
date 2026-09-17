@@ -30,9 +30,9 @@ export const CanvasPane: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-canvas-secondary text-gray-400 p-8 select-none">
         <FileCode2 className="w-12 h-12 text-gray-300 mb-3" />
-        <p className="text-sm font-medium text-gray-600">工作区深度视窗 (Canvas Stage)</p>
-        <p className="text-xs text-gray-400 mt-1">
-          在对话流中点击文件改动卡片或工作区文件，可在此实时预览、编辑与对比代码
+        <p className="text-sm font-medium text-gray-600">工作区文档与深度视窗 (Doc & Canvas Stage)</p>
+        <p className="text-xs text-gray-400 mt-1 text-center max-w-sm">
+          在对话流中点击文档知识卡片、技术规范或工作区文件，可在此实时预览 Markdown 架构规范、编辑源码与审查 Diff
         </p>
       </div>
     );
