@@ -15,14 +15,14 @@
 from __future__ import annotations
 
 import asyncio
-import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from loguru import logger
 
 from agent_runtime.errors import ToolExecutionError
+from agent_runtime.guardrails.budget_ledger import ChildBudget
 from agent_runtime.llm.client import LLMGateway
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research.contracts import (
@@ -55,36 +55,8 @@ class Evidence:
     artifact_path: Optional[str] = None
 
 
-@dataclass(slots=True)
-class _Budget:
-    """子智能体预算计数器。"""
-
-    max_tokens: int
-    max_wall_time_sec: float
-    started_at: float = field(default_factory=time.perf_counter)
-    tokens: int = 0
-
-    def add_tokens(self, amount: int) -> None:
-        """累加 Token 消耗。"""
-        self.tokens += max(0, int(amount))
-
-    @property
-    def elapsed(self) -> float:
-        """已消耗的挂钟秒数。"""
-        return time.perf_counter() - self.started_at
-
-    @property
-    def exhausted(self) -> bool:
-        """Token 或挂钟任一耗尽即视为耗尽。"""
-        return self.tokens >= self.max_tokens or self.elapsed >= self.max_wall_time_sec
-
-    def reason(self) -> str:
-        """预算耗尽的说明（用于 warnings）。"""
-        if self.tokens >= self.max_tokens:
-            return f"子智能体 Token 预算耗尽（{self.tokens}/{self.max_tokens}）"
-        if self.elapsed >= self.max_wall_time_sec:
-            return f"子智能体挂钟预算耗尽（{self.elapsed:.1f}s/{self.max_wall_time_sec}s）"
-        return ""
+# 预算计数器复用 ``guardrails.budget_ledger.ChildBudget``（与动态子智能体同一实现），
+# 避免"每个子智能体各写一份预算算术"——预算口径一旦分叉，对账就不可信。
 
 
 class ResearchRunner:
@@ -129,7 +101,7 @@ class ResearchRunner:
             :class:`ResearchReport`。**任何阶段失败都不会抛异常**，
             而是返回带 ``warnings`` 的报告（可能是空报告）。
         """
-        budget = _Budget(
+        budget = ChildBudget(
             max_tokens=int(self._config.max_total_tokens),
             max_wall_time_sec=float(self._config.max_wall_time_sec),
         )
@@ -222,7 +194,7 @@ class ResearchRunner:
         self,
         request: ResearchRequest,
         evidence: Sequence[Evidence],
-        budget: _Budget,
+        budget: ChildBudget,
         *,
         followup: bool,
     ) -> List[str]:
@@ -286,7 +258,7 @@ class ResearchRunner:
         self,
         request: ResearchRequest,
         evidence: Sequence[Evidence],
-        budget: _Budget,
+        budget: ChildBudget,
     ) -> Mapping[str, Any]:
         """产出最终报告的原始 JSON（随后必须经 :func:`build_report` 净化）。"""
         user_content = self._render_distill_input(request, evidence)

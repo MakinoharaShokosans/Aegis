@@ -95,7 +95,7 @@ def build_initial_state(
         rolling_summary=rolling_summary,
         confirmed_facts=list(confirmed_facts or []),
         failed_attempts=list(failed_attempts or []),
-        permission_level=permission_level,  # type: ignore[typeddict-item]
+        permission_level=permission_level,
         artifacts={},
         step_count=0,
         total_tokens=0,

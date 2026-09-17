@@ -20,7 +20,7 @@ from typing import Any, Mapping, Sequence
 
 from loguru import logger
 
-from tools.core.protocol import ToolResult
+from tools.core.protocol import ToolResult, ToolTrust
 from tools.core.registry import ToolRegistry
 
 __all__ = ["DispatchedResult", "ToolDispatcher"]
@@ -37,11 +37,15 @@ class DispatchedResult:
         tool_call_id: 原始调用 ID（用于配对 ToolMessage）。
         tool_name: 工具名。
         result: 统一结果契约。
+        trust: **本次调用**生效的信任级。解析规则：``result.trust``（调用期覆盖）
+            优先，否则回退工具类静态声明；未知工具取最保守值 ``untrusted``。
+            编排层只读这一个字段，不必自行拼装解析逻辑。
     """
 
     tool_call_id: str
     tool_name: str
     result: ToolResult
+    trust: ToolTrust = "trusted"
 
 
 class ToolDispatcher:
@@ -86,6 +90,8 @@ class ToolDispatcher:
                 tool_call_id=tool_call_id,
                 tool_name=tool_name,
                 result=ToolResult.failure(f"未知工具: {tool_name}"),
+                # 未知工具的副作用不可静态推理，信任级取最保守值
+                trust="untrusted",
             )
 
         try:
@@ -99,4 +105,29 @@ class ToolDispatcher:
 
         if result.duration_ms == 0:
             result.duration_ms = int((time.perf_counter() - started) * 1000)
-        return DispatchedResult(tool_call_id=tool_call_id, tool_name=tool_name, result=result)
+        return DispatchedResult(
+            tool_call_id=tool_call_id,
+            tool_name=tool_name,
+            result=result,
+            trust=_resolve_trust(result, tool),
+        )
+
+
+def _resolve_trust(result: ToolResult, tool: Any) -> ToolTrust:
+    """解析本次调用生效的信任级。
+
+    优先级：**调用期覆盖 > 工具类静态声明 > 最保守值**。
+    之所以允许调用期覆盖：像动态子智能体这类工具，其输出信任级取决于
+    **本次被授予了哪些工具**，静态类属性表达不了这种依赖。
+
+    Args:
+        result: 工具返回的结果。
+        tool: 工具实例。
+
+    Returns:
+        ``"trusted"`` 或 ``"untrusted"``。
+    """
+    if result.trust in ("trusted", "untrusted"):
+        return result.trust  # type: ignore[return-value]
+    declared = getattr(tool, "trust", None)
+    return "trusted" if declared == "trusted" else "untrusted"

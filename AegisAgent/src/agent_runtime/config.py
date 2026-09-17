@@ -228,7 +228,53 @@ class ResearchConfig(BaseModel):
 
 
 # ==============================================================================
-# 12. 技能信任与治理配置
+# 12. 动态子智能体委派配置（能力衰减 + 预算切片）
+#     规范：documents/agent_runtime/13_subagent_delegation.md
+# ==============================================================================
+
+class SubagentConfig(BaseModel):
+    """
+    动态子智能体（``spawn_subagent``）的授权与预算上限。
+
+    **这里的每一项都是可以被代码强制执行的硬约束**，不是提示词建议——
+    凡只写在工具描述里的"上限"都不构成上限（见规范 §6）。
+
+    与 :class:`ResearchConfig` 的分工：研究子智能体是**强类型输出**的专用通道，
+    本段配置的是**通用但弱保证**的通道，两者刻意并存、不互相折叠。
+    """
+    enabled: bool = Field(default=True, description="总开关；关闭后主 Agent 不具备动态委派能力")
+    model_tier: Literal["reasoning", "fast"] = Field(default="fast", description="子智能体使用的模型层级")
+    max_depth: int = Field(default=1, description="最大委派深度；1 表示只允许主 Agent 分叉一级")
+    max_steps: int = Field(default=8, description="子智能体内部交互轮数硬上限（代码内 clamp）")
+    max_total_tokens: int = Field(default=30000, description="单次派发的名义 Token 上限（实际额度受父级余额收窄）")
+    min_token_budget: int = Field(default=2000, description="最小可授予额度；余额低于此值直接拒绝派发")
+    max_wall_time_sec: float = Field(default=90.0, description="单次派发挂钟上限（秒）")
+    max_spawns_per_task: int = Field(default=4, description="单任务派发次数上限：约束'委派意愿'的物理旋钮")
+    max_assigned_tools: int = Field(default=6, description="单次派发可授权的工具条数上限")
+    max_findings: int = Field(default=6, description="回流的结论条目上限")
+    max_observation_chars: int = Field(
+        default=4000,
+        description=(
+            "子智能体单条工具观察值的字符上限（**内存截断，不落盘**）。"
+            "刻意不复用主循环的 ObservationPruner：后者会把超长内容写成 artifact，"
+            "而子智能体的中间观察值不应污染主任务的产物登记表"
+        ),
+    )
+    max_answer_chars: int = Field(default=400, description="单条结论长度上限")
+    max_citations: int = Field(default=8, description="单条结论可携带的引用数上限")
+    max_report_chars: int = Field(default=3000, description="渲染后注入主上下文的上限")
+    denied_tools: List[str] = Field(
+        default_factory=lambda: ["spawn_subagent", "delegate_research"],
+        description=(
+            "禁止下发给子智能体的工具（硬黑名单，与'白名单取交集'叠加）。"
+            "默认剔除委派类工具：前者防套娃，后者防止在子智能体内再嵌一层模型循环"
+            "（等价于深度 +1，却绕过了深度计数）"
+        ),
+    )
+
+
+# ==============================================================================
+# 13. 技能信任与治理配置
 #     规范：documents/agent_runtime/08_skills_management.md 第 4.1-4.3 节
 # ==============================================================================
 
@@ -251,7 +297,7 @@ class SkillsConfig(BaseModel):
 
 
 # ==============================================================================
-# 13. 三级权限分级配置（HITL 越级人工审核）
+# 14. 三级权限分级配置（HITL 越级人工审核）
 #     规范：documents/技术选型/bash_shell.md §2.3、agent_runtime/04 §4.5
 # ==============================================================================
 
@@ -266,8 +312,18 @@ class PermissionsConfig(BaseModel):
         default="workspace_write", description="新任务的默认权限基线"
     )
     read_only_tools: List[str] = Field(
-        default_factory=lambda: ["view_file", "rag_search", "load_skill", "delegate_research"],
-        description="只读类工具（免审批）",
+        default_factory=lambda: [
+            "view_file",
+            "rag_search",
+            "load_skill",
+            "delegate_research",
+            "spawn_subagent",
+        ],
+        description=(
+            "只读类工具（免审批）。``spawn_subagent`` 归此类的理由：它**不直接产生副作用**，"
+            "其内部每一次子调用都会按父级权限重新判定（能力在派发前已衰减），"
+            "因此委派动作本身不需要构成一道审批；需要审批的是子智能体实际执行的具体动作"
+        ),
     )
     workspace_write_tools: List[str] = Field(
         default_factory=lambda: ["write_file"],
@@ -325,7 +381,7 @@ class PermissionsConfig(BaseModel):
 
 
 # ==============================================================================
-# 14. 全局配置根对象 (AegisConfig)
+# 15. 全局配置根对象 (AegisConfig)
 # ==============================================================================
 
 class AegisConfig(BaseSettings):
@@ -345,6 +401,7 @@ class AegisConfig(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
+    subagent: SubagentConfig = Field(default_factory=SubagentConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
     permissions: PermissionsConfig = Field(default_factory=PermissionsConfig)
 

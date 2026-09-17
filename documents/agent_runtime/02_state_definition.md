@@ -116,3 +116,16 @@ class AgentState(TypedDict):
   new_total_tokens = state["total_tokens"] + response.usage.total_tokens
   ```
 * 一旦 `new_total_tokens >= config.guardrails.max_total_tokens`，立即置位 `should_terminate = True` 并标记 `termination_reason = "Token budget exceeded"`。
+
+#### 写入责任划分（防止口径分叉）
+
+`total_tokens` 是**多写者字段**，因此每个写入方的语义必须明确，否则会出现漏记或重复计入：
+
+| 写入方 | 写入内容 |
+|:---|:---|
+| `planner` / `executor` / `evaluator` | 本节点自身 LLM 调用的 `usage.total_tokens` |
+| `tool_runner` | **仅增量**：本次派发期间子智能体**已结算**的消耗（见 `13` §4.4） |
+
+> ⚠️ `tool_runner` 的写入必须用**增量**而非绝对值，且必须发生在**权限审批闸门之后**。
+> `interrupt()` 挂起时本节点的返回值会被 LangGraph 整体丢弃——若在闸门之前记账，
+> 那一次记账会永久丢失。此顺序不可调换，改动节点内步骤顺序时需重新论证。

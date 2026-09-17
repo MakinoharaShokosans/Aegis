@@ -1,7 +1,8 @@
-"""``tool_runner`` 节点：权限闸门 + 并发工具派发。
+"""``tool_runner`` 节点：权限闸门 + 并发工具派发 + 预算冲销。
 
-对应 ``documents/agent_runtime/03_node_specification.md`` §4.3 与
-``documents/agent_runtime/04_routing_and_control_flow.md`` §4.5（HITL）。
+对应 ``documents/agent_runtime/03_node_specification.md`` §4.3、
+``04_routing_and_control_flow.md`` §4.5（HITL）与
+``13_subagent_delegation.md`` §4（子智能体预算对账）。
 
 **为什么从 ``executor`` 拆出来**：LangGraph 的 ``interrupt()`` 恢复时会**重跑整个节点**。
 把审批放在这里（而非紧随 fast 模型调用的 ``executor`` 内），
@@ -13,13 +14,22 @@
 1. 读取上一条 ``AIMessage`` 的 ``tool_calls``；
 2. **权限闸门**：逐个判定所需级别；存在越级且未获会话白名单豁免时，
    调用 ``interrupt()`` 挂起任务等待人工审批；
-3. 指纹登记与死循环判定（命中则整批拦截）；
-4. ``asyncio.gather`` 并发派发；
-5. 观察值治理（超限落盘）与**原子对**组装；
-6. 瞬态护栏：连续错误计数与强制重规划通知。
+3. 同步父任务已用量到预算账本，然后**串行准入**（预留）；
+4. 指纹登记与死循环判定（命中则整批拦截）；
+5. ``asyncio.gather`` 并发派发；
+6. 观察值治理（超限落盘）与**原子对**组装（按信任级决定是否加不可信信封）；
+7. 瞬态护栏：连续错误计数与强制重规划通知；
+8. **预算冲销**：把子智能体实际消耗并入 ``total_tokens``。
 
 **原子对铁律**：无论批准、拒绝、拦截还是失败，都必须为每个 ``tool_call``
 生成配对 ``ToolMessage``，否则端点会因 ``tool_call_id`` 不匹配返回 400。
+
+.. important::
+   **预算冲销必须发生在审批闸门之后（第 8 步），这是不可调换的顺序。**
+   ``interrupt()`` 挂起时本节点已产生的返回值会被整体丢弃，因此若在第 2 步之前
+   记账，被丢弃的那一次记账就会永久丢失（账本是一次性结算的）。
+   当前顺序下：挂起发生在派发之前，而子智能体的消耗只可能发生在派发期间，
+   所以"挂起 ⇒ 本次无消耗可记"，不存在丢失。
 """
 
 from __future__ import annotations
@@ -31,6 +41,9 @@ from langchain_core.messages import AIMessage, SystemMessage, ToolMessage
 from langgraph.types import interrupt
 from loguru import logger
 
+from agent_runtime.envelope import observation
+from agent_runtime.guardrails.authority import TaskAuthority
+from agent_runtime.guardrails.budget_ledger import BudgetLedger
 from agent_runtime.guardrails.loop_detector import (
     build_replan_notice,
     is_fingerprint_loop,
@@ -62,6 +75,8 @@ def build_tool_runner_node(
     guardrails_config: Any,
     permissions_config: Any,
     *,
+    ledger: Optional[BudgetLedger] = None,
+    authority: Optional[TaskAuthority] = None,
     approval_allowlist: Optional[Set[str]] = None,
     recorder: Optional[TrajectoryRecorder] = None,
 ) -> NodeFn:
@@ -72,6 +87,10 @@ def build_tool_runner_node(
         pruner: 观察值裁剪器。
         guardrails_config: ``config.runtime.guardrails``（指纹与错误阈值）。
         permissions_config: ``config.permissions``（三级权限分类表）。
+        ledger: **子智能体预算账本**（父级记账方）。为 ``None`` 时不启用预算冲销
+            （如单测直接构造节点时）。
+        authority: **任务授权窗口**（父级权限级别的权威推送点）。为 ``None`` 时
+            不推送——此时叶子工具只能使用其初始级别。
         approval_allowlist: **会话级"永久放行"指纹集合**（可变引用）。
             由 ``TaskRegistry`` 持有，跨 ``resume`` 存活；为 ``None`` 时不启用豁免。
         recorder: 轨迹记录器（可选旁路）。
@@ -81,17 +100,18 @@ def build_tool_runner_node(
     """
 
     async def tool_runner(state: Mapping[str, Any]) -> Dict[str, Any]:
-        """执行已生成的工具调用（含越级审批闸门）。
+        """执行已生成的工具调用（含越级审批闸门与预算冲销）。
 
         Args:
             state: ``AgentState``（只读）。
 
         Returns:
-            工具消息、连续错误、指纹队列与产物句柄增量。
+            工具消息、连续错误、指纹队列、产物句柄与 Token 增量。
         """
         step_index = int(state.get("step_count", 0))
         task_id = str(state.get("task_id", "unknown"))
         current_level = state.get("permission_level") or "workspace_write"
+        base_tokens = int(state.get("total_tokens", 0))
 
         assistant = latest_ai_message(list(state.get("messages") or []))
         specs = to_tool_call_specs(getattr(assistant, "tool_calls", None) or [])
@@ -121,7 +141,20 @@ def build_tool_runner_node(
             )
 
         # ------------------------------------------------------------------
-        # 2. 指纹登记与死循环判定
+        # 2. 预算账本：同步父任务已用量 → 串行准入（必须在并发派发之前）
+        #    准入无 await，因而原子；若挪到 gather 之后，并发子任务会各自
+        #    读到同一份余额并全额预留，造成超额分配。
+        # ------------------------------------------------------------------
+        consumed_before = 0
+        if ledger is not None:
+            ledger.sync_parent_usage(base_tokens)
+            consumed_before = ledger.consumed
+        if authority is not None:
+            # 把 State 中的权威级别推送给叶子工具（工具看不到 State）
+            authority.bind(current_level)
+
+        # ------------------------------------------------------------------
+        # 3. 指纹登记与死循环判定
         # ------------------------------------------------------------------
         fingerprint_history = register_fingerprints(
             state.get("fingerprint_history") or [],
@@ -135,7 +168,7 @@ def build_tool_runner_node(
             logger.warning("[ToolRunner] 指纹死循环命中，拦截本次派发")
 
         # ------------------------------------------------------------------
-        # 3. 并发派发（被拒绝/被拦截的调用不派发，改为合成观察值）
+        # 4. 并发派发（被拒绝/被拦截的调用不派发，改为合成观察值）
         # ------------------------------------------------------------------
         if loop_detected:
             results: List[DispatchedResult] = [
@@ -165,7 +198,7 @@ def build_tool_runner_node(
             ]
 
         # ------------------------------------------------------------------
-        # 4. 观察值治理 + 原子对组装
+        # 5. 观察值治理 + 原子对组装（信任级决定是否加不可信信封）
         # ------------------------------------------------------------------
         tool_messages: List[ToolMessage] = []
         artifacts: Dict[str, str] = dict(state.get("artifacts") or {})
@@ -185,13 +218,11 @@ def build_tool_runner_node(
             if pruned.artifact_path and pruned.artifact_id:
                 artifacts[pruned.artifact_id] = pruned.artifact_path
 
-            wrapped_observation = (
-                f'<tool_observation tool="{dispatched.tool_name}">\n'
-                f"{pruned.summary}\n"
-                f"</tool_observation>"
-            )
             tool_messages.append(
-                ToolMessage(content=wrapped_observation, tool_call_id=dispatched.tool_call_id)
+                ToolMessage(
+                    content=observation(dispatched.tool_name, dispatched.trust, pruned.summary),
+                    tool_call_id=dispatched.tool_call_id,
+                )
             )
 
             if recorder is not None:
@@ -204,11 +235,11 @@ def build_tool_runner_node(
                     artifact_path=pruned.artifact_path or "",
                     ok=not failed,
                     step_count=step_index,
-                    total_tokens=int(state.get("total_tokens", 0)),
+                    total_tokens=base_tokens,
                 )
 
         # ------------------------------------------------------------------
-        # 5. 瞬态护栏：成功清零、失败累加，必要时注入重规划通知
+        # 6. 瞬态护栏：成功清零、失败累加，必要时注入重规划通知
         # ------------------------------------------------------------------
         consecutive_errors = update_consecutive_errors(
             int(state.get("consecutive_errors", 0)), failure_count
@@ -232,17 +263,30 @@ def build_tool_runner_node(
                     consecutive_errors=consecutive_errors,
                 )
 
+        # ------------------------------------------------------------------
+        # 7. 预算冲销：把本次派发期间子智能体**已结算**的消耗并入父任务计量
+        #    用"增量"而非"绝对值"：账本随任务重建，而 total_tokens 已由
+        #    Checkpoint 持久化，增量语义在 resume 场景下天然正确。
+        # ------------------------------------------------------------------
+        child_tokens = 0
+        if ledger is not None:
+            child_tokens = max(0, ledger.consumed - consumed_before)
+
         logger.info(
             f"[ToolRunner] 执行 {len(specs)} 个工具（拒绝 {len(blocked_reasons)} 个），"
-            f"失败 {failure_count} 个，连续错误={consecutive_errors}，死循环={loop_detected}"
+            f"失败 {failure_count} 个，连续错误={consecutive_errors}，死循环={loop_detected}，"
+            f"子智能体消耗={child_tokens}"
         )
 
-        return {
+        updates: Dict[str, Any] = {
             "messages": tool_messages,
             "consecutive_errors": consecutive_errors,
             "fingerprint_history": fingerprint_history,
             "artifacts": artifacts,
         }
+        if child_tokens:
+            updates["total_tokens"] = base_tokens + child_tokens
+        return updates
 
     return tool_runner
 

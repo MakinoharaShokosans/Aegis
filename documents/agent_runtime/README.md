@@ -16,6 +16,7 @@
 | [10_directory_structure.md](./10_directory_structure.md) | **目录结构与工程分层（权威）** | **内容/代码分离、依赖方向矩阵、统一裁决记录、打包与资源约定** |
 | [11_http_api.md](./11_http_api.md) | **HTTP API 契约（唯一用户入口）** | **工作区/会话/任务 REST、SSE 事件流、DTO 分层、安全红线** |
 | [12_research_subagent.md](./12_research_subagent.md) | **外部检索隔离（信任边界）** | **研究子智能体、trust 构造期拒绝、四道结构性约束、注入样态标注** |
+| [13_subagent_delegation.md](./13_subagent_delegation.md) | **动态子智能体委派（能力衰减）** | **元工具 spawn_subagent、三道收窄、父级预算账本（预留+结算）、引用白名单、子级禁审批、中间步骤不可见** |
 
 ---
 
@@ -84,6 +85,18 @@
   - `AegisAgent/src/agent_runtime/guardrails/injection_guard.py` (注入样态标注)
   - `AegisAgent/src/tools/core/registry.py`（`allow_untrusted` 构造期拒绝）
 - 关键约束：主工具表**不得**出现 `web_search`；主 Agent 唯一外部入口是 `delegate_research`
+
+### 步骤十一：动态子智能体委派（能力衰减 + 预算切片）
+- 参考：[`13_subagent_delegation.md`](./13_subagent_delegation.md)
+- 实现：
+  - `AegisAgent/src/agent_runtime/subagent/` (`contracts.py` / `runner.py` / `tool.py`)
+  - `AegisAgent/src/agent_runtime/guardrails/budget_ledger.py` (父级账本 + 子级计数器)
+  - `AegisAgent/src/agent_runtime/guardrails/authority.py` (父级权限级别的权威推送点)
+  - `AegisAgent/src/agent_runtime/envelope.py` (XML 定界信封的唯一实现侧)
+- 关键约束：三道收窄（工具集 / 权限级别 / 深度）必须在**派发前一次完成**；
+  子级**不得**请求人工审批（`interrupt()` 恢复会重跑整个节点 ⇒ 副作用执行两次）；
+  子级消耗必须以增量冲销进 `total_tokens`，且冲销点在**审批闸门之后**
+- 前置修复：`tool_runner` 此前对 `total_tokens` **只读**，导致子智能体消耗对父任务熔断不可见
 
 ---
 

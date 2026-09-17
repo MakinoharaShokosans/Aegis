@@ -60,6 +60,7 @@ AegisAgent/src/agent_runtime/
 ├── context.py                  ✅         ContextManager：四层 Prompt 装配 + 上下文检视（06 §4）
 ├── prompt_loader.py            ✅         提示词加载（包内路径优先 + 项目根回退 + 缓存）
 ├── structured_output.py        ✅         结构化输出抽取（节点与研究子智能体共用）
+├── envelope.py                 ✅         ★ XML 定界信封的**唯一实现侧**（主循环与子智能体共用）
 ├── checkpoint.py               ✅         AsyncSqliteSaver 生命周期（WAL / 建表 / 关闭）（04 §4）
 ├── routing.py                  ✅         路由契约**聚合导出**（实现分散在 edges/）
 ├── workflow.py                 ✅         进程级装配 + 任务级装配 + 图构建 + run/resume（04 §3–4）
@@ -87,13 +88,22 @@ AegisAgent/src/agent_runtime/
 │   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
 │   ├── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
 │   ├── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
-│   └── permission.py                      ★ 三级权限分级与越级判定（HITL 判定核心，纯函数）
+│   ├── permission.py                      ★ 三级权限分级与越级判定（HITL 判定核心，纯函数）
+│   ├── budget_ledger.py                   ★ 子智能体预算账本（父级唯一记账方）+ ChildBudget（子级计数器）
+│   └── authority.py                       ★ 任务授权窗口（父级权限级别的权威推送点，叶子工具只读视图）
 │
 ├── research/                   ✅         研究子智能体：不可信外部数据的隔离区（12）
 │   ├── __init__.py
 │   ├── contracts.py                       ResearchRequest / ResearchReport 强类型契约 + render_for_model
 │   ├── runner.py                          有界异步循环：检索规划 → 并发抓取 → 强类型提炼
 │   └── tool.py                            DelegateResearchTool + build_research_tool 装配
+│
+├── subagent/                   ✅         动态子智能体委派：能力衰减 + 预算切片 + 上下文隔离（13）
+│   ├── __init__.py
+│   ├── contracts.py                       Proposal（模型提议）/ Request（已收窄授权）分离 +
+│   │                                      SubagentReport + 引用白名单（URL 白名单的泛化）
+│   ├── runner.py                          有界异步循环：子级权限二次判定（**不 interrupt**）→ 派发 → 收尾
+│   └── tool.py                            ★ SpawnSubagentTool：三道收窄在派发前一次完成
 │
 ├── llm/                        ✅         双模型分层网关
 │   ├── __init__.py
@@ -224,12 +234,16 @@ AegisAgent/
 | ⑬ | 条件边全部挤在 `routing.py` | **新增 `edges/`，与 `nodes/` 对称；`routing.py` 退化为聚合导出** | 新增边不必修改公共文件 |
 | ⑭ | MCP 代码跨 `tools/` 与 `mcps/` 两处 | **全部归并到 `mcps/`**（`models` / `adapter` / `manager`） | 集中审计"谁拉起了什么进程" |
 | ⑮ | 部分基础能力（异常/分词/检查点/提示词加载）无归属 | **`errors.py` / `tokenizer.py` / `checkpoint.py` / `prompt_loader.py` / `structured_output.py`** | 统一口径，避免各处重复实现 |
-| ⑯ | 研究子智能体用**子图**还是 **tool** | **用 tool**：接口为 `delegate_research`，内部是一条有界异步循环，**不引入 LangGraph 子图** | 子图会共享 `messages` 与 Checkpoint ⇒ 原始网页回流主上下文，隔离形同虚设；tool 天然把不可信内容的生命周期关在一次函数调用内 |
+| ⑯ | "内部跑模型循环的能力"用**子图**还是 **tool** | **一律用 tool，禁用子图**（通则；首个实例是 `delegate_research`，泛化为 `spawn_subagent`） | 子图会共享 `messages` 与 Checkpoint ⇒ 被隔离的中间内容回流并**持久化进主任务快照**，恢复时重新喂回主上下文，隔离形同虚设；tool 天然把不可信内容的生命周期关在一次函数调用内。泛化论证见 `13` §1.3 |
 | ⑰ | "主工具表不含 web_search" 只靠约定 | **`AegisTool.trust` + `ToolRegistry(allow_untrusted=False)` 构造期拒绝** | 把约定变成可执行不变量——想犯这个错都犯不了 |
 | ⑱ | 工作区技能包静默进入**系统提示词** | **按来源分级：`builtin`/`global` 可信、`workspace` 默认拒绝**；元数据做注入标注与长度截断；内容纳入 XML 定界信封 | 克隆恶意仓库即可注入是唯一"零交互可中招"的路径，必须默认拒绝（`08` §4.1–4.3） |
 | ⑳ | 人工审批的 `interrupt()` 放在哪个节点 | **新增 `tool_runner` 节点承载权限闸门，`executor` 只生成 `tool_calls`** | LangGraph 的 `interrupt()` 恢复时**重跑整个节点**；若闸门紧邻 fast 模型调用，审批后会让模型调用再发生一次——重复计费，且可能产生"用户批准的命令 ≠ 实际执行的命令"。拆开后重跑代价仅为纯函数判定 |
 | ㉑ | 三级权限在 bash_shell 还是 Agent 侧判定 | **统一在 Agent 工具层判定**（`tool_runner`），bash_shell 只保留绝对红线 `CommandAudit` | 避免两套分类器漂移；工具层同时知道工具名与参数，是唯一能统一判定所有工具（含 MCP）的位置 |
 | ⑲ | MCP 工具直接进主工具表 | **数据面与控制面分离**：描述消毒硬拒 + 结果标注；`trust="untrusted"` 且经 `untrusted_allowlist` **逐名授权**；stdio 子进程施加 setrlimit | 工具描述会进**工具 Schema**（位置高于观察值）；stdio server 是任意代码执行，只能靠 opt-in + 资源上限 + 审计（`09` §3.5） |
+| ㉒ | 子智能体的 Token 消耗游离在父任务预算之外 | **`BudgetLedger`：父级唯一记账方，先预留后结算；子级只能报告不能记账；消耗以增量冲销进 `total_tokens`** | 工具层此前的隐含契约是"工具是叶子、便宜"，动态子智能体三条全破。若不显式补偿，父任务的物理熔断可被委托绕过；而**事后累加在并发下不成立**（父任务在子任务返回前不知道它花了多少）；冲销只能发生在审批闸门**之后**，否则 `interrupt()` 丢弃节点返回值会连带丢账（`13` §4） |
+| ㉓ | 工具信任级是静态类属性 | **新增调用期覆盖 `ToolResult.trust`；`DispatchedResult.trust` 统一解析，不可信信封由编排层集中添加** | `spawn_subagent` 的输出信任级取决于**本次被授予了哪些工具**，静态属性表达不了这种依赖。信封由编排层加而非各工具自渲染，才能避免"某个工具忘了标注"的漏网（`13` §3.4） |
+| ㉔ | 通用子智能体的输出契约交给主模型定义 | **禁止**：只保留"固定信封 + 保守信任级"；保真度由**引用白名单**兜底 | `12` 的安全性来自**语义**约束（URL 真实抓取过、版本号严格正则），那是逐用途手写的判断，模型只能给**形状**给不出**语义**。参数化 schema 会让强类型退化成"包装成 JSON 的自由文本"——**比自由文本更危险，因为它骗过阅读者的警惕**（`13` §3.1） |
+| ㉕ | 子智能体内部能否请求人工审批 | **不能**。越级即失败，子级循环**不 import `interrupt`** | ①技术：`interrupt()` 恢复会重跑整个节点，而子智能体跑在 `tool_runner` 内部 ⇒ 挂起恢复会让子循环全量重跑，模型调用重复计费、有副作用的工具**执行两次**；②安全：审批洗白——父级被拦的动作可被子智能体重新包装成审批卡片。两害之下"派发前一次性衰减"是唯一既能保安全又能保语义的写法（`13` §2.3） |
 
 ---
 
@@ -237,21 +251,23 @@ AegisAgent/
 
 行 = 调用方，列 = 被依赖方。`✔` 允许，`✘` 禁止。
 
-| ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | research | nodes | workflow | api | services |
-|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **errors** | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **guardrails** | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **edges** | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **llm** | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **memory** | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **mcps** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ |
-| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | ✘ | — | ✘ | ✘ | ✘ |
-| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
-| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ |
-| **services** | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | — |
+| ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | research | subagent | nodes | workflow | api | services |
+|:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **errors** | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **guardrails** | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **edges** | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **llm** | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **memory** | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **mcps** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **research** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **subagent** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ |
+| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ |
+| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
+| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✔ | — | ✘ |
+| **services** | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
 
 **关键约束**：
 
@@ -259,11 +275,16 @@ AegisAgent/
 - `edges/*` 只依赖 `state` 与 `langgraph`，**不得**依赖 `llm`/`memory`/`tools`。
 - `guardrails/` 不得依赖 `llm`，保证可离线确定性单测。
 - `services/*` **连 `config` 都不依赖**——各自通过 `services/settings.py` 读 TOML 段落。
-- `research/*` 只依赖 `tools.core` 的**契约**（`AegisTool` / `ToolRegistry`），
-  **不 import 任何具体工具**——受限工具表由 `workflow` 注入（依赖倒置）。
+- `research/*` 与 `subagent/*` 只依赖 `tools.core` 的**契约**（`AegisTool` / `ToolRegistry` /
+  `ToolDispatcher`），**不 import 任何具体工具**——受限工具表由 `workflow` 注入（依赖倒置）。
+- **`nodes/*` 不得依赖 `subagent/`**：`tool_runner` 只通过 `envelope` / `budget_ledger` /
+  `authority` 这三个共享原语与委派能力交互。若 `nodes` 需要 import `subagent`，
+  说明委派逻辑漏进了编排层。
 - **LLM 循环型能力不得放进 `tools/builtin/`**：`tools/builtin/` 只放叶子工具；
-  凡内部要跑模型循环的（如研究子智能体），归入各自的编排包（`research/`），
-  否则会形成 `tools ↔ research` 的包级循环。
+  凡内部要跑模型循环的（如研究子智能体、动态子智能体），归入各自的编排包
+  （`research/` / `subagent/`），否则会形成 `tools ↔ research` 的包级循环。
+- **XML 定界信封只允许一处实现**（`envelope.py`）：协议分叉在安全上不可接受——
+  一份实现加了不可信警示、另一份忘了加，读者就会把不可信内容当成可信内容。
 
 > 注：`services` 行全为 `✘` 指的是"不依赖 `agent_runtime`"；`services/settings.py` 是服务侧自有模块，不受本矩阵约束。
 
@@ -342,6 +363,7 @@ packages = [
 | `storage/{checkpoints,traces,artifacts,logs}` | `01` §5、`06` §7 |
 | `edges/` | 裁决项⑬ |
 | `research/` + `guardrails/injection_guard.py` | `12_research_subagent.md` |
+| `subagent/` + `guardrails/{budget_ledger,authority}.py` + `envelope.py` | `13_subagent_delegation.md` |
 | `api/` | 裁决项⑩、`11_http_api.md` |
 
 ---
@@ -363,6 +385,8 @@ packages = [
 | 子系统（`services/bash_shell` + `web_search`） | ✅ 已完成 |
 | 评测 harness（`rag_bench` + `agent_bench`） | ✅ 已完成 |
 | 外部检索隔离（`research/` + `Trust` 机制 + 注入标注） | ✅ 已完成（见 `12_research_subagent.md`） |
+| 动态子智能体委派（`subagent/` + 预算账本 + 三道收窄 + 引用白名单 + 调用期信任级） | ✅ 已完成（见 `13_subagent_delegation.md`） |
+| 子智能体预算对账缺口修复（消耗回流 `total_tokens`） | ✅ 已完成（裁决㉒；修复了工具层对预算**只读**导致的委托绕过） |
 | 工作区技能包的不可信边界（信任分级 / 默认拒绝 / 披露信封） | ✅ 已完成（见 `08` §4.1–4.3，裁决⑱） |
 | MCP 工具的不可信边界（描述消毒 / 逐名授权 / 子进程资源上限） | ✅ 已完成（见 `09` §3.5，裁决⑲） |
 | 本地代码库（RAG 检索结果） | 视为可信（用户自己的工作区）；若将来索引外部仓库需重新评估 |

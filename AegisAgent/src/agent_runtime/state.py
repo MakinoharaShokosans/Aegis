@@ -105,8 +105,11 @@ class AgentState(TypedDict):
     * ``budget_guard`` : ``should_terminate`` / ``termination_reason``
     * ``executor``     : ``step_count`` / ``total_tokens`` / ``consecutive_errors`` /
       ``fingerprint_history`` / ``artifacts`` / ``messages``
+    * ``tool_runner``  : ``total_tokens``（**仅增量**：并入子智能体已结算的消耗，
+      使子任务的 Token 不再游离于物理预算之外）/ ``consecutive_errors`` /
+      ``fingerprint_history`` / ``artifacts`` / ``messages``
     * ``evaluator``    : ``rolling_summary`` / ``confirmed_facts`` / ``failed_attempts`` /
-      ``milestones`` / ``should_terminate``
+      ``milestones`` / ``should_terminate`` / ``total_tokens``
     """
 
     # --------------------------------------------------------------------------
@@ -148,6 +151,7 @@ class AgentState(TypedDict):
     # --------------------------------------------------------------------------
     # 5. 安全防御与执行控制标记
     # --------------------------------------------------------------------------
+    permission_level: PermissionLevel
     canary_token: str
     should_terminate: bool
     termination_reason: str

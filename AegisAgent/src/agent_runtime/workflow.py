@@ -29,6 +29,8 @@ from agent_runtime.checkpoint import SqliteCheckpointStore
 from agent_runtime.config import AegisConfig, get_config
 from agent_runtime.context import ContextManager
 from agent_runtime.execution_context import ExecutionContextManager, build_initial_state
+from agent_runtime.guardrails.authority import TaskAuthority
+from agent_runtime.guardrails.budget_ledger import BudgetLedger
 from agent_runtime.guardrails.observation_pruner import ObservationPruner
 from agent_runtime.guardrails.physical_budget import PhysicalBudgetGuard
 from agent_runtime.llm.client import LLMGateway
@@ -46,6 +48,7 @@ from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research import build_research_tool
 from agent_runtime.skills.registry import SkillsRegistry
 from agent_runtime.state import AgentState
+from agent_runtime.subagent import build_subagent_tool
 from agent_runtime.tokenizer import count_tokens
 from mcps.adapter import MCPToolAdapter
 from mcps.manager import MCPManager
@@ -201,6 +204,10 @@ class TaskRuntime:
     dispatcher: ToolDispatcher
     pruner: ObservationPruner
     lifecycle: ExecutionContextManager
+    #: 子智能体预算账本（**父级唯一记账方**，见 ``guardrails/budget_ledger.py``）
+    ledger: BudgetLedger
+    #: 任务授权窗口（父级权限级别的权威来源，供叶子工具只读）
+    authority: TaskAuthority
     service_clients: List[ServiceClient] = field(default_factory=list)
     #: 会话级"永久放行"指纹集合（由 TaskRegistry 持有，跨 resume 存活）
     approval_allowlist: Set[str] = field(default_factory=set)
@@ -263,6 +270,13 @@ async def prepare_task(
 
     # 3. 任务级护栏与工具
     guard = PhysicalBudgetGuard.from_config(cfg.runtime.guardrails)
+    authority = TaskAuthority(permission_level=str(state.get("permission_level") or ""))
+    # 账本与守卫同源上限，保证"父任务已用 + 子智能体消耗"不会因为两套口径而打架
+    ledger = BudgetLedger(
+        cfg.runtime.guardrails.max_total_tokens,
+        max_spawns=int(cfg.subagent.max_spawns_per_task),
+        min_grant_tokens=int(cfg.subagent.min_token_budget),
+    )
     pruner = ObservationPruner.from_config(
         cfg.runtime.context, cfg.runtime.storage.artifacts_dir, count_tokens
     )
@@ -329,6 +343,24 @@ async def prepare_task(
     for adapter in mcp_adapters:
         registry.register(adapter)
 
+    # 动态委派：把"组建受限子劳动力"本身做成一个叶子工具（元工具），图拓扑完全不动。
+    # 它持有 registry 的**引用**而非快照副本——收窄校验发生在**派发时刻**，
+    # 因此这里传同一对象是有意的，见 13_subagent_delegation.md §2.1。
+    if cfg.subagent.enabled:
+        registry.register(
+            build_subagent_tool(
+                gateway=deps.gateway,
+                parent_registry=registry,
+                prompts=deps.prompts,
+                config=cfg.subagent,
+                permissions_config=cfg.permissions,
+                ledger=ledger,
+                authority=authority,
+            )
+        )
+    else:
+        logger.warning("[Workflow] subagent 已关闭：主 Agent 不具备动态委派能力")
+
     logger.info(
         f"[Workflow] 工具表就绪: {len(registry)} 个"
         f"（可信 {len(registry) - len(mcp_adapters)} / 已授权不可信 {len(mcp_adapters)}）"
@@ -351,6 +383,8 @@ async def prepare_task(
         dispatcher=ToolDispatcher(registry),
         pruner=pruner,
         lifecycle=ExecutionContextManager(deps.memory, recorder),
+        ledger=ledger,
+        authority=authority,
         service_clients=list(clients.values()),
         approval_allowlist=approval_allowlist if approval_allowlist is not None else set(),
     )
@@ -399,12 +433,14 @@ def _compile_app(deps: RuntimeDeps, task: TaskRuntime) -> Any:
             task.context,
             task.recorder,
         ),
-        # tool_runner 承担权限闸门（人工审批挂起点）+ 并发派发 + 观察值治理
+        # tool_runner 承担权限闸门（人工审批挂起点）+ 并发派发 + 观察值治理 + 预算冲销
         "tool_runner": build_tool_runner_node(
             task.dispatcher,
             task.pruner,
             cfg.runtime.guardrails,
             cfg.permissions,
+            ledger=task.ledger,
+            authority=task.authority,
             approval_allowlist=task.approval_allowlist,
             recorder=task.recorder,
         ),

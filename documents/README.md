@@ -43,7 +43,8 @@ documents/
 │   ├── 09_mcp_integration_and_governance.md
 │   ├── 10_directory_structure.md  # 权威目录结构与工程分层（裁决记录）
 │   ├── 11_http_api.md             # HTTP API 契约与对外交付入口
-│   └── 12_research_subagent.md    # 外部检索隔离：信任边界、强类型契约、有界研究循环
+│   ├── 12_research_subagent.md    # 外部检索隔离：信任边界、强类型契约、有界研究循环
+│   └── 13_subagent_delegation.md  # 动态子智能体委派：能力衰减、预算账本、引用白名单、禁审批
 │
 ├── bash_shell/                    # 【实施技术规范】受控 Shell 沙箱 (AegisAgent/src/services/bash_shell/)
 │   ├── README.md                  # 沙箱子系统实施规范索引与架构拓扑
@@ -97,12 +98,16 @@ documents/
      收到的是经强类型校验（URL 白名单 / 版本正则 / 长度上限）净化后的报告。
      `ToolRegistry(allow_untrusted=False)` 会在**构造期**拒绝把不可信工具注册进特权表（见 `12_research_subagent.md`）；
    - 单轮内多个 `tool_calls` 由 `ToolDispatcher` 通过 `asyncio.gather` 并发派发，端到端耗时大幅缩减。
-3. **提示层与不可信面安全：五道互补机制**（详见 `agent_runtime/05`、`08`、`09`、`12`）：
+3. **提示层与不可信面安全：六道互补机制**（详见 `agent_runtime/05`、`08`、`09`、`12`、`13`）：
    - **XML 定界协议**：`<project_rules>` / `<user_task>` / `<tool_observation>` / `<external_content>` /
      `<available_skills>` / `<skill_sop>` 内的文本一律视为数据而非指令（`system.md` §一）；
    - **Canary Token**：会话级确定性派生的金丝雀注入系统提示词，检测外泄并熔断（`guardrails/canary.py`）；
    - **权限分离（只读信息源）**：网络检索隔离在研究子智能体内，主 Agent 结构性地拿不到原始网页
      （`12_research_subagent.md`）；
+   - **能力衰减委派**：主 Agent 可动态组建受限子劳动力（`spawn_subagent`），
+     但子级工具集 / 权限级别 / 递归深度均在**派发前一次性收窄**，且子级
+     **不能请求人工审批**（防审批洗白 + 防副作用重复执行）、回流内容一律按不可信处理
+     并由**引用白名单**核对（`13_subagent_delegation.md`）；
    - **技能信任分级**：内置/全局技能可信、**工作区技能默认拒绝**，元数据做注入标注与截断，
      内容纳入 XML 定界信封（`08_skills_management.md` §4.1–4.3）；
    - **MCP 数据面/控制面分离**：工具描述消毒硬拒、结果标注；server 默认关闭、

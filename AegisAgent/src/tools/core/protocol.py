@@ -37,6 +37,15 @@ class ToolResult(BaseModel):
     duration_ms: int = Field(default=0, description="耗时（毫秒）")
     error: Optional[str] = Field(default=None, description="失败原因摘要")
     meta: Dict[str, Any] = Field(default_factory=dict, description="工具特有的结构化附加信息")
+    trust: Optional[ToolTrust] = Field(
+        default=None,
+        description=(
+            "**调用期信任级覆盖**；``None`` 表示继承工具类静态声明的 ``trust``。"
+            "用于「同一个工具、不同入参、不同信任级」的情形（如动态子智能体："
+            "其输出信任级取决于本次被授予了哪些工具）。"
+            "编排层据此决定是否给观察值加不可信信封。"
+        ),
+    )
 
     @classmethod
     def failure(cls, message: str, **meta: Any) -> "ToolResult":
