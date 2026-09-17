@@ -103,6 +103,16 @@ Thumbs.db
 **/.benchmarks/
 **/evaluation/**/benchmark_report.md.tmp
 
-# Node / MCP
+# Node / MCP / Frontend
 node_modules/
 **/node_modules/
+dist/
+**/dist/
+.vite/
+**/.vite/
+.turbo/
+**/.turbo/
+*.tsbuildinfo
+**/*.tsbuildinfo
+
+
