@@ -6,6 +6,7 @@ from langgraph.graph import END
 from agent_runtime.edges.after_planner import route_after_planner
 from agent_runtime.edges.after_budget_guard import route_after_budget_guard
 from agent_runtime.edges.after_executor import route_after_executor
+from agent_runtime.edges.after_tool_runner import route_after_tool_runner
 from agent_runtime.edges.after_evaluator import route_after_evaluator
 
 
@@ -73,6 +74,20 @@ def test_route_after_executor():
     assert route_after_executor(state_ok) == "tool_runner"
 
 
+def test_route_after_tool_runner():
+    """测试 tool_runner 节点的路由决策。"""
+    # 1. 硬熔断直接去往 END
+    state_terminated = {
+        "should_terminate": True,
+        "termination_reason": "安全熔断",
+    }
+    assert route_after_tool_runner(state_terminated) == END
+
+    # 2. 正常流转（含工具成功、工具被拒绝、指纹死循环拦截）-> 回流 planner
+    state_ok = {"should_terminate": False}
+    assert route_after_tool_runner(state_ok) == "planner"
+
+
 def test_route_after_evaluator():
     """测试 evaluator 节点的路由决策。"""
     # 1. 验收通过，交付并结束任务
@@ -87,3 +102,4 @@ def test_route_after_evaluator():
         "should_terminate": False,
     }
     assert route_after_evaluator(state_rejected) == "planner"
+
