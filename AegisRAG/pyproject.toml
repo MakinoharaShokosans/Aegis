@@ -41,7 +41,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/api", "src/indexer", "src/embeddings", "src/storage"]
+packages = ["src/api", "src/indexer", "src/embeddings", "src/rerank", "src/storage"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

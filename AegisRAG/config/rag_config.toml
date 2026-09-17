@@ -14,16 +14,76 @@ storage_path = "storage/qdrant_data"
 host = "127.0.0.1"
 port = 6333
 collection_name = "aegis_code_chunks"
-vector_size = 384                   # 对应 bge-small 向量维度
+# ⚠️ vector_size 当前对应本地 BAAI/bge-m3（1024 维，原生多语言与代码增强），
+# 若切换至 [embedding.remote] 远端模型，必须同步核实其真实输出维度并修改这里，
+# 否则会在启动期被 storage/qdrant_store.py 的维度自检拒绝启动（fail-fast）。
+vector_size = 1024
 distance = "Cosine"
 
+# ------------------------------------------------------------------------------
+# Dense 向量生成（03 §1）。mode 二选一，仿照 [qdrant].mode 的 local/server 设计：
+#   - "remote"（默认）：走 [embedding.remote] 描述的 OpenAI 兼容 /embeddings 接口；
+#   - "local"：走 [embedding.local] 描述的本地 FastEmbed ONNX 模型，离线/无 key 时的兜底。
+# 注意：Sparse (BM25) 向量与 mode 无关，永远走本地 FastEmbed——BM25 是基于语料的词法统计，
+# 不存在"远程 BM25 API"这种东西，cache_dir/batch_size/max_length 三项因此始终生效。
+# ------------------------------------------------------------------------------
 [embedding]
-model_name = "BAAI/bge-small-en-v1.5"
+mode = "remote"
 cache_dir = "storage/cache/fastembed"
 batch_size = 32
 max_length = 512
+
+[embedding.local]
+model_name = "BAAI/bge-m3"
+
+[embedding.remote]
+# OpenAI 兼容 /embeddings 接口（POST {base_url}/embeddings，Bearer 鉴权）
+base_url = "https://api.openlux.ai/v1"
+model = "CHANGE_ME_EMBEDDING_MODEL"  # TODO：真实模型 ID 待填入，见里程碑 §六 待办
+api_key_env = "EMBEDDING_API_KEY"
+timeout_sec = 30
 
 [indexer]
 chunk_size = 600
 chunk_overlap = 100
 supported_languages = ["c", "cpp", "go", "python"]
+
+# ------------------------------------------------------------------------------
+# 检索流水线参数（规划中，📋 尚未实现——见 documents/rag_retrieval/04_hybrid_retrieval_and_rerank.md）
+# 规范纪律：召回/融合/返回数量一律走本段配置，代码与文档均不得硬编码 Top-N 字面量。
+# ------------------------------------------------------------------------------
+[retrieval]
+dense_top_k = 50                    # Dense 向量 prefetch 候选数量（04 §1）
+sparse_top_k = 50                   # Sparse (bm25) 向量 prefetch 候选数量（04 §1）
+fusion_top_k = 30                   # RRF 融合后进入精排的候选数量（04 §1/§3）
+default_top_k = 5                   # 未在请求中显式传 top_k 时的最终返回数量（04 §3，05 §1.1）
+
+# 以下两项仅供未来增强（RSE / MMR，04 §6）启用时消费，当前阶段不生效
+# rse_max_gap = 1                   # RSE 缝合允许的最大切片序号间隔（chunk_index 差值）
+# mmr_lambda = 0.5                  # MMR 多样性权衡系数：越接近 1 越偏相关性，越接近 0 越偏多样性
+
+# ------------------------------------------------------------------------------
+# Cross-Encoder 精排（04 §3，核心范围）。mode 语义同 [embedding]：
+#   - "remote"（默认）：走 [rerank.remote] 描述的 OpenAI 兼容风格接口；
+#   - "local"：走 [rerank.local] 描述的本地 fastembed.rerank.cross_encoder.TextCrossEncoder。
+# ------------------------------------------------------------------------------
+[rerank]
+mode = "remote"
+cache_dir = "storage/cache/fastembed"  # 仅 mode="local" 时生效
+# min_score 是触发响应体 low_confidence=true 的精排分数阈值（04 §4）。
+# 无论 local 还是 remote，具体分数分布都要实现后用 06_evaluation_and_benchmarking.md 的
+# 基线数据校准，此处先占位，不代表这是一个已验证过的合理默认值。
+min_score = 0.0
+
+[rerank.local]
+model_name = "BAAI/bge-reranker-base"
+
+[rerank.remote]
+# 约定：POST {base_url}/rerank，body {"model","query","documents"}，
+# 响应 {"results": [{"index", "relevance_score"}, ...]}——这是部分 OpenAI 兼容网关
+# （如 TEI/Jina 风格）常见的事实标准约定，非 OpenAI 官方规范（OpenAI 本身没有 rerank 端点）。
+# 首次真实联调前务必对照 api.openlux.ai 的实际文档核实这个假设，见里程碑 §六 待办。
+base_url = "https://api.openlux.ai/v1"
+model = "CHANGE_ME_RERANK_MODEL"     # TODO：真实模型 ID 待填入，见里程碑 §六 待办
+api_key_env = "RERANK_API_KEY"
+timeout_sec = 30

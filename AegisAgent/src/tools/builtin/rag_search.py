@@ -75,7 +75,10 @@ class RagSearchTool(AegisTool):
         blocks = []
         for index, chunk in enumerate(chunks, start=1):
             location = f"{chunk.get('file_path', '?')}:{chunk.get('start_line', '?')}-{chunk.get('end_line', '?')}"
+            scope = chunk.get("enclosing_scope")
             header = f"[{index}] {location}"
+            if scope:
+                header += f" > {scope}"
             if chunk.get("git_commit"):
                 header += f" @{chunk['git_commit']}"
             blocks.append(f"{header}\n{chunk.get('content', '')}")
