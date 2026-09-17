@@ -211,6 +211,23 @@ max_code_examples = 5               # 代码示例条数上限
 max_code_chars = 2000               # 单个代码块长度上限
 max_report_chars = 4000             # 渲染后注入主上下文的上限
 
+# ------------------------------------------------------------------------------
+# 12b. 专用代码检索子智能体（源码深度探索与证据提炼）
+# ------------------------------------------------------------------------------
+[code_search]
+enabled = true                      # 关闭后主 Agent 仅具备单次 rag_search 基础检索能力
+model_tier = "fast"                 # 使用便宜快速的层级
+max_rounds = 3                      # 内部检索与判别重试轮数上限
+max_chunks_per_round = 5            # 单轮检索最多召回切片数
+max_source_chars = 6000             # 单切片正文进入子上下文的截断上限
+max_wall_time_sec = 45              # 子智能体挂钟上限（秒）
+max_total_tokens = 20000            # 子智能体 Token 上限
+max_findings = 6                    # 结论条目上限
+max_answer_chars = 500              # 单条结论长度上限
+max_code_snippets = 5               # 代码片段条目上限
+max_code_chars = 2000               # 单个代码片段长度上限
+max_report_chars = 4000             # 渲染后注入主上下文的上限
+
 
 # ------------------------------------------------------------------------------
 # 13. 动态子智能体委派（能力衰减 + 预算切片）
@@ -234,7 +251,7 @@ max_observation_chars = 4000        # 子级单条观察值上限（内存截断
 max_answer_chars = 400              # 单条结论长度上限
 max_citations = 8                   # 单条结论的引用数上限
 max_report_chars = 3000             # 渲染后注入主上下文的上限
-denied_tools = ["spawn_subagent", "delegate_research"]  # 硬黑名单：防套娃 + 防嵌套模型循环
+denied_tools = ["spawn_subagent", "delegate_research", "delegate_code_search"]  # 硬黑名单：防套娃 + 防嵌套模型循环
 
 
 # ------------------------------------------------------------------------------
@@ -265,6 +282,7 @@ read_only_tools = [
     "rag_search",
     "load_skill",
     "delegate_research",
+    "delegate_code_search",
     "spawn_subagent",      # 委派动作本身无直接副作用；子级每次调用按父级权限重新判定
 ]
 workspace_write_tools = ["write_file"]

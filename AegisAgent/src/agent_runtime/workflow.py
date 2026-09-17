@@ -45,6 +45,7 @@ from agent_runtime.nodes import (
 from agent_runtime.nodes.base import NodeFn
 from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.observability.trajectory import TrajectoryRecorder
+from agent_runtime.code_search import build_code_search_tool
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.research import build_research_tool
 from agent_runtime.skills.registry import SkillsRegistry
@@ -345,6 +346,18 @@ async def prepare_task(
         )
     else:
         logger.warning("[Workflow] research 已关闭：主 Agent 不具备任何外部信息能力（离线最安全模式）")
+
+    # 专用代码检索子智能体：多轮检索-判别-换词-提炼
+    if cfg.code_search.enabled:
+        registry.register(
+            build_code_search_tool(
+                gateway=deps.gateway,
+                rag_tool=clients["rag"],
+                prompts=deps.prompts,
+                config=cfg.code_search,
+                event_bus=event_bus,
+            )
+        )
 
     # 已通过描述消毒 + 用户在配置中显式开启的 MCP 工具：逐名授权后进入主工具表
     for adapter in mcp_adapters:

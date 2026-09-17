@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import uuid
 
 from fastapi.testclient import TestClient
 
@@ -23,10 +24,11 @@ class TestRouteIngest:
         (repo_dir / "calc.go").write_text("package main\nfunc Add(a, b int) int { return a + b }\n", encoding="utf-8")
 
         app = create_app()
+        repo_name = f"sample_repo_{uuid.uuid4().hex[:8]}"
         with TestClient(app) as client:
             # 1. 首次索引
             payload = {
-                "repo_name": "sample_repo",
+                "repo_name": repo_name,
                 "repo_root": str(repo_dir),
                 "incremental": True,
             }

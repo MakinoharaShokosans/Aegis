@@ -256,6 +256,28 @@ class ResearchConfig(BaseModel):
 
 
 # ==============================================================================
+# 11b. 代码检索子智能体配置（源码深度探索与证据提炼）
+# ==============================================================================
+
+class CodeSearchConfig(BaseModel):
+    """
+    代码检索子智能体（``delegate_code_search``）预算与契约上限。
+    """
+    enabled: bool = Field(default=True, description="总开关；关闭后主 Agent 仅具备单次 rag_search 能力")
+    model_tier: Literal["reasoning", "fast"] = Field(default="fast", description="代码检索子智能体使用的模型层级")
+    max_rounds: int = Field(default=3, description="内部检索与判别重试轮数上限")
+    max_chunks_per_round: int = Field(default=5, description="单轮检索最多召回切片数")
+    max_source_chars: int = Field(default=6000, description="单切片正文进入子上下文的截断上限")
+    max_wall_time_sec: float = Field(default=45.0, description="子智能体挂钟上限（秒）")
+    max_total_tokens: int = Field(default=20000, description="子智能体 Token 上限")
+    max_findings: int = Field(default=6, description="结论条目上限")
+    max_answer_chars: int = Field(default=500, description="单条结论长度上限")
+    max_code_snippets: int = Field(default=5, description="代码片段条目上限")
+    max_code_chars: int = Field(default=2000, description="单个代码片段长度上限")
+    max_report_chars: int = Field(default=4000, description="渲染后注入主上下文的上限")
+
+
+# ==============================================================================
 # 12. 动态子智能体委派配置（能力衰减 + 预算切片）
 #     规范：documents/agent_runtime/13_subagent_delegation.md
 # ==============================================================================
@@ -292,7 +314,7 @@ class SubagentConfig(BaseModel):
     max_citations: int = Field(default=8, description="单条结论可携带的引用数上限")
     max_report_chars: int = Field(default=3000, description="渲染后注入主上下文的上限")
     denied_tools: List[str] = Field(
-        default_factory=lambda: ["spawn_subagent", "delegate_research"],
+        default_factory=lambda: ["spawn_subagent", "delegate_research", "delegate_code_search"],
         description=(
             "禁止下发给子智能体的工具（硬黑名单，与'白名单取交集'叠加）。"
             "默认剔除委派类工具：前者防套娃，后者防止在子智能体内再嵌一层模型循环"
@@ -345,6 +367,7 @@ class PermissionsConfig(BaseModel):
             "rag_search",
             "load_skill",
             "delegate_research",
+            "delegate_code_search",
             "spawn_subagent",
         ],
         description=(
@@ -429,6 +452,7 @@ class AegisConfig(BaseSettings):
     server: ServerConfig = Field(default_factory=ServerConfig)
     mcp: MCPConfig = Field(default_factory=MCPConfig)
     research: ResearchConfig = Field(default_factory=ResearchConfig)
+    code_search: CodeSearchConfig = Field(default_factory=CodeSearchConfig)
     subagent: SubagentConfig = Field(default_factory=SubagentConfig)
     skills: SkillsConfig = Field(default_factory=SkillsConfig)
     permissions: PermissionsConfig = Field(default_factory=PermissionsConfig)
