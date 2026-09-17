@@ -28,7 +28,7 @@ distance = "Cosine"
 # 不存在"远程 BM25 API"这种东西，cache_dir/batch_size/max_length 三项因此始终生效。
 # ------------------------------------------------------------------------------
 [embedding]
-mode = "remote"
+mode = "local"
 cache_dir = "storage/cache/fastembed"
 batch_size = 32
 max_length = 512
@@ -68,7 +68,7 @@ default_top_k = 5                   # 未在请求中显式传 top_k 时的最�
 #   - "local"：走 [rerank.local] 描述的本地 fastembed.rerank.cross_encoder.TextCrossEncoder。
 # ------------------------------------------------------------------------------
 [rerank]
-mode = "remote"
+mode = "local"
 cache_dir = "storage/cache/fastembed"  # 仅 mode="local" 时生效
 # min_score 是触发响应体 low_confidence=true 的精排分数阈值（04 §4）。
 # 无论 local 还是 remote，具体分数分布都要实现后用 06_evaluation_and_benchmarking.md 的
