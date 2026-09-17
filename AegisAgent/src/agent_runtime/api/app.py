@@ -108,7 +108,7 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
         CORSMiddleware,
         allow_origins=list(cfg.server.cors_allow_origins),
         allow_credentials=False,
-        allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "X-Trace-ID", "Last-Event-ID", "Authorization", "X-API-Token"],
         expose_headers=["X-Trace-ID"],
     )

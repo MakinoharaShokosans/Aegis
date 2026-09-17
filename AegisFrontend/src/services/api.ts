@@ -7,7 +7,6 @@ import type {
   Workspace,
   WorkspaceCreatePayload,
   WorkspaceUpdatePayload,
-  WorkspaceMemory,
   Session,
   SessionContextResponse,
   FileNode,
@@ -15,6 +14,14 @@ import type {
   RagRetrieveResult,
   PermissionLevel,
 } from '@/types';
+
+export interface MemoryViewDto {
+  scope: string;
+  updated_at?: number;
+  project_conventions: string[];
+  confirmed_architecture: string[];
+  failed_attempts: Array<{ action: string; failure_reason: string; conclusion?: string }>;
+}
 
 class ApiClient {
   private token: string = '';
@@ -98,23 +105,27 @@ class ApiClient {
     });
   }
 
-  async getWorkspaceMemories(workspaceId: string): Promise<WorkspaceMemory[]> {
-    return this.request<WorkspaceMemory[]>(`/api/v1/workspaces/${workspaceId}/memories`);
+  async getWorkspaceMemory(workspaceId: string): Promise<MemoryViewDto> {
+    return this.request<MemoryViewDto>(`/api/v1/workspaces/${workspaceId}/memory`);
   }
 
-  async createWorkspaceMemory(
+  async promoteWorkspaceFact(
     workspaceId: string,
-    payload: { category: string; title: string; content: string; pinned?: boolean }
-  ): Promise<WorkspaceMemory> {
-    return this.request<WorkspaceMemory>(`/api/v1/workspaces/${workspaceId}/memories`, {
+    payload: { fact: string; category?: string }
+  ): Promise<{ status: string; category?: string }> {
+    return this.request<{ status: string; category?: string }>(`/api/v1/workspaces/${workspaceId}/memory/facts`, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
   }
 
-  async deleteWorkspaceMemory(workspaceId: string, memoryId: string): Promise<{ success: boolean }> {
-    return this.request<{ success: boolean }>(`/api/v1/workspaces/${workspaceId}/memories/${memoryId}`, {
-      method: 'DELETE',
+  async recordWorkspaceFailure(
+    workspaceId: string,
+    payload: { action: string; failure_reason: string; conclusion?: string }
+  ): Promise<{ status: string }> {
+    return this.request<{ status: string }>(`/api/v1/workspaces/${workspaceId}/memory/failures`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   }
 

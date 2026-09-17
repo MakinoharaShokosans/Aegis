@@ -251,8 +251,45 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchMemories: async (workspaceId: string) => {
     set({ isLoadingMemories: true });
     try {
-      const memories = await api.getWorkspaceMemories(workspaceId);
-      set({ memories, isLoadingMemories: false });
+      const memoryView = await api.getWorkspaceMemory(workspaceId);
+      const mappedMemories: WorkspaceMemory[] = [];
+      memoryView.confirmed_architecture.forEach((item, idx) => {
+        mappedMemories.push({
+          id: `arch-${idx}`,
+          workspace_id: workspaceId,
+          category: 'confirmed_architecture',
+          title: item.length > 25 ? `${item.slice(0, 25)}...` : item,
+          content: item,
+          pinned: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+      memoryView.project_conventions.forEach((item, idx) => {
+        mappedMemories.push({
+          id: `conv-${idx}`,
+          workspace_id: workspaceId,
+          category: 'project_conventions',
+          title: item.length > 25 ? `${item.slice(0, 25)}...` : item,
+          content: item,
+          pinned: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+      memoryView.failed_attempts.forEach((item, idx) => {
+        mappedMemories.push({
+          id: `fail-${idx}`,
+          workspace_id: workspaceId,
+          category: 'global_failed_attempts',
+          title: item.action.length > 25 ? `${item.action.slice(0, 25)}...` : item.action,
+          content: `失败原因: ${item.failure_reason}\n结论: ${item.conclusion || ''}`,
+          pinned: false,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
+      set({ memories: mappedMemories, isLoadingMemories: false });
     } catch {
       const fallbackMemories: WorkspaceMemory[] = [
         {
@@ -294,8 +331,19 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const wsId = get().activeWorkspaceId;
     if (!wsId) return;
     try {
-      const mem = await api.createWorkspaceMemory(wsId, payload);
-      set((state) => ({ memories: [mem, ...state.memories] }));
+      if (payload.category === 'global_failed_attempts') {
+        await api.recordWorkspaceFailure(wsId, {
+          action: payload.title,
+          failure_reason: payload.content,
+          conclusion: payload.title,
+        });
+      } else {
+        await api.promoteWorkspaceFact(wsId, {
+          fact: `${payload.title}: ${payload.content}`,
+          category: payload.category,
+        });
+      }
+      await get().fetchMemories(wsId);
     } catch {
       const localMem: WorkspaceMemory = {
         id: `mem-${Date.now()}`,
@@ -314,11 +362,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   deleteMemory: async (memoryId: string) => {
     const wsId = get().activeWorkspaceId;
     if (!wsId) return;
-    try {
-      await api.deleteWorkspaceMemory(wsId, memoryId);
-    } catch {
-      // ignore
-    }
     set((state) => ({ memories: state.memories.filter((m) => m.id !== memoryId) }));
   },
 
