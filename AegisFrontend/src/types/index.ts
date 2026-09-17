@@ -299,3 +299,117 @@ export interface SidecarConfig {
   bashMemoryPoolMb: number;
   bashTimeoutSec: number;
 }
+
+// ==========================================
+// 7. API DTOs & Payloads
+// ==========================================
+
+export interface MemoryViewDto {
+  scope: string;
+  updated_at?: number;
+  project_conventions: string[];
+  confirmed_architecture: string[];
+  failed_attempts: Array<{ action: string; failure_reason: string; conclusion?: string }>;
+}
+
+export interface PromoteFactPayload {
+  fact: string;
+  category?: string;
+}
+
+export interface RecordFailurePayload {
+  action: string;
+  failure_reason: string;
+  conclusion?: string;
+}
+
+export interface TaskCreatePayload {
+  prompt: string;
+  permission_level?: PermissionLevel;
+  model?: string;
+}
+
+export interface TaskCreateResponse {
+  task_id: string;
+  status: string;
+  stream_url: string;
+}
+
+export interface HitlApprovalPayload {
+  approval_id: string;
+  decision: 'once' | 'always';
+  feedback?: string;
+}
+
+export interface HitlRejectPayload {
+  approval_id: string;
+  reason: string;
+}
+
+export interface FileContentResponse {
+  path: string;
+  content: string;
+  language: string;
+}
+
+export interface FileSaveResponse {
+  path: string;
+  status: string;
+  size: number;
+}
+
+export interface RagIngestPayload {
+  workspace_id?: string;
+  incremental?: boolean;
+  file_extensions?: string[];
+}
+
+export interface RagIngestResponse {
+  task_id: string;
+  status: string;
+  total_files: number;
+  total_chunks: number;
+}
+
+export interface RagRetrievePayload {
+  query: string;
+  top_k?: number;
+  dense_top_k?: number;
+  sparse_top_k?: number;
+}
+
+export interface HealthResponse {
+  status: string;
+  service: string;
+  version: string;
+  uptime_sec?: number;
+  active_tasks?: number;
+}
+
+export interface ToolMetadata {
+  name: string;
+  description: string;
+  parameters: Record<string, unknown>;
+  is_dangerous: boolean;
+  permission_level: PermissionLevel;
+}
+
+export interface SystemIntrospection {
+  service: string;
+  version: string;
+  tools: ToolMetadata[];
+  skills: Array<{ name: string; description: string }>;
+  mcps: Array<{ name: string; status: string; tools_count: number }>;
+  config: Record<string, unknown>;
+}
+
+export interface ArtifactHandleResponse {
+  handle_id: string;
+  task_id: string;
+  file_path: string;
+  content: string;
+  size_bytes: number;
+  token_count: number;
+  created_at: string;
+}
+

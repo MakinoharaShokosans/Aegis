@@ -12,7 +12,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
-import { api } from '@/services/api';
+import { httpClient } from '@/api';
 
 export const SettingsModal: React.FC = () => {
   const { settingsModalOpen, setSettingsModalOpen } = useUiStore();
@@ -21,7 +21,7 @@ export const SettingsModal: React.FC = () => {
   const [copiedToken, setCopiedToken] = useState(false);
 
   // Security Gate form state
-  const [tokenVal, setTokenVal] = useState(api.getToken() || 'aegis_sec_98f413a69b184ef4b07890c21625ae7d');
+  const [tokenVal, setTokenVal] = useState(httpClient.getToken() || 'aegis_sec_98f413a69b184ef4b07890c21625ae7d');
   const [allowedHosts, setAllowedHosts] = useState('127.0.0.1, localhost, ::1');
   const [corsOrigins, setCorsOrigins] = useState('http://localhost:5173, http://127.0.0.1:5173');
 
@@ -48,7 +48,7 @@ export const SettingsModal: React.FC = () => {
   const handleRotateToken = () => {
     const newToken = `aegis_sec_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
     setTokenVal(newToken);
-    api.setToken(newToken);
+    httpClient.setToken(newToken);
   };
 
   return (
@@ -144,7 +144,7 @@ export const SettingsModal: React.FC = () => {
                       value={tokenVal}
                       onChange={(e) => {
                         setTokenVal(e.target.value);
-                        api.setToken(e.target.value);
+                        httpClient.setToken(e.target.value);
                       }}
                       className="flex-1 px-3 py-2 border border-border-subtle rounded-lg font-mono text-xs bg-white"
                     />

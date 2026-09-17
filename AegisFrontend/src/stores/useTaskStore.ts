@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Task, TaskMessage, TraceStep, SubagentInfo, TelemetryStats, HITLApprovalRequest, PermissionLevel } from '@/types';
-import { api } from '@/services/api';
+import { taskApi } from '@/api';
 
 interface TaskState {
   currentTaskId: string | null;
@@ -334,7 +334,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     get().setCurrentTaskId(taskId);
 
     try {
-      await api.createTask(sessionId, {
+      await taskApi.create(sessionId, {
         prompt,
         permission_level: options?.permissionLevel,
         model: options?.model,
@@ -370,7 +370,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   approveAction: async (taskId, approvalId, decision, feedback) => {
     try {
-      await api.approveAction(taskId, { approval_id: approvalId, decision, feedback });
+      await taskApi.approve(taskId, { approval_id: approvalId, decision, feedback });
     } catch {
       // ignore
     }
@@ -386,7 +386,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
   rejectAction: async (taskId, approvalId, reason) => {
     try {
-      await api.rejectAction(taskId, { approval_id: approvalId, reason });
+      await taskApi.reject(taskId, { approval_id: approvalId, reason });
     } catch {
       // ignore
     }
@@ -404,7 +404,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const id = get().currentTaskId;
     if (!id) return;
     try {
-      await api.cancelTask(id);
+      await taskApi.cancel(id);
     } catch {
       // ignore
     }

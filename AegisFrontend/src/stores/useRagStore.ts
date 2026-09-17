@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { RagHealth, RagHit, RagRetrieveResult } from '@/types';
-import { api } from '@/services/api';
+import { ragApi } from '@/api';
 
 interface RagState {
   health: RagHealth | null;
@@ -84,7 +84,7 @@ export const useRagStore = create<RagState>((set) => ({
   fetchHealth: async () => {
     set({ isLoadingHealth: true });
     try {
-      const h = await api.getRagHealth();
+      const h = await ragApi.getHealth();
       set({ health: h, isLoadingHealth: false });
     } catch {
       set({ isLoadingHealth: false });
@@ -94,7 +94,7 @@ export const useRagStore = create<RagState>((set) => ({
   triggerIngest: async (options) => {
     set({ isIngesting: true, ingestStatus: '正在扫描工作区并执行语法感知切分...' });
     try {
-      const res = await api.triggerRagIngest({
+      const res = await ragApi.triggerIngest({
         incremental: options?.incremental ?? true,
         workspace_id: options?.workspaceId,
       });
@@ -120,7 +120,7 @@ export const useRagStore = create<RagState>((set) => ({
     set({ isSearching: true, query: q });
     const start = Date.now();
     try {
-      const res: RagRetrieveResult = await api.queryRagRetrieve({ query: q, top_k: 5 });
+      const res: RagRetrieveResult = await ragApi.retrieve({ query: q, top_k: 5 });
       set({
         hits: res.hits,
         searchDurationMs: res.elapsed_ms || Date.now() - start,

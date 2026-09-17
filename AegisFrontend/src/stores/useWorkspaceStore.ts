@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { Workspace, WorkspaceMemory, Session, FileNode, OpenTab, WorkspaceCreatePayload, WorkspaceUpdatePayload } from '@/types';
-import { api } from '@/services/api';
+import { workspaceApi, sessionApi, fileApi } from '@/api';
 
 interface WorkspaceState {
   // Workspaces
@@ -83,7 +83,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchWorkspaces: async () => {
     set({ isLoadingWorkspaces: true });
     try {
-      const data = await api.listWorkspaces();
+      const data = await workspaceApi.list();
       set({ workspaces: data, isLoadingWorkspaces: false });
       if (data.length > 0 && !get().activeWorkspaceId) {
         await get().setActiveWorkspace(data[0].id);
@@ -115,7 +115,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   createWorkspace: async (payload: WorkspaceCreatePayload) => {
     try {
-      const ws = await api.createWorkspace(payload);
+      const ws = await workspaceApi.create(payload);
       set((state) => ({ workspaces: [ws, ...state.workspaces] }));
       await get().setActiveWorkspace(ws.id);
       return ws;
@@ -139,7 +139,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   updateWorkspace: async (id: string, payload: WorkspaceUpdatePayload) => {
     try {
-      const updated = await api.updateWorkspace(id, payload);
+      const updated = await workspaceApi.update(id, payload);
       set((state) => ({
         workspaces: state.workspaces.map((w) => (w.id === id ? { ...w, ...updated } : w)),
       }));
@@ -152,7 +152,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   deleteWorkspace: async (id: string) => {
     try {
-      await api.deleteWorkspace(id);
+      await workspaceApi.delete(id);
     } catch {
       // ignore
     }
@@ -173,7 +173,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchSessions: async (workspaceId: string) => {
     set({ isLoadingSessions: true });
     try {
-      const sessions = await api.listSessions(workspaceId);
+      const sessions = await sessionApi.list(workspaceId);
       set({ sessions, isLoadingSessions: false });
       if (sessions.length > 0 && !get().activeSessionId) {
         set({ activeSessionId: sessions[0].id });
@@ -215,7 +215,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const wsId = get().activeWorkspaceId;
     if (!wsId) throw new Error('No active workspace');
     try {
-      const session = await api.createSession(wsId, title);
+      const session = await sessionApi.create(wsId, title);
       set((state) => ({ sessions: [session, ...state.sessions], activeSessionId: session.id }));
       return session;
     } catch {
@@ -234,7 +234,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   deleteSession: async (id: string) => {
     try {
-      await api.deleteSession(id);
+      await sessionApi.delete(id);
     } catch {
       // ignore
     }
@@ -251,7 +251,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchMemories: async (workspaceId: string) => {
     set({ isLoadingMemories: true });
     try {
-      const memoryView = await api.getWorkspaceMemory(workspaceId);
+      const memoryView = await workspaceApi.getMemory(workspaceId);
       const mappedMemories: WorkspaceMemory[] = [];
       memoryView.confirmed_architecture.forEach((item, idx) => {
         mappedMemories.push({
@@ -332,13 +332,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!wsId) return;
     try {
       if (payload.category === 'global_failed_attempts') {
-        await api.recordWorkspaceFailure(wsId, {
+        await workspaceApi.recordFailure(wsId, {
           action: payload.title,
           failure_reason: payload.content,
           conclusion: payload.title,
         });
       } else {
-        await api.promoteWorkspaceFact(wsId, {
+        await workspaceApi.promoteFact(wsId, {
           fact: `${payload.title}: ${payload.content}`,
           category: payload.category,
         });
@@ -368,7 +368,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchFileTree: async (workspaceId: string) => {
     set({ isLoadingFileTree: true });
     try {
-      const tree = await api.getFileTree(workspaceId);
+      const tree = await fileApi.getTree(workspaceId);
       set({ fileTree: tree, isLoadingFileTree: false });
     } catch {
       set({ isLoadingFileTree: false });
@@ -402,7 +402,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
     try {
       if (wsId) {
-        const fileData = await api.getFileContent(wsId, relativePath);
+        const fileData = await fileApi.getContent(wsId, relativePath);
         get().openTab({
           filePath: fileData.path,
           title: fileData.path.split('/').pop() || fileData.path,
@@ -453,7 +453,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     if (!activeTab || !wsId) return;
 
     try {
-      await api.saveFileContent(wsId, activeTab.filePath, activeTab.content);
+      await fileApi.saveContent(wsId, activeTab.filePath, activeTab.content);
       set((state) => ({
         tabs: state.tabs.map((t) => (t.id === activeTab.id ? { ...t, isModified: false } : t)),
       }));
