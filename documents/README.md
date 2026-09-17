@@ -13,9 +13,15 @@
 documents/
 ├── README.md                      # [当前文档] 全景总入口与实施导航
 ├── 技术栈.md                      # 全景技术栈清单 (Tech Stack BOM, 库/模型/版本/环境)
-├── 测试路线.md                    # 测试补齐路线图 (单元 → 组件 → API → 全链路，不含需人工介入场景)
-├── 深度测试路线.md                # 真实 LLM 驱动的深度测试路线 (Phase 9~15，需真实 TERRA_KEY/LUNA_KEY)
+├── 测试路线/                      # 【测试路线全景】(分系统独立维护)
+│   ├── README.md                  # 测试路线总索引与双系统全景一览
+│   ├── AegisAgent/                # 👑 Agent 调度宿主系统测试路线 (基础 + 深度测试)
+│   │   ├── 测试路线.md            # • 基础测试路线 (Phase 1~8: 单元/节点/HITL 审批/API 契约)
+│   │   └── 深度测试路线.md        # • 深度测试路线 (Phase 9~15: 真实前沿 LLM / AgentBench / 红队)
+│   └── AegisRAG/                  # 📚 独立代码检索子系统测试路线
+│       └── 测试路线.md            # • RAG 全栈测试路线 (Phase 1~7: AST 切分/向量化/Qdrant/精排/API/评测)
 │
+├── 里程碑/                        # 【功能就绪与实施全景】(双勾验收跟踪)
 ├── 技术选型/                      # 架构决策记录 (ADRs) - 阐述"为什么选该技术"
 │   ├── README.md                  # ADR 导航与设计哲学
 │   ├── agent_runtime.md           # Agent Runtime 架构决策
