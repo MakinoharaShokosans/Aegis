@@ -31,7 +31,7 @@ def _bootstrap_sys_path() -> None:
 
 
 def main() -> None:
-    """读取配置并启动 uvicorn 服务。
+    """读取配置、执行启动前置体检并安全拉起 uvicorn 服务。
 
     Raises:
         FileNotFoundError: 找不到 ``rag_config.toml`` 时抛出。
@@ -39,9 +39,22 @@ def main() -> None:
     """
     _bootstrap_sys_path()
 
+    from api.preflight import DiagnosticReporter, PreflightRunner
     from api.settings import get_settings
 
     settings = get_settings()
+
+    # 1. 启动前置体检与自检门禁
+    runner = PreflightRunner()
+    report = runner.run(settings)
+    print(DiagnosticReporter.format_console(report))
+
+    if not report.is_launch_ready:
+        print("\n[✘ 启动中止] 前置自检发现致命错误，拒绝带病启动服务！\n", file=sys.stderr)
+        sys.exit(1)
+
+    # 2. 安全拉起服务
+    print(f"[🚀 AegisRAG] 正在拉起 HTTP 检索服务: http://{settings.server.host}:{settings.server.port}\n")
     uvicorn.run(
         "api.app:app",
         host=settings.server.host,

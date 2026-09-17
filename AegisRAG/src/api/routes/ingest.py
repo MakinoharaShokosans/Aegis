@@ -26,7 +26,29 @@ router = APIRouter()
 __all__ = ["router"]
 
 #: 索引时跳过的目录名（隐藏目录一律跳过，见 _iter_repo_files）
-_SKIP_DIR_NAMES = {"node_modules", "__pycache__", ".venv", "venv", "storage", "dist", "build"}
+_SKIP_DIR_NAMES = {
+    "node_modules",
+    "__pycache__",
+    ".venv",
+    "venv",
+    "qdrant_data",
+    "cache",
+    "dist",
+    "build",
+    "htmlcov",
+}
+
+#: 索引时跳过的固定文件名（如包管理 lockfile，避免冗余切分占用计算资源）
+_SKIP_FILE_NAMES = {
+    "uv.lock",
+    "package-lock.json",
+    "poetry.lock",
+    "yarn.lock",
+    "pnpm-lock.yaml",
+    "Cargo.lock",
+    "go.sum",
+    ".DS_Store",
+}
 
 #: 单文件读取体积上限（字节）——防御性工程上限，非业务可调参数，故不进配置
 _MAX_FILE_BYTES = 5 * 1024 * 1024
@@ -130,11 +152,15 @@ def ingest_documents(payload: IngestRequest, request: Request) -> IngestResponse
 
 
 def _iter_repo_files(repo_root: Path) -> Iterator[Path]:
-    """遍历仓库文件，跳过隐藏目录与常见的构建/依赖目录。"""
+    """遍历仓库文件，跳过隐藏目录、锁定文件与常见的构建/依赖目录。"""
     for path in repo_root.rglob("*"):
         if not path.is_file():
             continue
+        if path.name in _SKIP_FILE_NAMES:
+            continue
         rel_parts = path.relative_to(repo_root).parts[:-1]
+        if rel_parts and rel_parts[0] == "storage":
+            continue
         if any(part.startswith(".") or part in _SKIP_DIR_NAMES for part in rel_parts):
             continue
         if path.stat().st_size > _MAX_FILE_BYTES:

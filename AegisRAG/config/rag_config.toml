@@ -14,7 +14,7 @@ storage_path = "storage/qdrant_data"
 host = "127.0.0.1"
 port = 6333
 collection_name = "aegis_code_chunks"
-# ⚠️ vector_size 当前对应本地 BAAI/bge-m3（1024 维，原生多语言与代码增强），
+# ⚠️ vector_size 当前对应本地 jinaai/jina-embeddings-v3（1024 维，原生多语言、长文本与代码增强），
 # 若切换至 [embedding.remote] 远端模型，必须同步核实其真实输出维度并修改这里，
 # 否则会在启动期被 storage/qdrant_store.py 的维度自检拒绝启动（fail-fast）。
 vector_size = 1024
@@ -34,7 +34,7 @@ batch_size = 32
 max_length = 512
 
 [embedding.local]
-model_name = "BAAI/bge-m3"
+model_name = "jinaai/jina-embeddings-v3"
 
 [embedding.remote]
 # OpenAI 兼容 /embeddings 接口（POST {base_url}/embeddings，Bearer 鉴权）
