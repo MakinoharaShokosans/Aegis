@@ -44,6 +44,8 @@ dev = [
     "numpy>=2.4.6,<3.0.0",
     "tabulate>=0.10.0,<1.0.0",
     "hatchling>=1.32.0,<2.0.0",
+    "pytest-cov>=7.1.0",
+    "hypothesis>=6.168.0",
 ]
 
 [build-system]
@@ -57,3 +59,7 @@ packages = ["src/agent_runtime", "src/tools", "src/mcps", "src/services", "src/s
 pythonpath = ["src"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+markers = [
+    "real_llm: 需要真实 LLM API Key 的外部模型调用测试（默认跳过，需显式 pytest -m real_llm 触发）",
+]
+addopts = "-m 'not real_llm'"

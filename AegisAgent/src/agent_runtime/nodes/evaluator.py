@@ -25,6 +25,7 @@ from agent_runtime.llm.client import LLMGateway
 from agent_runtime.nodes.base import (
     NodeFn,
     coerce_failed_attempts,
+    coerce_milestones,
     extract_json_object,
     merge_unique,
 )
@@ -117,14 +118,18 @@ def build_evaluator_node(
         if not verdict:
             logger.warning("[Evaluator] 未能解析结构化验收结论，按未达成处理")
 
-        milestones: List[Milestone] = list(state.get("milestones") or [])
+        milestones: List[Milestone] = coerce_milestones(list(state.get("milestones") or []))
         current_index = int(state.get("current_milestone_idx", 0))
         accepted = bool(verdict.get("milestone_ok"))
 
         if accepted and milestones:
             milestones = _mark_milestone_completed(milestones, current_index)
 
-        all_done = bool(milestones) and all(milestone.status == "completed" for milestone in milestones)
+        all_done = (
+            all(milestone.status == "completed" for milestone in milestones)
+            if milestones
+            else accepted
+        )
 
         # 验收通过且仍有后续里程碑时，推进指针；全部完成则保持在末尾
         next_index = min(current_index + 1, len(milestones) - 1) if (accepted and milestones) else current_index

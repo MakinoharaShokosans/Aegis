@@ -114,9 +114,9 @@ def build_tool_runner_node(
                 continue
             escalations.append((call_id, name, args, decision))
 
-        blocked_ids: Set[str] = set()
+        blocked_reasons: Dict[str, str] = {}
         if escalations:
-            blocked_ids = await _resolve_escalations(
+            blocked_reasons = await _resolve_escalations(
                 escalations, current_level, task_id, step_index, allowlist, recorder
             )
 
@@ -146,7 +146,7 @@ def build_tool_runner_node(
             ]
         else:
             dispatchable = [
-                (call_id, name, args) for call_id, name, args in specs if call_id not in blocked_ids
+                (call_id, name, args) for call_id, name, args in specs if call_id not in blocked_reasons
             ]
             dispatched = await dispatcher.dispatch(dispatchable)
             by_id = {item.tool_call_id: item for item in dispatched}
@@ -156,7 +156,9 @@ def build_tool_runner_node(
                     DispatchedResult(
                         tool_call_id=call_id,
                         tool_name=name,
-                        result=ToolResult.failure(f"{_REJECT_PREFIX}，请改用合规方案（如仅生成本地补丁而不推送远端）"),
+                        result=ToolResult.failure(
+                            f"{_REJECT_PREFIX}：{blocked_reasons.get(call_id, '用户未批准该操作')}，请改用合规方案（如仅生成本地补丁而不推送远端）"
+                        ),
                     ),
                 )
                 for call_id, name, _ in specs
@@ -231,7 +233,7 @@ def build_tool_runner_node(
                 )
 
         logger.info(
-            f"[ToolRunner] 执行 {len(specs)} 个工具（拒绝 {len(blocked_ids)} 个），"
+            f"[ToolRunner] 执行 {len(specs)} 个工具（拒绝 {len(blocked_reasons)} 个），"
             f"失败 {failure_count} 个，连续错误={consecutive_errors}，死循环={loop_detected}"
         )
 
@@ -267,7 +269,7 @@ async def _resolve_escalations(
         recorder: 轨迹记录器。
 
     Returns:
-        被拒绝、不允许执行的 ``tool_call_id`` 集合（空集表示全部放行）。
+        被拒绝、不允许执行的 ``tool_call_id -> 拒绝原因`` 字典（空字典表示全部放行）。
     """
     primary = escalations[0]
     decision = primary[3]
@@ -309,14 +311,14 @@ async def _resolve_escalations(
             step_count=step_index,
         )
 
-    if not verdict.get("approved"):
+    if verdict.get("approved") is not True:
         reason = str(verdict.get("reason") or "用户未批准该操作")
         logger.warning(f"[ToolRunner] 审批被拒绝：{reason}")
-        return {call_id for call_id, _, _, _ in escalations}
+        return {call_id: reason for call_id, _, _, _ in escalations}
 
     if str(verdict.get("scope") or "once") == "always":
         for _, name, args, _ in escalations:
             allowlist.add(action_signature(name, args))
         logger.info(f"[ToolRunner] 已加入会话白名单（{len(escalations)} 项），后续同类操作免审")
 
-    return set()
+    return {}

@@ -79,9 +79,10 @@ def _to_openai_messages(messages: Sequence[BaseMessage]) -> List[Dict[str, Any]]
                 }
             )
         elif isinstance(message, AIMessage):
+            content_str = _as_text(message.content) if message.content is not None else ""
             item: Dict[str, Any] = {
                 "role": "assistant",
-                "content": _as_text(message.content) or None,
+                "content": content_str,
             }
             tool_calls = getattr(message, "tool_calls", None) or []
             if tool_calls:

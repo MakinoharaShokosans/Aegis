@@ -266,25 +266,31 @@ class TaskRegistry:
             TaskNotFoundError: 任务不存在。
             TaskAlreadyRunningError: 任务不在等待审批状态。
         """
-        handle = self.get(task_id)
-        if handle.status != "waiting_for_approval" or handle.approval_request is None:
-            raise TaskAlreadyRunningError(
-                "任务当前不处于等待审批状态",
-                context={"task_id": task_id, "status": handle.status},
-            )
+        async with self._lock:
+            handle = self.get(task_id)
+            if handle.status != "waiting_for_approval" or handle.approval_request is None:
+                raise TaskAlreadyRunningError(
+                    "任务当前不处于等待审批状态",
+                    context={"task_id": task_id, "status": handle.status},
+                )
 
-        expected_id = str(handle.approval_request.get("approval_id") or "")
-        if approval_id and expected_id and approval_id != expected_id:
-            raise TaskAlreadyRunningError(
-                "审批标识不匹配（可能已被其它决策消费）",
-                context={"expected": expected_id, "received": approval_id},
-            )
+            expected_id = str(handle.approval_request.get("approval_id") or "")
+            if approval_id and expected_id and approval_id != expected_id:
+                raise TaskAlreadyRunningError(
+                    "审批标识不匹配（可能已被其它决策消费）",
+                    context={"expected": expected_id, "received": approval_id},
+                )
 
-        decision: Dict[str, Any] = {"approved": bool(approved)}
-        if approved:
-            decision["scope"] = "always" if str(scope) == "always" else "once"
-        else:
-            decision["reason"] = reason or "用户拒绝该操作"
+            decision: Dict[str, Any] = {"approved": bool(approved)}
+            if approved:
+                decision["scope"] = "always" if str(scope) == "always" else "once"
+            else:
+                decision["reason"] = reason or "用户拒绝该操作"
+
+            handle.approval_request = None
+            handle.status = "queued"
+            handle.finished_at = None
+            self._running.add(task_id)
 
         await self.emit(
             task_id,
@@ -296,11 +302,6 @@ class TaskRegistry:
             },
         )
 
-        handle.approval_request = None
-        handle.status = "queued"
-        handle.finished_at = None
-        async with self._lock:
-            self._running.add(task_id)
         handle.runner = asyncio.create_task(
             self._run(deps, handle, resume=True, approval_decision=decision)
         )
@@ -373,7 +374,7 @@ class TaskRegistry:
                     approval_allowlist=self._allowlist_for(handle.session_id),
                     event_sink=lambda event: self.emit(handle.task_id, event),
                 )
-            self._apply_outcome(handle, outcome)
+            await self._apply_outcome(handle, outcome)
         except asyncio.CancelledError:
             handle.status = "cancelled"
             handle.finished_at = time.time()

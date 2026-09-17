@@ -442,6 +442,9 @@ async def _drive_graph(
 
     async for chunk in app.astream(graph_input, run_config, stream_mode="updates"):
         for node_name, delta in (chunk or {}).items():
+            if node_name == "__interrupt__":
+                continue
+            delta_dict = delta if isinstance(delta, dict) else {}
             seq += 1
             if event_sink is not None:
                 await event_sink(
@@ -449,9 +452,9 @@ async def _drive_graph(
                         "event": "node.finished",
                         "node": node_name,
                         "seq": seq,
-                        "step_count": int((delta or {}).get("step_count", task.state.get("step_count", 0))),
-                        "total_tokens": int((delta or {}).get("total_tokens", task.state.get("total_tokens", 0))),
-                        "should_terminate": bool((delta or {}).get("should_terminate", False)),
+                        "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
+                        "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
+                        "should_terminate": bool(delta_dict.get("should_terminate", False)),
                     }
                 )
 

@@ -104,11 +104,24 @@ def build_planner_node(
 
         # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
         # 这样"里程碑"是模型自主分解的产物，而不是硬编码的固定流程。
-        existing = list(state.get("milestones") or [])
+        existing = coerce_milestones(list(state.get("milestones") or []))
         if not existing and verdict.get("milestones"):
             milestones = coerce_milestones(verdict["milestones"])
-        else:
+        elif existing:
             milestones = apply_milestone_updates(existing, verdict.get("milestone_updates"))
+        else:
+            milestones = []
+
+        is_completed = bool(
+            verdict.get("is_completed")
+            or verdict.get("all_completed")
+            or str(verdict.get("status", "")).lower() == "completed"
+        )
+        if is_completed:
+            if milestones:
+                milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
+            else:
+                milestones = [Milestone(id=1, title="完成任务目标", status="completed")]
 
         logger.info(f"[Planner] 决策指令已生成（tokens={response.total_tokens}）")
 

@@ -53,18 +53,11 @@ artifacts_dir = "storage/artifacts"
 temperature = 0.0               # 严谨确定性推理，温度设为 0.0
 
 [[models.reasoning.endpoints]]
-name = "deepseek-r1-primary"
-base_url = "https://api.deepseek.com/v1"
-model = "deepseek-reasoner"
-api_key_env = "DEEPSEEK_API_KEY"
-timeout_sec = 120
-
-[[models.reasoning.endpoints]]
-name = "siliconflow-r1-backup"
-base_url = "https://api.siliconflow.cn/v1"
-model = "deepseek-ai/DeepSeek-R1"
-api_key_env = "SILICONFLOW_API_KEY"
-timeout_sec = 120
+name = "gpt-5.6-terra"
+base_url = "https://api.openlux.ai/v1"
+model = "gpt-5.6-terra"
+api_key_env = "TERRA_KEY"
+timeout_sec = 180
 
 # ------------------------------------------------------------------------------
 # 6. 快速模型配置与降级列表 (Fast / Action Model Fallback Chain)
@@ -74,25 +67,18 @@ timeout_sec = 120
 temperature = 0.2               # 快速工具调度，保持输出格式稳定
 
 [[models.fast.endpoints]]
-name = "deepseek-v3-primary"
-base_url = "https://api.deepseek.com/v1"
-model = "deepseek-chat"
-api_key_env = "DEEPSEEK_API_KEY"
-timeout_sec = 30
-
-[[models.fast.endpoints]]
-name = "openai-4o-mini-backup"
-base_url = "https://api.openai.com/v1"
-model = "gpt-4o-mini"
-api_key_env = "OPENAI_API_KEY"
-timeout_sec = 30
-
-[[models.fast.endpoints]]
-name = "local-ollama-fallback"
-base_url = "http://localhost:11434/v1"
-model = "qwen2.5:7b"
-api_key_env = "OLLAMA_API_KEY"
+name = "gpt-5.4-mini"
+base_url = "https://api.openlux.ai/v1"
+model = "gpt-5.4-mini"
+api_key_env = "LUNA_KEY"
 timeout_sec = 60
+
+[[models.fast.endpoints]]
+name = "gpt-5.6-luna"
+base_url = "https://api.openlux.ai/v1"
+model = "gpt-5.6-luna"
+api_key_env = "LUNA_KEY"
+timeout_sec = 90
 
 # ------------------------------------------------------------------------------
 # 7. 基础设施独立微服务客户端寻址

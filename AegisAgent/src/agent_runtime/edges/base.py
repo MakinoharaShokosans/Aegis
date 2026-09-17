@@ -44,10 +44,15 @@ def all_milestones_completed(state: Mapping[str, Any]) -> bool:
     Returns:
         存在至少一个里程碑且其状态全部为 ``completed`` 时返回 ``True``。
     """
-    milestones: List[Any] = list(state.get("milestones") or [])
+    from agent_runtime.nodes.base import coerce_milestones
+
+    raw_milestones: List[Any] = list(state.get("milestones") or [])
+    if not raw_milestones:
+        return False
+    milestones = coerce_milestones(raw_milestones)
     if not milestones:
         return False
-    return all(getattr(milestone, "status", None) == "completed" for milestone in milestones)
+    return all(milestone.status == "completed" for milestone in milestones)
 
 
 def resolve_targets(*node_names: str) -> dict[str, str]:

@@ -24,6 +24,8 @@ env/
 # Testing & Coverage
 .pytest_cache/
 **/.pytest_cache/
+.hypothesis/
+**/.hypothesis/
 .coverage
 .coverage.*
 htmlcov/

@@ -136,21 +136,22 @@ def coerce_failed_attempts(raw: Any) -> List[FailedAttempt]:
     return [attempt for attempt in attempts if attempt.action or attempt.conclusion]
 
 
-def apply_milestone_updates(milestones: Sequence[Milestone], updates: Any) -> List[Milestone]:
+def apply_milestone_updates(milestones: Sequence[Any], updates: Any) -> List[Milestone]:
     """按模型给出的状态更新里程碑（只允许合法状态值）。
 
     Args:
-        milestones: 既有里程碑列表。
+        milestones: 既有里程碑列表（可能包含 Milestone 对象或从 checkpoint 反序列化的 dict）。
         updates: 期望是 ``[{"id":1,"status":"completed"}]``。
 
     Returns:
         更新后的里程碑列表（原地构造新对象，不修改入参）。
     """
+    normalized = coerce_milestones(list(milestones))
     if not isinstance(updates, list):
-        return list(milestones)
+        return normalized
 
     valid_status = {"pending", "in_progress", "completed", "failed"}
-    by_id = {milestone.id: milestone for milestone in milestones}
+    by_id = {m.id: m for m in normalized}
 
     for update in updates:
         if not isinstance(update, Mapping):
@@ -166,7 +167,7 @@ def apply_milestone_updates(milestones: Sequence[Milestone], updates: Any) -> Li
         current = by_id[milestone_id]
         by_id[milestone_id] = current.model_copy(update={"status": status})
 
-    return [by_id[milestone.id] for milestone in milestones]
+    return [by_id[m.id] for m in normalized]
 
 
 def coerce_milestones(raw: Any, *, max_items: int = 8) -> List[Milestone]:
@@ -175,7 +176,7 @@ def coerce_milestones(raw: Any, *, max_items: int = 8) -> List[Milestone]:
     只做"形状校验"，不判断计划质量——计划好坏由 evaluator 与实际执行检验。
 
     Args:
-        raw: 期望是 ``[{"id","title","description"}]``。
+        raw: 期望是 ``[{"id","title","description"}]`` 或已有的 ``Milestone`` 序列。
         max_items: 上限，防止模型输出超长计划把状态撑爆。
 
     Returns:
@@ -186,21 +187,36 @@ def coerce_milestones(raw: Any, *, max_items: int = 8) -> List[Milestone]:
 
     milestones: List[Milestone] = []
     for index, item in enumerate(raw[:max_items], start=1):
-        if not isinstance(item, Mapping):
+        if isinstance(item, Milestone):
+            milestones.append(item)
             continue
-        title = str(item.get("title", "")).strip()
-        if not title:
+        if isinstance(item, Mapping):
+            title = str(item.get("title", "")).strip() or f"阶段 {index}"
+            try:
+                milestone_id = int(item.get("id", index))
+            except (TypeError, ValueError):
+                milestone_id = index
+            status_val = str(item.get("status") or "pending")
+            desc = str(item.get("description", "")).strip()
+        elif hasattr(item, "status"):
+            title = getattr(item, "title", "") or f"阶段 {index}"
+            milestone_id = getattr(item, "id", index)
+            try:
+                milestone_id = int(milestone_id)
+            except (TypeError, ValueError):
+                milestone_id = index
+            status_val = str(getattr(item, "status", "pending"))
+            desc = str(getattr(item, "description", "")).strip()
+        else:
             continue
-        try:
-            milestone_id = int(item.get("id", index))
-        except (TypeError, ValueError):
-            milestone_id = index
+
+        status = status_val if status_val in {"pending", "in_progress", "completed", "failed"} else "pending"
         milestones.append(
             Milestone(
                 id=milestone_id,
                 title=title,
-                description=str(item.get("description", "")).strip(),
-                status=str(item.get("status") or "pending") if str(item.get("status") or "pending") in {"pending", "in_progress", "completed", "failed"} else "pending",
+                description=desc,
+                status=status,
             )
         )
     return milestones

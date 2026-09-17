@@ -18,6 +18,7 @@ env/
 
 # Testing & Coverage
 .pytest_cache/
+.hypothesis/
 .coverage
 .coverage.*
 htmlcov/
