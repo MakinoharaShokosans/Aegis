@@ -18,7 +18,7 @@ export const FileMutationCard: React.FC<FileMutationCardProps> = ({ mutation, on
   const filename = mutation.path.split('/').pop() || mutation.path;
 
   const getFileIcon = () => {
-    if (mutation.path.endsWith('.py')) return <span className="text-xs">🐍</span>;
+    if (mutation.path.endsWith('.py')) return <FileCode className="w-3.5 h-3.5 text-emerald-600 shrink-0" />;
     if (mutation.path.endsWith('.md')) return <FileText className="w-3.5 h-3.5 text-purple-600 shrink-0" />;
     if (mutation.path.endsWith('.c') || mutation.path.endsWith('.cpp'))
       return <Code2 className="w-3.5 h-3.5 text-blue-600 shrink-0" />;

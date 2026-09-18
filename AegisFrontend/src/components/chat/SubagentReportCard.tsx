@@ -45,7 +45,7 @@ export const SubagentReportCard: React.FC<SubagentReportCardProps> = ({
           variant={isDocSearch ? 'purple' : 'warning'}
           size="xs"
         >
-          {isDocSearch ? '3轮自适应 RAG' : '🛡 外部数据隔离'}
+          {isDocSearch ? '3轮自适应 RAG' : '外部数据隔离'}
         </Badge>
       </div>
 

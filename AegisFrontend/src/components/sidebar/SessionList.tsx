@@ -56,7 +56,9 @@ export const SessionList: React.FC<SessionListProps> = ({
             <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center mx-auto text-slate-400">
               <MessageSquare className="w-4 h-4" />
             </div>
-            <p className="text-xs text-slate-400">暂无匹配的会话任务</p>
+            <p className="text-xs text-slate-400">
+              {sessions.length === 0 ? '当前工作区暂无会话' : '暂无匹配的会话任务'}
+            </p>
             {onNewSession && (
               <button
                 onClick={onNewSession}

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
 import { httpClient, systemApi } from '@/api';
+import type { McpServerInfo } from '@/types';
 
 export const SettingsModal: React.FC = () => {
   const { settingsModalOpen, setSettingsModalOpen } = useUiStore();
@@ -36,6 +37,7 @@ export const SettingsModal: React.FC = () => {
   const [shellPort, setShellPort] = useState('8002');
   const [webPort, setWebPort] = useState('8003');
   const [memoryPoolMb, setMemoryPoolMb] = useState('512');
+  const [mcpServers, setMcpServers] = useState<McpServerInfo[]>([]);
 
   React.useEffect(() => {
     if (settingsModalOpen) {
@@ -50,6 +52,14 @@ export const SettingsModal: React.FC = () => {
         if (fEndpoints.length > 0) {
           setFastModel(fEndpoints.map((e) => e.model || e.name).join(' / '));
           setFastBaseUrl(fEndpoints[0].base_url);
+        }
+      }).catch(() => {
+        // ignore
+      });
+
+      systemApi.getMcps().then((data) => {
+        if (Array.isArray(data)) {
+          setMcpServers(data);
         }
       }).catch(() => {
         // ignore
@@ -363,27 +373,70 @@ export const SettingsModal: React.FC = () => {
 
           {activeTab === 'mcp' && (
             <div className="space-y-3">
-              <div className="p-4 rounded-xl border border-border-subtle bg-gray-50/50 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-gray-900 flex items-center gap-2">
-                    <span>filesystem-mcp-server</span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-mono">v1.0.2</span>
-                  </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5">提供工作区文件系统高级遍历、AST 解析与元数据提取工具</p>
-                </div>
-                <span className="text-emerald-600 font-medium">已启用 ●</span>
-              </div>
+              {mcpServers.length > 0 ? (
+                mcpServers.map((srv) => (
+                  <div
+                    key={srv.name}
+                    className="p-4 rounded-xl border border-border-subtle bg-gray-50/50 flex items-center justify-between"
+                  >
+                    <div>
+                      <div className="font-semibold text-gray-900 flex items-center gap-2">
+                        <span className="font-mono">{srv.name}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded text-[10px] font-mono font-medium ${
+                            !srv.enabled
+                              ? 'bg-slate-100 text-slate-600'
+                              : srv.connected
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : srv.error
+                              ? 'bg-rose-100 text-rose-800'
+                              : 'bg-blue-100 text-blue-800'
+                          }`}
+                        >
+                          {!srv.enabled
+                            ? '未启用 (Disabled)'
+                            : srv.connected
+                            ? '已连接 (Active)'
+                            : srv.error
+                            ? '连接失败 (Error)'
+                            : '已配置待连接 (Lazy)'}
+                        </span>
+                        <span className="px-1.5 py-0.2 bg-slate-200/70 text-slate-600 rounded text-[10px] font-mono">
+                          {srv.transport || 'stdio'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        {!srv.enabled
+                          ? '在 config/config.toml 中处于 disabled 状态（出于安全隔离，默认不拉起外部子进程）'
+                          : srv.connected
+                          ? `已通过 Aegis MCP 治理管理器纳管，成功挂载 ${srv.tool_count} 个外部工具`
+                          : srv.error
+                          ? `连接失败: ${srv.error}`
+                          : '已声明并在需要工具时通过 Lazy 模式即时建立连接'}
+                      </p>
+                    </div>
 
-              <div className="p-4 rounded-xl border border-border-subtle bg-gray-50/50 flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-gray-900 flex items-center gap-2">
-                    <span>git-integration-server</span>
-                    <span className="px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 text-[10px] font-mono">v0.8.4</span>
+                    <div className="text-right shrink-0 ml-4">
+                      {!srv.enabled ? (
+                        <span className="text-slate-400 font-mono text-[11px]">未激活 ○</span>
+                      ) : srv.connected ? (
+                        <span className="text-emerald-600 font-mono text-[11px] font-medium">已挂载 ({srv.tool_count}) ●</span>
+                      ) : srv.error ? (
+                        <span className="text-rose-600 font-mono text-[11px]">异常 ○</span>
+                      ) : (
+                        <span className="text-blue-600 font-mono text-[11px]">待唤醒 ○</span>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-[11px] text-gray-500 mt-0.5">提供分支管理、Commit 暂存与差异对比原子能力</p>
+                ))
+              ) : (
+                <div className="p-8 text-center rounded-xl border border-dashed border-slate-200 bg-slate-50/50 space-y-2">
+                  <div className="text-slate-600 font-semibold text-xs">暂无已配置的 MCP 服务器</div>
+                  <p className="text-[11px] text-slate-400 max-w-md mx-auto leading-relaxed">
+                    当前环境未在 <code className="font-mono px-1 py-0.5 bg-slate-100 rounded text-slate-700">config/config.toml</code> 中启用外部 MCP 服务器。如需接入，请在配置文件的 <code className="font-mono text-slate-700">[mcp.servers.*]</code> 节点下设置 <code className="font-mono text-slate-700">enabled = true</code>。
+                  </p>
                 </div>
-                <span className="text-emerald-600 font-medium">已启用 ●</span>
-              </div>
+              )}
             </div>
           )}
         </div>

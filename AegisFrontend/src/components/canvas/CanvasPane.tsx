@@ -5,7 +5,6 @@
 
 import React, { useState } from 'react';
 import {
-  BookOpen,
   Copy,
   Check,
   FileCode,
@@ -25,7 +24,6 @@ export const CanvasPane: React.FC = () => {
     setActiveTab,
     updateTabContent,
     saveCurrentTab,
-    openTab,
   } = useWorkspaceStore();
   const { previewFullScreen, togglePreviewFullScreen } = useUiStore();
 
@@ -35,30 +33,7 @@ export const CanvasPane: React.FC = () => {
   const activeTab = tabs.find((t) => t.id === activeTabId) || tabs[0];
 
   if (!activeTab) {
-    return (
-      <div className="flex flex-col items-center justify-center h-full bg-slate-50 text-slate-400 p-8 select-none">
-        <div className="w-14 h-14 rounded-2xl bg-white border border-slate-200 flex items-center justify-center mb-3 shadow-xs">
-          <BookOpen className="w-7 h-7 text-purple-600" />
-        </div>
-        <p className="text-sm font-bold text-slate-800">工作区深度画布视窗 (Doc & Canvas Stage)</p>
-        <p className="text-xs text-slate-400 mt-1.5 text-center max-w-sm leading-relaxed">
-          在左侧文件树或对话流中点击文档与源码文件，可在此实时阅读 Markdown 架构规范、编辑代码与审查 Diff
-        </p>
-        <button
-          onClick={() =>
-            openTab({
-              filePath: 'documents/agent_runtime/11_http_api.md',
-              title: '11_http_api.md',
-              language: 'markdown',
-              content: '# 11_http_api.md\n\nHTTP API 规范阅读中...',
-            })
-          }
-          className="mt-4 px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-xs text-slate-700 font-medium transition shadow-2xs"
-        >
-          打开默认规范文档
-        </button>
-      </div>
-    );
+    return null;
   }
 
   const isMarkdown =

@@ -5,9 +5,6 @@
 
 import React, { useState } from 'react';
 import {
-  Bot,
-  User,
-  Shield,
   Clock,
   ThumbsUp,
   ThumbsDown,
@@ -24,18 +21,44 @@ import type { TaskMessage } from '@/types';
 import { MilestoneItem } from '@/components/domain/MilestoneItem';
 import { FileMutationCard } from '@/components/domain/FileMutationCard';
 import { SubagentReportCard } from './SubagentReportCard';
+import {
+  AegisAiAvatar,
+  AegisUserAvatar,
+  AegisSystemAvatar,
+} from '@/components/common/AegisAvatar';
 
 interface MessageBubbleProps {
   message: TaskMessage;
   onOpenFile: (path: string) => void;
 }
 
+function parseMessageContent(content: string): string {
+  if (!content || typeof content !== 'string') return '';
+  const trimmed = content.trim();
+  if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+    try {
+      const parsed = JSON.parse(trimmed);
+      if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.message === 'string') return parsed.message;
+        if (typeof parsed.content === 'string') return parsed.content;
+        if (typeof parsed.response === 'string') return parsed.response;
+        if (typeof parsed.result === 'string') return parsed.result;
+        if (typeof parsed.answer === 'string') return parsed.answer;
+      }
+    } catch {
+      // not valid JSON, fallback to original content
+    }
+  }
+  return content;
+}
+
 export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
   ({ message, onOpenFile }) => {
     const [copied, setCopied] = useState(false);
+    const displayContent = parseMessageContent(message.content);
 
     const handleCopy = () => {
-      navigator.clipboard.writeText(message.content);
+      navigator.clipboard.writeText(displayContent);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     };
@@ -43,12 +66,10 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
     if (message.role === 'user') {
       return (
         <div className="flex items-start gap-3 justify-end select-none animate-in fade-in duration-150">
-          <div className="bg-brand-600 text-white rounded-2xl rounded-tr-xs px-4 py-2.5 max-w-[85%] text-xs leading-relaxed shadow-sm">
-            {message.content}
+          <div className="bg-brand-600 text-white rounded-2xl rounded-tr-xs px-4 py-2.5 max-w-[85%] text-xs leading-relaxed shadow-sm whitespace-pre-wrap">
+            {displayContent}
           </div>
-          <div className="w-7 h-7 rounded-full bg-brand-700 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-xs">
-            <User className="w-4 h-4" />
-          </div>
+          <AegisUserAvatar size="md" glow className="mt-0.5" />
         </div>
       );
     }
@@ -56,24 +77,22 @@ export const MessageBubble: React.FC<MessageBubbleProps> = React.memo(
     if (message.role === 'system') {
       return (
         <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 text-xs flex items-center gap-2.5 select-none shadow-2xs">
-          <Shield className="w-4 h-4 text-brand-600 shrink-0" />
-          <span className="leading-relaxed">{message.content}</span>
+          <AegisSystemAvatar size="sm" />
+          <span className="leading-relaxed">{displayContent}</span>
         </div>
       );
     }
 
     return (
       <div className="flex items-start gap-3 animate-in fade-in duration-150">
-        <div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-brand-600 to-brand-500 text-white flex items-center justify-center shrink-0 text-xs font-bold shadow-2xs select-none">
-          <Bot className="w-4 h-4" />
-        </div>
+        <AegisAiAvatar size="md" glow className="mt-0.5" />
 
         <div className="flex-1 space-y-3 min-w-0">
           <div className="bg-white border border-slate-200 rounded-2xl rounded-tl-xs p-4 text-xs leading-relaxed shadow-xs space-y-3.5">
             {/* Markdown Main Text */}
             <div className="prose prose-sm max-w-none text-slate-800 font-sans leading-relaxed">
               <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeHighlight]}>
-                {message.content}
+                {displayContent}
               </ReactMarkdown>
             </div>
 

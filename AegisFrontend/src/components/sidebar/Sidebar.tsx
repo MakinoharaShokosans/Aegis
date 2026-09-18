@@ -9,45 +9,44 @@ import {
   PanelLeft,
   Plus,
   Settings,
-  Shield,
   BrainCircuit,
   MessageSquare,
   FolderTree,
+  FolderPlus,
   Layers,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useTaskStore } from '@/stores/useTaskStore';
+import { ProjectsTree } from './ProjectsTree';
 import { WorkspaceTree } from './WorkspaceTree';
-import { SessionList } from './SessionList';
 
 export const Sidebar: React.FC = () => {
   const {
     sidebarOpen,
     toggleSidebar,
+    openWorkspaceModal,
     setSettingsModalOpen,
     setMemoryDrawerOpen,
     setContextDrawerOpen,
   } = useUiStore();
 
   const {
-    sessions,
-    activeSessionId,
-    setActiveSession,
-    createSession,
-    deleteSession,
-    memories,
     activeWorkspaceId,
-    workspaces,
+    memories,
+    createSession,
+    setActiveSession,
   } = useWorkspaceStore();
 
   const { setCurrentTaskId } = useTaskStore();
 
-  const [activeTab, setActiveTab] = useState<'sessions' | 'files' | 'memory'>('sessions');
-
-  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
+  const [activeTab, setActiveTab] = useState<'projects' | 'files' | 'memory'>('projects');
 
   const handleNewSession = async () => {
+    if (!activeWorkspaceId) {
+      openWorkspaceModal('create');
+      return;
+    }
     const newSess = await createSession('新任务会话');
     setActiveSession(newSess.id);
     setCurrentTaskId(null);
@@ -55,7 +54,7 @@ export const Sidebar: React.FC = () => {
 
   if (!sidebarOpen) {
     return (
-      <aside className="flex flex-col items-center py-3 px-2 border-r border-slate-200 bg-white w-12 h-screen select-none shrink-0 z-10 shadow-2xs">
+      <aside className="flex flex-col items-center py-3 px-2 border-r border-slate-200 bg-white w-12 h-full select-none shrink-0 z-10 shadow-2xs">
         <button
           onClick={toggleSidebar}
           className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 transition"
@@ -65,8 +64,17 @@ export const Sidebar: React.FC = () => {
         </button>
 
         <button
+          onClick={() => openWorkspaceModal('create')}
+          className="mt-4 p-2 rounded-lg bg-amber-500 hover:bg-amber-600 text-white shadow-xs transition"
+          title="接入本地工程工作区"
+        >
+          <FolderPlus className="w-4 h-4" />
+        </button>
+
+        <button
           onClick={handleNewSession}
-          className="mt-4 p-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition"
+          disabled={!activeWorkspaceId}
+          className="mt-2 p-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white shadow-xs transition disabled:opacity-40"
           title="新建任务会话"
         >
           <Plus className="w-4 h-4" />
@@ -77,10 +85,10 @@ export const Sidebar: React.FC = () => {
         <button
           onClick={() => {
             toggleSidebar();
-            setActiveTab('sessions');
+            setActiveTab('projects');
           }}
           className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-600 hover:text-brand-600 transition"
-          title="会话列表"
+          title="项目与会话树 (Projects)"
         >
           <MessageSquare className="w-4 h-4" />
         </button>
@@ -118,21 +126,10 @@ export const Sidebar: React.FC = () => {
   }
 
   return (
-    <aside className="flex flex-col w-64 h-screen border-r border-slate-200 bg-white select-none shrink-0 z-10">
-      {/* Sidebar Header */}
-      <div className="flex items-center justify-between px-3.5 py-3 border-b border-slate-100">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded-lg bg-brand-600 flex items-center justify-center text-white shadow-2xs">
-            <Shield className="w-3.5 h-3.5" />
-          </div>
-          <div className="flex flex-col">
-            <span className="font-bold text-xs tracking-tight text-slate-900">
-              {activeWorkspace ? activeWorkspace.name : 'Aegis 工作区'}
-            </span>
-            <span className="text-[10px] text-slate-400 font-mono leading-none">Workspace Console</span>
-          </div>
-        </div>
-
+    <aside className="flex flex-col w-64 h-full border-r border-slate-200 bg-white select-none shrink-0 z-10">
+      {/* Sidebar Top Navigation Header */}
+      <div className="flex items-center justify-between px-3.5 py-2.5 border-b border-slate-100">
+        <span className="font-semibold text-xs text-slate-700">资源导航</span>
         <button
           onClick={toggleSidebar}
           className="p-1 rounded-md hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition"
@@ -142,33 +139,19 @@ export const Sidebar: React.FC = () => {
         </button>
       </div>
 
-      {/* New Session Button */}
-      <div className="p-3 pb-2">
-        <button
-          onClick={handleNewSession}
-          className="w-full flex items-center justify-between px-3 py-2 bg-brand-600 hover:bg-brand-700 text-white rounded-lg font-medium text-xs shadow-xs transition"
-        >
-          <div className="flex items-center gap-2">
-            <Plus className="w-4 h-4" />
-            <span>新建任务会话</span>
-          </div>
-          <kbd className="px-1.5 py-0.5 bg-brand-700 text-[10px] rounded text-blue-100 font-mono">⌘N</kbd>
-        </button>
-      </div>
-
       {/* Segmented View Switcher */}
-      <div className="px-3 py-1">
+      <div className="px-3 pt-2.5 pb-1">
         <div className="flex items-center p-0.5 bg-slate-100 rounded-lg text-xs font-medium text-slate-600">
           <button
-            onClick={() => setActiveTab('sessions')}
+            onClick={() => setActiveTab('projects')}
             className={`flex-1 flex items-center justify-center gap-1.5 py-1 rounded-md transition ${
-              activeTab === 'sessions'
+              activeTab === 'projects'
                 ? 'bg-white text-slate-900 shadow-2xs font-semibold'
                 : 'hover:text-slate-900'
             }`}
           >
             <MessageSquare className="w-3.5 h-3.5 text-brand-600" />
-            <span>会话</span>
+            <span>项目树</span>
           </button>
 
           <button
@@ -198,19 +181,8 @@ export const Sidebar: React.FC = () => {
       </div>
 
       {/* Content Area */}
-      <div className="flex-1 flex flex-col min-h-0 p-3 pt-2">
-        {activeTab === 'sessions' && (
-          <SessionList
-            sessions={sessions}
-            activeSessionId={activeSessionId}
-            onSelectSession={(id) => {
-              setActiveSession(id);
-              setCurrentTaskId(null);
-            }}
-            onDeleteSession={deleteSession}
-            onNewSession={handleNewSession}
-          />
-        )}
+      <div className="flex-1 flex flex-col min-h-0 p-3 pt-1">
+        {activeTab === 'projects' && <ProjectsTree />}
 
         {activeTab === 'files' && <WorkspaceTree />}
 
@@ -239,7 +211,13 @@ export const Sidebar: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="font-semibold text-slate-800 truncate">{m.title}</span>
                       <span className="text-[10px] px-1.5 py-0.2 rounded bg-purple-100 text-purple-700 font-mono">
-                        {m.category === 'confirmed_architecture' ? '架构' : m.category === 'project_conventions' ? '规范' : '教训'}
+                        {m.category === 'user_profile'
+                          ? '画像'
+                          : m.category === 'confirmed_architecture'
+                          ? '知识库'
+                          : m.category === 'project_conventions'
+                          ? '准则'
+                          : '避坑'}
                       </span>
                     </div>
                     <p className="text-[11px] text-slate-500 line-clamp-2 mt-1">{m.content}</p>

@@ -4,7 +4,6 @@
 
 import React, { useState } from 'react';
 import {
-  Shield,
   FolderTree,
   ChevronDown,
   Plus,
@@ -16,6 +15,7 @@ import {
   Search,
   Command,
 } from 'lucide-react';
+import { AegisBrand } from '@/components/common/AegisLogo';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 import { useUiStore } from '@/stores/useUiStore';
 
@@ -41,20 +41,12 @@ export const AppHeader: React.FC = () => {
   );
 
   return (
-    <header className="flex items-center justify-between h-12 px-4 border-b border-slate-200 bg-white select-none text-xs z-30 shadow-2xs">
+    <header className="flex items-center justify-between h-12 px-4 border-b border-slate-200 bg-white select-none text-xs z-30 shadow-2xs shrink-0">
       {/* Left: Brand & Workspace Selector */}
       <div className="flex items-center gap-3">
         {/* Brand Shield Logo */}
-        <div className="flex items-center gap-2 pr-3 border-r border-slate-200">
-          <div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-brand-600 to-brand-500 flex items-center justify-center text-white shadow-xs">
-            <Shield className="w-3.5 h-3.5" />
-          </div>
-          <span className="font-bold text-slate-900 tracking-tight text-sm">
-            Aegis<span className="text-brand-600 font-extrabold">Agent</span>
-          </span>
-          <span className="px-1.5 py-0.2 bg-brand-50 border border-brand-200 text-brand-700 font-mono text-[10px] rounded-md font-semibold">
-            v4.0
-          </span>
+        <div className="pr-3 border-r border-slate-200">
+          <AegisBrand size="sm" version="v4.0" />
         </div>
 
         {/* Workspace Dropdown */}
@@ -110,7 +102,17 @@ export const AppHeader: React.FC = () => {
                 ))}
               </div>
 
-              <div className="border-t border-slate-100 mt-1 pt-1.5 px-2">
+              <div className="border-t border-slate-100 mt-1 pt-1.5 px-2 space-y-1">
+                <button
+                  onClick={() => {
+                    setWsDropdownOpen(false);
+                    openWorkspaceModal('manage');
+                  }}
+                  className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-slate-700 hover:bg-slate-50 rounded-lg transition font-medium border border-slate-200"
+                >
+                  <FolderTree className="w-3.5 h-3.5 text-slate-500" />
+                  <span>管理与切换工作区</span>
+                </button>
                 <button
                   onClick={() => {
                     setWsDropdownOpen(false);
