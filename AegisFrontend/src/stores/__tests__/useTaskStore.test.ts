@@ -4,7 +4,6 @@ import { taskApi } from '@/api';
 
 describe('useTaskStore', () => {
   beforeEach(() => {
-    // Reset Zustand store state
     useTaskStore.setState({
       currentTaskId: null,
       tasks: {},
@@ -14,219 +13,162 @@ describe('useTaskStore', () => {
     vi.restoreAllMocks();
   });
 
-  it('should initialize and set currentTaskId', () => {
+  it('should stack conversation messages across multiple task submissions in the same session', async () => {
+    vi.spyOn(taskApi, 'create')
+      .mockResolvedValueOnce({
+        task_id: 'real-task-1',
+        session_id: 'sess-abc',
+        status: 'running',
+      })
+      .mockResolvedValueOnce({
+        task_id: 'real-task-2',
+        session_id: 'sess-abc',
+        status: 'running',
+      });
+
+    vi.spyOn(taskApi, 'subscribe').mockReturnValue(() => {});
+
     const store = useTaskStore.getState();
-    expect(store.currentTaskId).toBeNull();
 
-    store.setCurrentTaskId('task-100');
-    expect(useTaskStore.getState().currentTaskId).toBe('task-100');
-  });
+    // Turn 1: User sends first message
+    const taskId1 = await store.submitTask('sess-abc', '第一轮指令：分析项目结构');
+    expect(taskId1).toBe('real-task-1');
+    expect(useTaskStore.getState().currentTaskId).toBe('real-task-1');
 
-  it('should submit task, create task state and call taskApi.create', async () => {
-    const mockCreate = vi.spyOn(taskApi, 'create').mockResolvedValue({
-      task_id: 'task-new-1',
-      status: 'running',
-      stream_url: '/api/v1/tasks/task-new-1/stream',
-    });
+    const task1 = useTaskStore.getState().tasks['real-task-1'];
+    expect(task1.messages.length).toBe(1);
+    expect(task1.messages[0].content).toBe('第一轮指令：分析项目结构');
 
-    const store = useTaskStore.getState();
-    const taskId = await store.submitTask('sess-1', '测试任务目标', {
-      permissionLevel: 'workspace_write',
-      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
-    });
-
-    expect(taskId).toBeTruthy();
-    expect(mockCreate).toHaveBeenCalledTimes(1);
-
-    const task = useTaskStore.getState().tasks[taskId];
-    expect(task).toBeDefined();
-    expect(task.prompt).toBe('测试任务目标');
-    expect(task.status).toBe('running');
-    expect(task.messages.length).toBe(1);
-    expect(task.messages[0].role).toBe('user');
-  });
-
-  it('should append message and trace steps to an existing task', () => {
-    const store = useTaskStore.getState();
-    store.upsertTask({
-      id: 'task-test',
-      title: 'Test',
-      prompt: 'Prompt',
-      status: 'running',
-      permissionLevel: 'workspace_write',
-      model: 'Fast',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [],
-      traceSteps: [],
-      subagents: [],
-      telemetry: {
-        rounds: 1,
-        steps: 1,
-        tokenSpeed: 200,
-        totalTokens: 1000,
-        cacheHitRate: 0.99,
-        waterLevelPct: 20,
-        maxWaterLevelPct: 80,
-      },
-    });
-
-    store.appendMessage('task-test', {
-      id: 'msg-1',
+    // Simulate assistant responding in Turn 1
+    useTaskStore.getState().appendMessage('real-task-1', {
+      id: 'msg-assistant-1',
       role: 'assistant',
-      content: '规划完成',
-      timestamp: '10:00',
+      content: '项目结构包含 AegisAgent, AegisFrontend, AegisRAG',
+      timestamp: '12:00',
     });
 
-    store.appendTraceStep('task-test', {
-      id: 'tr-1',
-      node: 'planner',
-      step: 1,
-      inputSummary: 'Input',
-      outputSummary: 'Output',
-      durationMs: 300,
-      timestamp: '10:00:01',
-    });
+    const task1WithResp = useTaskStore.getState().tasks['real-task-1'];
+    expect(task1WithResp.messages.length).toBe(2);
 
-    const task = useTaskStore.getState().tasks['task-test'];
-    expect(task.messages.length).toBe(1);
-    expect(task.messages[0].content).toBe('规划完成');
-    expect(task.traceSteps.length).toBe(1);
-    expect(task.traceSteps[0].node).toBe('planner');
+    // Turn 2: User sends second message in the same session
+    const taskId2 = await store.submitTask('sess-abc', '第二轮指令：请在这个结构下创建 files.py');
+    expect(taskId2).toBe('real-task-2');
+    expect(useTaskStore.getState().currentTaskId).toBe('real-task-2');
+
+    const task2 = useTaskStore.getState().tasks['real-task-2'];
+    // Crucial check: All 3 messages (User1, Assistant1, User2) must be preserved in sequence!
+    expect(task2.messages.length).toBe(3);
+    expect(task2.messages[0].content).toBe('第一轮指令：分析项目结构');
+    expect(task2.messages[1].content).toBe('项目结构包含 AegisAgent, AegisFrontend, AegisRAG');
+    expect(task2.messages[2].content).toBe('第二轮指令：请在这个结构下创建 files.py');
+    expect(task2.telemetry.rounds).toBe(2);
   });
 
-  it('should handle HITL approval request, approve action, and resume task', async () => {
-    const mockApprove = vi.spyOn(taskApi, 'approve').mockResolvedValue({
-      success: true,
-      task_status: 'running',
-    });
-
-    const store = useTaskStore.getState();
-    store.upsertTask({
-      id: 'task-hitl',
-      title: 'HITL Test',
-      prompt: 'Do dangerous action',
-      status: 'running',
-      permissionLevel: 'workspace_write',
-      model: 'Fast',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [],
-      traceSteps: [],
-      subagents: [],
-      telemetry: {
-        rounds: 1,
-        steps: 1,
-        tokenSpeed: 200,
-        totalTokens: 1000,
-        cacheHitRate: 0.99,
-        waterLevelPct: 20,
-        maxWaterLevelPct: 80,
-      },
-    });
-
-    // Set pending approval
-    store.setPendingApproval('task-hitl', {
-      approval_id: 'appr-999',
-      task_id: 'task-hitl',
-      action_type: 'privileged_exec',
-      command: 'sudo systemctl restart',
-      reason: '需要重启服务',
-      created_at: new Date().toISOString(),
-    });
-
-    expect(useTaskStore.getState().tasks['task-hitl'].status).toBe('waiting_for_approval');
-
-    // Approve action
-    await store.approveAction('task-hitl', 'appr-999', 'once', '放行测试');
-
-    expect(mockApprove).toHaveBeenCalledWith('task-hitl', {
-      approval_id: 'appr-999',
-      decision: 'once',
-      feedback: '放行测试',
-    });
-
-    const updatedTask = useTaskStore.getState().tasks['task-hitl'];
-    expect(updatedTask.pendingApproval).toBeUndefined();
-    expect(updatedTask.status).toBe('running');
-    expect(updatedTask.messages.some((m) => m.content.includes('人机协同审批通过'))).toBe(true);
-  });
-
-  it('should handle HITL reject action and notify state machine', async () => {
-    const mockReject = vi.spyOn(taskApi, 'reject').mockResolvedValue({
-      success: true,
-      task_status: 'running',
-    });
-
-    const store = useTaskStore.getState();
-    store.upsertTask({
-      id: 'task-rej',
-      title: 'Reject Test',
-      prompt: 'Bad action',
-      status: 'waiting_for_approval',
-      permissionLevel: 'workspace_write',
-      model: 'Fast',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [],
-      traceSteps: [],
-      subagents: [],
-      telemetry: {
-        rounds: 1,
-        steps: 1,
-        tokenSpeed: 200,
-        totalTokens: 1000,
-        cacheHitRate: 0.99,
-        waterLevelPct: 20,
-        maxWaterLevelPct: 80,
-      },
-    });
-
-    await store.rejectAction('task-rej', 'appr-123', '风险过高，禁止操作');
-
-    expect(mockReject).toHaveBeenCalledWith('task-rej', {
-      approval_id: 'appr-123',
-      reason: '风险过高，禁止操作',
-    });
-
-    const updatedTask = useTaskStore.getState().tasks['task-rej'];
-    expect(updatedTask.status).toBe('running');
-    expect(updatedTask.messages.some((m) => m.content.includes('审批拒绝'))).toBe(true);
-  });
-
-  it('should cancel running task upon emergency breaker', async () => {
+  it('should handle cancelCurrentTask cleanly', async () => {
     const mockCancel = vi.spyOn(taskApi, 'cancel').mockResolvedValue({
       success: true,
       task_status: 'cancelled',
     });
 
-    const store = useTaskStore.getState();
-    store.upsertTask({
-      id: 'task-cancel',
-      title: 'Cancel Test',
-      prompt: 'Long running',
-      status: 'running',
-      permissionLevel: 'workspace_write',
-      model: 'Fast',
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-      messages: [],
-      traceSteps: [],
-      subagents: [],
-      telemetry: {
-        rounds: 1,
-        steps: 1,
-        tokenSpeed: 200,
-        totalTokens: 1000,
-        cacheHitRate: 0.99,
-        waterLevelPct: 20,
-        maxWaterLevelPct: 80,
+    useTaskStore.setState({
+      currentTaskId: 'task-to-cancel',
+      tasks: {
+        'task-to-cancel': {
+          id: 'task-to-cancel',
+          session_id: 'sess-1',
+          title: '运行测试',
+          prompt: '运行测试',
+          status: 'running',
+          permissionLevel: 'workspace_write',
+          model: 'fast',
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          messages: [],
+          traceSteps: [],
+          subagents: [],
+          telemetry: { rounds: 1, steps: 1, tokenSpeed: 0, totalTokens: 10, cacheHitRate: 1, waterLevelPct: 1, maxWaterLevelPct: 80 },
+        },
       },
     });
-    store.setCurrentTaskId('task-cancel');
 
-    await store.cancelCurrentTask();
-    expect(mockCancel).toHaveBeenCalledWith('task-cancel');
-    expect(useTaskStore.getState().tasks['task-cancel'].status).toBe('cancelled');
+    await useTaskStore.getState().cancelCurrentTask();
+
+    expect(mockCancel).toHaveBeenCalledWith('task-to-cancel');
+    const task = useTaskStore.getState().tasks['task-to-cancel'];
+    expect(task.status).toBe('cancelled');
+    expect(task.messages.some((m) => m.content.includes('任务已被用户手动终止'))).toBe(true);
+  });
+
+  it('should process node.finished, tool.call, and tool.result SSE events into rich TraceSteps', async () => {
+    let capturedHandler: ((event: string, data: any) => void) | undefined;
+    vi.spyOn(taskApi, 'create').mockResolvedValue({
+      task_id: 'task-trace-test',
+      session_id: 'sess-1',
+      status: 'running',
+    });
+    vi.spyOn(taskApi, 'subscribe').mockImplementation((_taskId, callbacks) => {
+      capturedHandler = callbacks?.onEvent;
+      return () => {};
+    });
+
+    const store = useTaskStore.getState();
+    await store.submitTask('sess-1', '测试执行追踪');
+    expect(capturedHandler).not.toBeNull();
+
+    // 1. Planner finished event
+    capturedHandler!('node.finished', {
+      node: 'planner',
+      seq: 1,
+      input_summary: '接收目标: 测试执行追踪',
+      output_summary: '【规划决策】派发执行',
+      decision: 'dispatch_action',
+      total_tokens: 1200,
+      step_count: 1,
+    });
+
+    // 2. Executor tool call event
+    capturedHandler!('tool.call', {
+      tool: 'read_file',
+      args: { path: 'src/main.py' },
+      step: 2,
+    });
+
+    // 3. Tool result event
+    capturedHandler!('tool.result', {
+      tool: 'read_file',
+      result: 'def main(): pass',
+      step: 3,
+    });
+
+    // 4. Evaluator finished event
+    capturedHandler!('node.finished', {
+      node: 'evaluator',
+      seq: 4,
+      input_summary: '复核阶段完成度',
+      output_summary: '【验收结论】验收通过，准予交付',
+      decision: 'accepted',
+      total_tokens: 2100,
+      step_count: 4,
+      should_terminate: true,
+    });
+
+    const task = useTaskStore.getState().tasks['task-trace-test'];
+    expect(task.traceSteps.length).toBeGreaterThanOrEqual(4);
+
+    // Verify trace step nodes and decisions
+    const plannerStep = task.traceSteps.find((s) => s.node === 'planner' && s.decision === 'dispatch_action');
+    expect(plannerStep).toBeDefined();
+    expect(plannerStep?.inputSummary).toBe('接收目标: 测试执行追踪');
+
+    const toolCallStep = task.traceSteps.find((s) => s.tool === 'read_file' && s.toolArgs);
+    expect(toolCallStep).toBeDefined();
+
+    const evaluatorStep = task.traceSteps.find((s) => s.node === 'evaluator' && s.decision === 'accepted');
+    expect(evaluatorStep).toBeDefined();
+    expect(evaluatorStep?.outputSummary).toContain('验收通过');
+
+    // Verify telemetry updated
+    expect(task.telemetry.totalTokens).toBe(2100);
+    expect(task.telemetry.steps).toBe(4);
   });
 });

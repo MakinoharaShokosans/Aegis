@@ -134,7 +134,48 @@ async def preview_context(
     )
 
     context_cfg = get_config().runtime.context
+    guardrails_cfg = get_config().runtime.guardrails
     active_tokens = await memory.store.get_active_turns_token_sum(session_id)
+
+    from agent_runtime.tokenizer import count_tokens
+
+    # 1. 第一层：系统提示词与规则（基础底模指令约 850 Token）
+    system_tokens = 850
+
+    # 2. 第二层：工作区长期记忆与用户画像
+    workspace_mem_text = "\n".join(
+        workspace_memory.user_profile
+        + workspace_memory.confirmed_architecture
+        + workspace_memory.project_conventions
+        + [
+            f"{item.action} {item.failure_reason} {item.conclusion}"
+            for item in workspace_memory.global_failed_attempts
+        ]
+    )
+    workspace_mem_tokens = count_tokens(workspace_mem_text)
+
+    # 3. 第三层：会话级压缩记忆与关键事实
+    session_mem_text = (
+        session_memory.summary
+        + "\n"
+        + "\n".join(session_memory.confirmed_facts)
+        + "\n"
+        + "\n".join(
+            f"{item.action} {item.failure_reason} {item.conclusion}"
+            for item in session_memory.failed_attempts
+        )
+    )
+    session_mem_tokens = count_tokens(session_mem_text)
+
+    # 4. 第四层：活跃滑窗轮次
+    active_turns_tokens = active_tokens
+
+    total_context_tokens = (
+        system_tokens + workspace_mem_tokens + session_mem_tokens + active_turns_tokens
+    )
+    water_level_pct = round(
+        (total_context_tokens / max(1, context_cfg.session_token_limit)) * 100, 1
+    )
 
     return ContextPreview(
         workspace={
@@ -143,6 +184,7 @@ async def preview_context(
             "root_path": workspace.root_path,
         },
         workspace_memory={
+            "user_profile": list(workspace_memory.user_profile),
             "confirmed_architecture": list(workspace_memory.confirmed_architecture),
             "project_conventions": list(workspace_memory.project_conventions),
             "global_failed_attempts": [
@@ -160,7 +202,17 @@ async def preview_context(
         budget={
             "session_token_limit": context_cfg.session_token_limit,
             "active_tokens": active_tokens,
+            "total_context_tokens": total_context_tokens,
+            "water_level_pct": water_level_pct,
             "high_watermark": context_cfg.compaction_high_watermark,
             "compaction_ratio": context_cfg.compaction_ratio,
+            "max_task_budget_tokens": guardrails_cfg.max_total_tokens,
+        },
+        layers_breakdown={
+            "system_tokens": system_tokens,
+            "workspace_memory_tokens": workspace_mem_tokens,
+            "session_memory_tokens": session_mem_tokens,
+            "active_turns_tokens": active_turns_tokens,
+            "total_context_tokens": total_context_tokens,
         },
     )

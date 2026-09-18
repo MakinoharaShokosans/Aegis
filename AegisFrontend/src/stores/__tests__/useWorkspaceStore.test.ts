@@ -8,6 +8,7 @@ describe('useWorkspaceStore', () => {
       workspaces: [],
       activeWorkspaceId: null,
       isLoadingWorkspaces: false,
+      workspaceSessions: {},
       sessions: [],
       activeSessionId: null,
       isLoadingSessions: false,
@@ -123,5 +124,79 @@ describe('useWorkspaceStore', () => {
 
     expect(mockSave).toHaveBeenCalledWith('ws-1', 'src/app.py', 'final code');
     expect(useWorkspaceStore.getState().tabs[0].isModified).toBe(false);
+  });
+
+  it('should fetch session turns and set currentTaskId on setActiveSession', async () => {
+    const mockTurns = [
+      {
+        id: '1',
+        session_id: 'sess-1',
+        turn_index: 1,
+        role: 'user' as const,
+        content: '历史提问 1',
+        token_count: 50,
+        created_at: new Date().toISOString(),
+      },
+      {
+        id: '2',
+        session_id: 'sess-1',
+        turn_index: 2,
+        role: 'assistant' as const,
+        content: '历史答复 1',
+        token_count: 120,
+        created_at: new Date().toISOString(),
+      },
+    ];
+
+    vi.spyOn(sessionApi, 'getTurns').mockResolvedValue(mockTurns);
+
+    const store = useWorkspaceStore.getState();
+    await store.setActiveSession('sess-1');
+
+    expect(useWorkspaceStore.getState().activeSessionId).toBe('sess-1');
+    const taskId = 'sess-history-sess-1';
+    const { useTaskStore } = await import('../useTaskStore');
+    expect(useTaskStore.getState().currentTaskId).toBe(taskId);
+    expect(useTaskStore.getState().tasks[taskId].messages.length).toBe(2);
+    expect(useTaskStore.getState().tasks[taskId].messages[0].content).toBe('历史提问 1');
+  });
+
+  it('should support creating and deleting sessions under specific workspaces in tree', async () => {
+    const mockCreatedSession = {
+      id: 'sess-new-1',
+      workspace_id: 'ws-2',
+      title: '在线测视力网页构想',
+      status: 'active' as const,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+
+    vi.spyOn(sessionApi, 'create').mockResolvedValue(mockCreatedSession);
+    vi.spyOn(sessionApi, 'delete').mockResolvedValue({ success: true, session_id: 'sess-new-1' });
+
+    useWorkspaceStore.setState({
+      workspaces: [
+        { id: 'ws-1', name: 'Aegis', root_path: '/path/1', created_at: '', updated_at: '' },
+        { id: 'ws-2', name: 'EyesPro', root_path: '/path/2', created_at: '', updated_at: '' },
+      ],
+      activeWorkspaceId: 'ws-1',
+      workspaceSessions: {
+        'ws-1': [],
+        'ws-2': [],
+      },
+    });
+
+    const store = useWorkspaceStore.getState();
+    const created = await store.createSession('在线测视力网页构想', 'ws-2');
+
+    expect(created.id).toBe('sess-new-1');
+    expect(useWorkspaceStore.getState().activeWorkspaceId).toBe('ws-2');
+    expect(useWorkspaceStore.getState().activeSessionId).toBe('sess-new-1');
+    expect(useWorkspaceStore.getState().workspaceSessions['ws-2'].length).toBe(1);
+
+    // Delete session
+    await store.deleteSession('sess-new-1', 'ws-2');
+    expect(useWorkspaceStore.getState().workspaceSessions['ws-2'].length).toBe(0);
+    expect(useWorkspaceStore.getState().activeSessionId).toBeNull();
   });
 });

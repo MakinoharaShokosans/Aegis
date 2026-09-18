@@ -38,6 +38,9 @@ __all__ = [
     "FileTreeResponse",
     "FileContentOut",
     "FileContentUpdate",
+    "DirectoryEntry",
+    "QuickLocation",
+    "DirectoryBrowseResponse",
     "RagIngestRequest",
     "RagIngestResponse",
     "RagRetrieveRequest",
@@ -104,11 +107,18 @@ class WorkspaceOut(BaseModel):
 
 
 class FactCreate(BaseModel):
-    """事实/规范上浮请求。"""
+    """事实/规范/用户画像上浮请求。"""
 
-    fact: str = Field(description="要沉淀的技术事实")
-    category: Literal["convention", "architecture"] = Field(
-        default="architecture", description="类别：编码规范或架构定论"
+    fact: str = Field(description="要沉淀的知识事实、画像偏好或工程规范")
+    category: Literal[
+        "convention",
+        "architecture",
+        "user_profile",
+        "knowledge",
+        "project_conventions",
+        "confirmed_architecture",
+    ] = Field(
+        default="architecture", description="类别：用户画像、编码规范或架构/知识库定论"
     )
 
 
@@ -127,8 +137,9 @@ class MemoryView(BaseModel):
     updated_at: float = Field(default=0.0, description="最后更新时间")
     summary: str = Field(default="", description="已压缩摘要（会话级）")
     compacted_until_turn_id: int = Field(default=0, description="压缩水位线（会话级）")
-    project_conventions: List[str] = Field(default_factory=list, description="项目规范（工作区级）")
-    confirmed_architecture: List[str] = Field(default_factory=list, description="架构定论（工作区级）")
+    user_profile: List[str] = Field(default_factory=list, description="用户画像与个性偏好")
+    project_conventions: List[str] = Field(default_factory=list, description="工程准则与业务规范（工作区级）")
+    confirmed_architecture: List[str] = Field(default_factory=list, description="知识库与领域架构定论（工作区级）")
     confirmed_facts: List[str] = Field(default_factory=list, description="已确认事实")
     failed_attempts: List[Dict[str, Any]] = Field(default_factory=list, description="踩坑记录")
     last_action_target: Dict[str, List[str]] = Field(default_factory=dict, description="上轮操作实体")
@@ -172,6 +183,9 @@ class ContextPreview(BaseModel):
     session_memory: Dict[str, Any] = Field(default_factory=dict)
     active_turns: List[TurnOut] = Field(default_factory=list)
     budget: Dict[str, Any] = Field(default_factory=dict)
+    layers_breakdown: Dict[str, int] = Field(
+        default_factory=dict, description="四层上下文各自的物理 Token 计量"
+    )
 
 
 # ==============================================================================
@@ -348,6 +362,36 @@ class FileContentUpdate(BaseModel):
 
     path: str = Field(description="目标相对路径")
     content: str = Field(description="要写入的新文本内容")
+
+
+# ==============================================================================
+# 本地目录选择与文件系统浏览
+# ==============================================================================
+
+class DirectoryEntry(BaseModel):
+    """目录选择器项。"""
+
+    name: str = Field(description="目录名称")
+    path: str = Field(description="物理绝对路径")
+    is_directory: bool = Field(default=True, description="是否为目录")
+    has_subdirectories: bool = Field(default=False, description="是否包含子目录")
+
+
+class QuickLocation(BaseModel):
+    """常用快捷路径。"""
+
+    label: str = Field(description="展示名称")
+    path: str = Field(description="物理绝对路径")
+
+
+class DirectoryBrowseResponse(BaseModel):
+    """目录浏览与选择响应。"""
+
+    current_path: str = Field(description="当前所在目录绝对路径")
+    parent_path: Optional[str] = Field(default=None, description="上一级父目录路径")
+    is_root: bool = Field(default=False, description="是否已为系统根目录")
+    directories: List[DirectoryEntry] = Field(default_factory=list, description="子目录列表")
+    quick_locations: List[QuickLocation] = Field(default_factory=list, description="常用快捷路径列表")
 
 
 # ==============================================================================

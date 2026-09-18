@@ -5,10 +5,8 @@
 import React from 'react';
 import {
   ShieldCheck,
-  Zap,
   Activity,
   Layers,
-  Sparkles,
   Command,
   BookOpen,
 } from 'lucide-react';
@@ -23,10 +21,12 @@ export const StatusBar: React.FC = () => {
 
   const currentTask = currentTaskId ? tasks[currentTaskId] : null;
   const currentWorkspace = workspaces.find((w) => w.id === activeWorkspaceId);
-  const telemetry = currentTask?.telemetry;
+  const totalTokens = currentTask?.telemetry?.totalTokens || 0;
+  const contextTokens = currentTask?.telemetry?.contextTokens ?? (currentTask ? 850 : 0);
+  const waterLevelPct = currentTask?.telemetry?.waterLevelPct ?? 0;
 
   return (
-    <footer className="h-7 px-3 bg-white border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 select-none z-20">
+    <footer className="h-7 px-3 bg-white border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-500 select-none z-20 shrink-0">
       {/* Left: Backend connection & Session State */}
       <div className="flex items-center gap-3">
         <div className="flex items-center gap-1.5 text-emerald-600 font-medium">
@@ -52,45 +52,33 @@ export const StatusBar: React.FC = () => {
         )}
       </div>
 
-      {/* Center: Live Telemetry (Speed, Cache, Water level) */}
-      <div className="hidden md:flex items-center gap-4">
-        {telemetry && (
-          <>
-            <div className="flex items-center gap-1 text-slate-600">
-              <Zap className="w-3 h-3 text-amber-500" />
-              <span>速度:</span>
-              <span className="font-mono font-medium text-slate-800">{telemetry.tokenSpeed} tok/s</span>
-            </div>
+      {/* Center: Context Window Watermark & Task Execution Tokens */}
+      <div className="hidden md:flex items-center gap-3">
+        <button
+          onClick={() => setContextDrawerOpen(true)}
+          className="flex items-center gap-1.5 hover:text-brand-600 transition"
+          title="点击打开四层上下文装配透视器"
+        >
+          <Layers className="w-3.5 h-3.5 text-brand-500" />
+          <span>上下文窗口:</span>
+          <span className="font-mono font-medium text-slate-800">
+            {contextTokens.toLocaleString()} / 32,000
+          </span>
+          <span className="text-[10px] text-slate-400 font-mono">({waterLevelPct}%)</span>
+        </button>
 
-            <div className="flex items-center gap-1 text-slate-600">
-              <Sparkles className="w-3 h-3 text-blue-500" />
-              <span>缓存命中:</span>
-              <span className="font-mono font-medium text-slate-800">{(telemetry.cacheHitRate * 100).toFixed(1)}%</span>
-            </div>
+        <div className="h-3 w-[1px] bg-slate-200" />
 
-            <button
-              onClick={() => setContextDrawerOpen(true)}
-              className="flex items-center gap-1.5 hover:text-brand-600 transition"
-              title="查看 Token 水位与四层上下文分布"
-            >
-              <Layers className="w-3 h-3 text-brand-500" />
-              <span>水位:</span>
-              <div className="w-16 h-1.5 bg-slate-100 rounded-full overflow-hidden border border-slate-200">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    telemetry.waterLevelPct > 70
-                      ? 'bg-amber-500'
-                      : telemetry.waterLevelPct > 85
-                      ? 'bg-rose-500'
-                      : 'bg-emerald-500'
-                  }`}
-                  style={{ width: `${Math.min(telemetry.waterLevelPct, 100)}%` }}
-                />
-              </div>
-              <span className="font-mono font-medium text-slate-800">{telemetry.waterLevelPct}%</span>
-            </button>
-          </>
-        )}
+        <div
+          className="flex items-center gap-1.5 text-slate-600"
+          title="当前任务全生命周期思考与工具调用的实际物理 LLM Token 累计消耗 (上限 200k 预算)"
+        >
+          <Activity className="w-3.5 h-3.5 text-amber-500" />
+          <span>任务消耗:</span>
+          <span className="font-mono font-medium text-slate-800">
+            {totalTokens.toLocaleString()} tokens
+          </span>
+        </div>
       </div>
 
       {/* Right: Sidecar badges & Quick Shortcuts */}

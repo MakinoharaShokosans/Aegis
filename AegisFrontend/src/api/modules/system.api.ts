@@ -7,6 +7,7 @@ import type {
   HealthResponse,
   SystemIntrospection,
   ToolMetadata,
+  McpServerInfo,
 } from '@/types';
 
 export const systemApi = {
@@ -27,29 +28,29 @@ export const systemApi = {
   /**
    * List all registered tools and their security levels
    */
-  getTools(): Promise<{ tools: ToolMetadata[] }> {
-    return httpClient.get<{ tools: ToolMetadata[] }>('/api/v1/introspection/tools');
+  getTools(): Promise<ToolMetadata[]> {
+    return httpClient.get<ToolMetadata[]>('/api/v1/tools');
   },
 
   /**
    * List available skills
    */
-  getSkills(): Promise<{ skills: Array<{ name: string; description: string }> }> {
-    return httpClient.get<{ skills: Array<{ name: string; description: string }> }>('/api/v1/introspection/skills');
+  getSkills(): Promise<Array<{ name: string; description: string; triggers?: string[]; trust?: string; source?: string }>> {
+    return httpClient.get<Array<{ name: string; description: string; triggers?: string[]; trust?: string; source?: string }>>('/api/v1/skills');
   },
 
   /**
    * List MCP servers and their statuses
    */
-  getMcps(): Promise<{ mcps: Array<{ name: string; status: string; tools_count: number }> }> {
-    return httpClient.get<{ mcps: Array<{ name: string; status: string; tools_count: number }> }>('/api/v1/introspection/mcps');
+  getMcps(): Promise<McpServerInfo[]> {
+    return httpClient.get<McpServerInfo[]>('/api/v1/mcp/servers');
   },
 
   /**
    * Masked system configuration
    */
   getConfig(): Promise<{ config: Record<string, unknown> }> {
-    return httpClient.get<{ config: Record<string, unknown> }>('/api/v1/introspection/config');
+    return httpClient.get<{ config: Record<string, unknown> }>('/api/v1/config');
   },
 
   /**
@@ -77,6 +78,6 @@ export const systemApi = {
       }>;
     };
   }> {
-    return httpClient.get('/api/v1/introspection/models');
+    return httpClient.get('/api/v1/models');
   },
 };

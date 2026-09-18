@@ -5,10 +5,13 @@ import type {
   Session,
   FileNode,
   OpenTab,
+  TaskMessage,
   WorkspaceCreatePayload,
   WorkspaceUpdatePayload,
 } from '@/types';
 import { workspaceApi, sessionApi, fileApi } from '@/api';
+import { useUiStore } from './useUiStore';
+import { useTaskStore } from './useTaskStore';
 
 interface WorkspaceState {
   // Workspaces
@@ -18,6 +21,7 @@ interface WorkspaceState {
   workspaceError: string | null;
 
   // Sessions
+  workspaceSessions: Record<string, Session[]>;
   sessions: Session[];
   activeSessionId: string | null;
   isLoadingSessions: boolean;
@@ -43,9 +47,9 @@ interface WorkspaceState {
 
   // Actions - Sessions
   fetchSessions: (workspaceId: string) => Promise<void>;
-  setActiveSession: (id: string | null) => void;
-  createSession: (title?: string) => Promise<Session>;
-  deleteSession: (id: string) => Promise<void>;
+  setActiveSession: (id: string | null) => Promise<void>;
+  createSession: (title?: string, workspaceId?: string) => Promise<Session>;
+  deleteSession: (id: string, workspaceId?: string) => Promise<void>;
 
   // Actions - Memories
   fetchMemories: (workspaceId: string) => Promise<void>;
@@ -69,6 +73,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   isLoadingWorkspaces: false,
   workspaceError: null,
 
+  workspaceSessions: {},
   sessions: [],
   activeSessionId: null,
   isLoadingSessions: false,
@@ -85,26 +90,30 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchWorkspaces: async () => {
     set({ isLoadingWorkspaces: true, workspaceError: null });
     try {
-      let data = await workspaceApi.list();
-      // 如果后端工作区为空，自动初始化主工程默认工作区
-      if (data.length === 0) {
-        try {
-          const defaultWs = await workspaceApi.create({
-            name: 'Aegis Core',
-            root_path: '/home/Skualeilu/Projects/Aegis',
-            description: 'AegisAgent 智能体核心运行时工作区',
-          });
-          data = [defaultWs];
-        } catch {
-          // 忽略创建失败
-        }
-      }
-
+      const data = await workspaceApi.list();
       set({ workspaces: data, isLoadingWorkspaces: false });
+
+      // Fetch sessions for all workspaces in parallel
+      const sessionMap: Record<string, Session[]> = {};
+      await Promise.allSettled(
+        data.map(async (ws) => {
+          try {
+            const list = await sessionApi.list(ws.id);
+            sessionMap[ws.id] = list;
+          } catch {
+            sessionMap[ws.id] = [];
+          }
+        })
+      );
+      set({ workspaceSessions: sessionMap });
+
       if (data.length > 0) {
         const currentActive = get().activeWorkspaceId;
         const targetId = currentActive && data.some((w) => w.id === currentActive) ? currentActive : data[0].id;
         await get().setActiveWorkspace(targetId);
+      } else {
+        // 无工作区时，弹出工作区创建引导弹窗，让用户显式确认路径与参数
+        useUiStore.getState().openWorkspaceModal('create');
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : '连接后端工作区失败';
@@ -113,7 +122,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   setActiveWorkspace: async (id: string) => {
-    set({ activeWorkspaceId: id });
+    const currentSessions = get().workspaceSessions[id] || [];
+    set({ activeWorkspaceId: id, sessions: currentSessions });
     await Promise.allSettled([
       get().fetchSessions(id),
       get().fetchMemories(id),
@@ -123,7 +133,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
 
   createWorkspace: async (payload: WorkspaceCreatePayload) => {
     const ws = await workspaceApi.create(payload);
-    set((state) => ({ workspaces: [ws, ...state.workspaces] }));
+    set((state) => ({
+      workspaces: [ws, ...state.workspaces],
+      workspaceSessions: { ...state.workspaceSessions, [ws.id]: [] },
+    }));
     await get().setActiveWorkspace(ws.id);
     return ws;
   },
@@ -139,9 +152,12 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     await workspaceApi.delete(id);
     set((state) => {
       const remaining = state.workspaces.filter((w) => w.id !== id);
+      const updatedSessions = { ...state.workspaceSessions };
+      delete updatedSessions[id];
       const nextActive = remaining.length > 0 ? remaining[0].id : null;
       return {
         workspaces: remaining,
+        workspaceSessions: updatedSessions,
         activeWorkspaceId: nextActive,
       };
     });
@@ -154,47 +170,176 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   fetchSessions: async (workspaceId: string) => {
     set({ isLoadingSessions: true });
     try {
-      let sessions = await sessionApi.list(workspaceId);
-      if (sessions.length === 0) {
-        try {
-          const defaultSession = await sessionApi.create(workspaceId, '默认会话');
-          sessions = [defaultSession];
-        } catch {
-          // 忽略创建失败
-        }
-      }
-      set({ sessions, isLoadingSessions: false });
-      if (sessions.length > 0) {
-        const currentSession = get().activeSessionId;
-        if (!currentSession || !sessions.some((s) => s.id === currentSession)) {
-          set({ activeSessionId: sessions[0].id });
+      const sessions = await sessionApi.list(workspaceId);
+      set((state) => ({
+        workspaceSessions: {
+          ...state.workspaceSessions,
+          [workspaceId]: sessions,
+        },
+        sessions: state.activeWorkspaceId === workspaceId ? sessions : state.sessions,
+        isLoadingSessions: false,
+      }));
+      if (get().activeWorkspaceId === workspaceId) {
+        if (sessions.length > 0) {
+          const currentSession = get().activeSessionId;
+          const targetSessionId =
+            currentSession && sessions.some((s) => s.id === currentSession)
+              ? currentSession
+              : sessions[0].id;
+          await get().setActiveSession(targetSessionId);
+        } else {
+          await get().setActiveSession(null);
         }
       }
     } catch {
-      set({ sessions: [], isLoadingSessions: false });
+      set((state) => ({
+        workspaceSessions: {
+          ...state.workspaceSessions,
+          [workspaceId]: [],
+        },
+        sessions: state.activeWorkspaceId === workspaceId ? [] : state.sessions,
+        isLoadingSessions: false,
+      }));
+      if (get().activeWorkspaceId === workspaceId) {
+        await get().setActiveSession(null);
+      }
     }
   },
 
-  setActiveSession: (id: string | null) => set({ activeSessionId: id }),
+  setActiveSession: async (id: string | null) => {
+    set({ activeSessionId: id });
+    if (!id) {
+      useTaskStore.getState().setCurrentTaskId(null);
+      return;
+    }
 
-  createSession: async (title?: string) => {
-    const wsId = get().activeWorkspaceId;
-    if (!wsId) throw new Error('No active workspace');
-    const session = await sessionApi.create(wsId, title);
-    set((state) => ({ sessions: [session, ...state.sessions], activeSessionId: session.id }));
+    // 1. 如果任务 Store 中已有该会话的任务及消息，优先复用活跃上下文
+    const existingTask = Object.values(useTaskStore.getState().tasks).find(
+      (t) => t.session_id === id
+    );
+    if (existingTask && existingTask.messages.length > 0) {
+      useTaskStore.getState().setCurrentTaskId(existingTask.id);
+      return;
+    }
+
+    try {
+      const turns = await sessionApi.getTurns(id);
+      if (turns && turns.length > 0) {
+        const taskId = `sess-history-${id}`;
+        const messages: TaskMessage[] = turns.map((t) => ({
+          id: `turn-${t.id}`,
+          role: t.role,
+          content: t.content,
+          timestamp: new Date(t.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          tokensUsed: t.token_count,
+        }));
+
+        const totalSessionTokens = turns.reduce((acc, cur) => acc + (cur.token_count || 0), 0);
+        const ctxTokens = 850 + (get().memories.length * 60) + totalSessionTokens;
+        const waterPct = Number(((ctxTokens / 32000) * 100).toFixed(1));
+
+        useTaskStore.getState().upsertTask({
+          id: taskId,
+          session_id: id,
+          title: turns[0]?.content?.slice(0, 30) || '历史任务会话',
+          prompt: turns[0]?.content || '',
+          status: 'completed',
+          permissionLevel: 'workspace_write',
+          model: 'Dual-Tier Model Gateway',
+          createdAt: turns[0]?.created_at || new Date().toISOString(),
+          updatedAt: turns[turns.length - 1]?.created_at || new Date().toISOString(),
+          messages,
+          traceSteps: [],
+          subagents: [],
+          telemetry: {
+            rounds: turns.length,
+            steps: turns.length,
+            tokenSpeed: 0,
+            totalTokens: totalSessionTokens,
+            contextTokens: ctxTokens,
+            maxContextTokens: 32000,
+            maxBudgetTokens: 200000,
+            cacheHitRate: 1.0,
+            waterLevelPct: waterPct,
+            maxWaterLevelPct: 80,
+          },
+        });
+        useTaskStore.getState().setCurrentTaskId(taskId);
+      } else {
+        useTaskStore.getState().setCurrentTaskId(null);
+      }
+    } catch (err) {
+      console.error('Failed to load session turns:', err);
+      useTaskStore.getState().setCurrentTaskId(null);
+    }
+  },
+
+  createSession: async (title?: string, workspaceId?: string) => {
+    const wsId = workspaceId || get().activeWorkspaceId;
+    if (!wsId) throw new Error('请先选择或创建工作区');
+    const session = await sessionApi.create(wsId, title || '新任务会话');
+    
+    set((state) => {
+      const currentList = state.workspaceSessions[wsId] || [];
+      const updatedList = [session, ...currentList.filter((s) => s.id !== session.id)];
+      const updatedMap = {
+        ...state.workspaceSessions,
+        [wsId]: updatedList,
+      };
+      const isActiveWorkspace = state.activeWorkspaceId === wsId;
+      return {
+        workspaceSessions: updatedMap,
+        sessions: isActiveWorkspace ? updatedList : state.sessions,
+        activeWorkspaceId: wsId,
+        activeSessionId: session.id,
+      };
+    });
+    
+    useTaskStore.getState().setCurrentTaskId(null);
     return session;
   },
 
-  deleteSession: async (id: string) => {
+  deleteSession: async (id: string, workspaceId?: string) => {
+    const state = get();
+    let targetWsId = workspaceId;
+    if (!targetWsId) {
+      for (const [wsId, sessList] of Object.entries(state.workspaceSessions)) {
+        if (sessList.some((s) => s.id === id)) {
+          targetWsId = wsId;
+          break;
+        }
+      }
+    }
+    if (!targetWsId) {
+      targetWsId = state.activeWorkspaceId || undefined;
+    }
+
     await sessionApi.delete(id);
-    set((state) => {
-      const remaining = state.sessions.filter((s) => s.id !== id);
-      const nextActive = remaining.length > 0 ? remaining[0].id : null;
+
+    set((currentState) => {
+      const updatedMap = { ...currentState.workspaceSessions };
+      if (targetWsId && updatedMap[targetWsId]) {
+        updatedMap[targetWsId] = updatedMap[targetWsId].filter((s) => s.id !== id);
+      }
+      
+      const currentSessions = currentState.activeWorkspaceId && updatedMap[currentState.activeWorkspaceId]
+        ? updatedMap[currentState.activeWorkspaceId]
+        : currentState.sessions.filter((s) => s.id !== id);
+
+      const nextActiveId =
+        currentState.activeSessionId === id
+          ? (currentSessions.length > 0 ? currentSessions[0].id : null)
+          : currentState.activeSessionId;
+
       return {
-        sessions: remaining,
-        activeSessionId: nextActive,
+        workspaceSessions: updatedMap,
+        sessions: currentSessions,
+        activeSessionId: nextActiveId,
       };
     });
+
+    const nextActive = get().activeSessionId;
+    await get().setActiveSession(nextActive);
   },
 
   fetchMemories: async (workspaceId: string) => {
@@ -202,12 +347,24 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     try {
       const memView = await workspaceApi.getMemory(workspaceId);
       const facts: WorkspaceMemory[] = [];
+      (memView.user_profile || []).forEach((item, idx) => {
+        facts.push({
+          id: `user-${idx}`,
+          workspace_id: workspaceId,
+          category: 'user_profile',
+          title: `用户画像 / 偏好 #${idx + 1}`,
+          content: item,
+          pinned: true,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      });
       (memView.confirmed_architecture || []).forEach((item, idx) => {
         facts.push({
           id: `arch-${idx}`,
           workspace_id: workspaceId,
           category: 'confirmed_architecture',
-          title: `架构定论 #${idx + 1}`,
+          title: `知识库与领域定论 #${idx + 1}`,
           content: item,
           pinned: true,
           created_at: new Date().toISOString(),
@@ -219,7 +376,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           id: `conv-${idx}`,
           workspace_id: workspaceId,
           category: 'project_conventions',
-          title: `约定规范 #${idx + 1}`,
+          title: `工程准则与业务规范 #${idx + 1}`,
           content: item,
           pinned: false,
           created_at: new Date().toISOString(),
@@ -231,7 +388,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
           id: `fail-${idx}`,
           workspace_id: workspaceId,
           category: 'global_failed_attempts',
-          title: `避坑指引: ${item.action}`,
+          title: `避坑与禁忌清单: ${item.action}`,
           content: `失败原因: ${item.failure_reason}${item.conclusion ? `\n结论: ${item.conclusion}` : ''}`,
           pinned: false,
           created_at: new Date().toISOString(),

@@ -48,6 +48,12 @@ describe('Domain API Modules', () => {
     await sessionApi.create('ws-123', 'Task Session');
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/workspaces/ws-123/sessions', expect.objectContaining({ method: 'POST' }));
 
+    await sessionApi.getTurns('sess-456', 30);
+    expect(mockFetch).toHaveBeenCalledWith(
+      expect.stringContaining('/api/v1/sessions/sess-456/turns?limit=30'),
+      expect.objectContaining({ method: 'GET' })
+    );
+
     await sessionApi.getContext('sess-456');
     expect(mockFetch).toHaveBeenCalledWith('/api/v1/sessions/sess-456/context', expect.objectContaining({ method: 'GET' }));
   });

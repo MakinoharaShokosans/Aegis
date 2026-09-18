@@ -6,7 +6,11 @@
 // 1. Workspace & Memory Types
 // ==========================================
 
-export type MemoryCategory = 'confirmed_architecture' | 'project_conventions' | 'global_failed_attempts';
+export type MemoryCategory =
+  | 'user_profile'
+  | 'confirmed_architecture'
+  | 'project_conventions'
+  | 'global_failed_attempts';
 
 export interface WorkspaceMemory {
   id: string;
@@ -74,14 +78,51 @@ export interface Session {
   turns?: SessionTurn[];
 }
 
-export interface SessionContextResponse {
-  session_id: string;
-  system_prompt: string;
-  workspace_memories: WorkspaceMemory[];
-  session_memory?: SessionMemory;
-  active_turns: SessionTurn[];
-  total_tokens: number;
+export interface ContextLayersBreakdown {
+  system_tokens: number;
+  workspace_memory_tokens: number;
+  session_memory_tokens: number;
+  active_turns_tokens: number;
+  total_context_tokens: number;
+}
+
+export interface ContextBudget {
+  session_token_limit: number; // 32,000
+  active_tokens: number;
+  total_context_tokens: number;
   water_level_pct: number;
+  high_watermark: number; // 0.8
+  compaction_ratio: number; // 0.4
+  max_task_budget_tokens: number; // 200,000
+}
+
+export interface SessionContextResponse {
+  workspace?: {
+    workspace_id: string;
+    name: string;
+    root_path: string;
+  };
+  workspace_memory?: {
+    user_profile: string[];
+    confirmed_architecture: string[];
+    project_conventions: string[];
+    global_failed_attempts: any[];
+  };
+  session_memory?: {
+    compacted_until_turn_id: number;
+    summary: string;
+    confirmed_facts: string[];
+    failed_attempts: any[];
+    last_action_target: Record<string, string[]>;
+  };
+  active_turns: SessionTurn[];
+  budget: ContextBudget;
+  layers_breakdown?: ContextLayersBreakdown;
+  session_id?: string;
+  system_prompt?: string;
+  workspace_memories?: WorkspaceMemory[];
+  total_tokens?: number;
+  water_level_pct?: number;
 }
 
 // ==========================================
@@ -167,6 +208,10 @@ export interface TraceStep {
   step: number;
   inputSummary?: string;
   outputSummary?: string;
+  decision?: string;
+  tool?: string;
+  toolArgs?: Record<string, unknown> | string;
+  toolResult?: string;
   durationMs: number;
   tokenUsage?: number;
   timestamp: string;
@@ -178,10 +223,13 @@ export interface TelemetryStats {
   rounds: number;
   steps: number;
   tokenSpeed: number; // tokens/sec
-  totalTokens: number;
+  totalTokens: number; // 本任务思考与工具物理累计消耗 (Cumulative Physical Execution Tokens, 对标 200k 预算)
+  contextTokens?: number; // 当前会话活跃上下文窗口占用 (Active Context Window Tokens, 对标 32k 窗口)
+  maxContextTokens?: number; // 会话上下文上限 (32,000)
+  maxBudgetTokens?: number; // 任务物理预算上限 (200,000)
   cacheHitRate: number; // e.g. 0.998 for 99.8%
-  waterLevelPct: number; // e.g. 32 for 32%
-  maxWaterLevelPct: number; // e.g. 80 for 80%
+  waterLevelPct: number; // 上下文水位百分比 (contextTokens / maxContextTokens * 100)
+  maxWaterLevelPct: number; // e.g. 80 for 80% (高水位压缩触发线)
 }
 
 export interface Task {
@@ -215,6 +263,26 @@ export interface FileNode {
   children?: FileNode[];
 }
 
+export interface DirectoryEntry {
+  name: string;
+  path: string;
+  is_directory: boolean;
+  has_subdirectories?: boolean;
+}
+
+export interface QuickLocation {
+  label: string;
+  path: string;
+}
+
+export interface DirectoryBrowseResponse {
+  current_path: string;
+  parent_path?: string | null;
+  is_root: boolean;
+  directories: DirectoryEntry[];
+  quick_locations: QuickLocation[];
+}
+
 export interface OpenTab {
   id: string;
   filePath: string;
@@ -231,12 +299,19 @@ export interface OpenTab {
 // ==========================================
 
 export interface RagHealth {
-  status: 'healthy' | 'degraded' | 'unhealthy';
+  status: 'ok' | 'healthy' | 'degraded' | 'unhealthy' | string;
   version: string;
-  service: string;
-  qdrant_connected: boolean;
-  dense_model: string;
-  sparse_model: string;
+  service?: string;
+  qdrant?: {
+    mode?: string;
+    collection_ready?: boolean;
+    point_count?: number;
+    vector_size?: number;
+  };
+  qdrant_connected?: boolean;
+  dense_model?: string;
+  sparse_model?: string;
+  embedding_model_loaded?: boolean;
 }
 
 export interface RagChunk {
@@ -307,6 +382,7 @@ export interface SidecarConfig {
 export interface MemoryViewDto {
   scope: string;
   updated_at?: number;
+  user_profile?: string[];
   project_conventions: string[];
   confirmed_architecture: string[];
   failed_attempts: Array<{ action: string; failure_reason: string; conclusion?: string }>;
@@ -417,5 +493,15 @@ export interface ArtifactHandleResponse {
   size_bytes: number;
   token_count: number;
   created_at: string;
+}
+
+export interface McpServerInfo {
+  name: string;
+  enabled: boolean;
+  transport: 'stdio' | 'sse' | string;
+  connected: boolean;
+  tool_count: number;
+  error?: string | null;
+  rejected_tools?: Array<{ name: string; reasons: string[] }>;
 }
 

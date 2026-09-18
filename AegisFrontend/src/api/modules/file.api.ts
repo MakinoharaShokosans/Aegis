@@ -64,4 +64,39 @@ export const fileApi = {
       { path: relativePath, content }
     );
   },
+
+  /**
+   * Browse host directories for workspace creation / connection
+   */
+  browseDirectories(path?: string): Promise<{
+    current_path: string;
+    parent_path?: string | null;
+    is_root: boolean;
+    directories: Array<{
+      name: string;
+      path: string;
+      is_directory: boolean;
+      has_subdirectories?: boolean;
+    }>;
+    quick_locations: Array<{
+      label: string;
+      path: string;
+    }>;
+  }> {
+    const params = path ? { path } : undefined;
+    return httpClient.get(`/api/v1/system/fs/directories`, params);
+  },
+
+  /**
+   * Invoke native OS file manager directory chooser
+   */
+  pickNativeDirectory(initialPath?: string): Promise<{
+    success: boolean;
+    path: string | null;
+    name: string | null;
+    cancelled: boolean;
+  }> {
+    const params = initialPath ? { path: initialPath } : undefined;
+    return httpClient.post(`/api/v1/system/fs/pick-directory`, undefined, { params });
+  },
 };

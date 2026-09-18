@@ -3,7 +3,7 @@
  */
 
 import { httpClient } from '../client';
-import type { Session, SessionContextResponse } from '@/types';
+import type { Session, SessionContextResponse, SessionTurn } from '@/types';
 
 function normalizeSession(raw: any): Session {
   if (!raw) return raw;
@@ -55,6 +55,32 @@ export const sessionApi = {
    */
   delete(sessionId: string): Promise<{ success: boolean; session_id: string }> {
     return httpClient.delete<{ success: boolean; session_id: string }>(`/api/v1/sessions/${encodeURIComponent(sessionId)}`);
+  },
+
+  /**
+   * Get turns (conversation history) for a session
+   */
+  async getTurns(sessionId: string, limit = 50, beforeId?: number): Promise<SessionTurn[]> {
+    const params = new URLSearchParams({ limit: String(limit) });
+    if (beforeId !== undefined) {
+      params.append('before_id', String(beforeId));
+    }
+    const data = await httpClient.get<any[]>(
+      `/api/v1/sessions/${encodeURIComponent(sessionId)}/turns?${params.toString()}`
+    );
+    if (!Array.isArray(data)) return [];
+    return data.map((t) => ({
+      id: String(t.id || ''),
+      session_id: sessionId,
+      turn_index: Number(t.id || 0),
+      role: t.role || 'user',
+      content: t.content || '',
+      token_count: t.token_count || 0,
+      created_at:
+        typeof t.timestamp === 'number'
+          ? new Date(t.timestamp * 1000).toISOString()
+          : new Date().toISOString(),
+    }));
   },
 
   /**

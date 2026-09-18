@@ -9,7 +9,7 @@ interface UiState {
 
   // Modals & Drawers
   workspaceModalOpen: boolean;
-  workspaceModalMode: 'create' | 'edit' | 'delete';
+  workspaceModalMode: 'create' | 'edit' | 'delete' | 'manage';
   ragCenterModalOpen: boolean;
   settingsModalOpen: boolean;
   memoryDrawerOpen: boolean;
@@ -23,7 +23,7 @@ interface UiState {
   togglePreviewFullScreen: () => void;
 
   // Modal Actions
-  openWorkspaceModal: (mode?: 'create' | 'edit' | 'delete') => void;
+  openWorkspaceModal: (mode?: 'create' | 'edit' | 'delete' | 'manage') => void;
   closeWorkspaceModal: () => void;
   setRagCenterModalOpen: (open: boolean) => void;
   setSettingsModalOpen: (open: boolean) => void;

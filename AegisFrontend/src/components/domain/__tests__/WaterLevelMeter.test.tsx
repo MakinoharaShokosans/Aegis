@@ -5,11 +5,11 @@ import { WaterLevelMeter } from '../WaterLevelMeter';
 describe('WaterLevelMeter', () => {
   it('renders safe green water level when percentage is low (< 50%)', () => {
     const { container } = render(
-      <WaterLevelMeter currentPct={32} maxPct={80} activeTokens={25600} />
+      <WaterLevelMeter activeTokens={6400} totalLimit={32000} maxPct={80} />
     );
 
-    expect(screen.getByText(/水位: 32.0% \/ 80%/i)).toBeInTheDocument();
-    expect(screen.getByText(/25.6k \/ 80k tok/i)).toBeInTheDocument();
+    expect(screen.getByText(/水位: 20.0% \/ 80%/i)).toBeInTheDocument();
+    expect(screen.getByText(/6.4k \/ 32k tok/i)).toBeInTheDocument();
     expect(container.firstChild).toHaveClass('text-emerald-700');
   });
 
