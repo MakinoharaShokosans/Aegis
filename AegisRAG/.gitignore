@@ -21,14 +21,19 @@ env/
 .hypothesis/
 .coverage
 .coverage.*
+coverage/
 htmlcov/
 coverage.xml
+.benchmarks/
 
 # Logging
 *.log
 logs/
+!storage/logs/
+storage/logs/*
+!storage/logs/.gitkeep
 
-# Secrets & Environment Variables
+# Secrets & Environment Variables (Keep .env.example)
 .env
 .env.*
 !.env.example
@@ -42,6 +47,7 @@ logs/
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
 # RAG Storage & Model Cache (保留目录骨架，忽略数据)
 storage/qdrant_data/*
@@ -50,3 +56,21 @@ storage/cache/*
 !storage/cache/.gitkeep
 .cache/
 .fastembed/
+.trafilatura/
+
+# SQLite & Databases
+*.db
+*.db-wal
+*.db-shm
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite-journal
+storage/*.db
+storage/*.db-wal
+storage/*.db-shm
+
+# SQLite Memory URI physical file leak prevention
+:memory:

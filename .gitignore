@@ -28,6 +28,8 @@ env/
 **/.hypothesis/
 .coverage
 .coverage.*
+coverage/
+**/coverage/
 htmlcov/
 coverage.xml
 
@@ -77,6 +79,8 @@ Thumbs.db
 !**/storage/qdrant_data/.gitkeep
 **/storage/cache/*
 !**/storage/cache/.gitkeep
+**/storage/logs/*
+!**/storage/logs/.gitkeep
 **/storage/*.db
 **/storage/*.db-wal
 **/storage/*.db-shm
@@ -101,7 +105,6 @@ Thumbs.db
 :memory:
 
 # 测试与评测的临时输出
-**/.pytest_cache/
 **/.benchmarks/
 **/evaluation/**/benchmark_report.md.tmp
 
@@ -110,11 +113,17 @@ node_modules/
 **/node_modules/
 dist/
 **/dist/
+dist-ssr/
+**/dist-ssr/
 .vite/
 **/.vite/
 .turbo/
 **/.turbo/
 *.tsbuildinfo
 **/*.tsbuildinfo
-
-
+playwright-report/
+**/playwright-report/
+blob-report/
+**/blob-report/
+test-results/
+**/test-results/

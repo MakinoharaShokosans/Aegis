@@ -21,14 +21,17 @@ env/
 .hypothesis/
 .coverage
 .coverage.*
+coverage/
 htmlcov/
 coverage.xml
+.benchmarks/
+evaluation/**/benchmark_report.md.tmp
 
 # Logging
 *.log
 logs/
 
-# Secrets & Environment Variables
+# Secrets & Environment Variables (Keep .env.example)
 .env
 .env.*
 !.env.example
@@ -42,6 +45,7 @@ logs/
 *.swo
 *~
 .DS_Store
+Thumbs.db
 
 # Agent Runtime Storage (保留目录骨架，忽略生成数据)
 storage/checkpoints/*
@@ -62,6 +66,7 @@ storage/*.db-shm
 storage/api_token
 storage/*.token
 
+# SQLite & Databases
 *.db
 *.db-wal
 *.db-shm
@@ -75,6 +80,7 @@ storage/*.token
 # 误生成产物：SQLite 内存库 URI ":memory:" 被当成物理文件路径落盘
 :memory:
 
-# Cache
+# Cache & Models
 .cache/
+.fastembed/
 .trafilatura/

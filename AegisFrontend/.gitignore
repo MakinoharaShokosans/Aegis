@@ -1,5 +1,35 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Production Builds
+dist/
+dist-ssr/
+build/
+
+# Vite / Bundler / Cache
+.vite/
+.turbo/
+*.tsbuildinfo
+
+# Test & Coverage
+coverage/
+*.lcov
+.nyc_output/
+playwright-report/
+blob-report/
+test-results/
+
+# Environment Variables & Secrets (Keep .env.example)
+.env
+.env.*
+!.env.example
+*.local
+*.pem
+*.key
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -7,24 +37,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-node_modules
-dist
-dist-ssr
-*.local
-
-# Editor directories and files
+# Editor & System Files
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
+Thumbs.db
 *.suo
 *.ntvs*
 *.njsproj
 *.sln
 *.sw?
-
-# Vite / Bundler / TS cache
-.vite/
-.turbo/
-*.tsbuildinfo
-
+*.swp
+*.swo
+*~
