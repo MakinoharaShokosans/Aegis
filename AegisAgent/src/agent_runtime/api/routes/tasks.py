@@ -63,6 +63,8 @@ _KNOWN_EVENTS = {
     "research.started",
     "research.round",
     "research.finished",
+    # 大模型底层 HTTP / Prompt 请求与应答透视
+    "llm.call",
 }
 
 
@@ -303,6 +305,13 @@ async def download_trace(task_id: str, config: ConfigDep, registry: RegistryDep)
         content=resolved.read_text(encoding="utf-8", errors="replace"),
         media_type="application/x-ndjson",
     )
+
+
+@router.get("/tasks/{task_id}/llm_calls", summary="获取任务的全部底层大模型调用记录")
+async def get_task_llm_calls(task_id: str, registry: RegistryDep) -> List[Dict[str, Any]]:
+    """返回任务在运行期产生的全部底层大模型请求/应答快照记录。"""
+    handle = registry.get(task_id)
+    return [ev for ev in handle.events if ev.get("event") == "llm.call"]
 
 
 @router.get("/tasks/{task_id}/stream", summary="订阅任务事件流（SSE）")

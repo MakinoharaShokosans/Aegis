@@ -691,9 +691,13 @@ async def test_workflow_conversational_direct_reply_closure(test_config: AegisCo
         assert final_state["termination_reason"] == "task_goal achieved"
         assert final_state["step_count"] == 1
 
-        nodes_executed = [ev["node"] for ev in events if "node" in ev]
+        nodes_executed = [ev["node"] for ev in events if ev.get("event") == "node.finished"]
         assert nodes_executed == ["planner", "budget_guard", "executor", "evaluator"]
         assert "tool_runner" not in nodes_executed
+
+        llm_calls = [ev for ev in events if ev.get("event") == "llm.call"]
+        assert len(llm_calls) == 3
+        assert [c["node"] for c in llm_calls] == ["planner", "executor", "evaluator"]
 
         # 校验提取的交付答复包含 executor 输出
         from agent_runtime.execution_context import ExecutionContextManager

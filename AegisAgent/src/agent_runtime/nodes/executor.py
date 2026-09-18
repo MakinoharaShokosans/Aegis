@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, Mapping, Optional
 
 from langchain_core.messages import AIMessage
@@ -25,8 +26,9 @@ from loguru import logger
 from agent_runtime.context import ContextManager
 from agent_runtime.errors import LLMUnavailableError
 from agent_runtime.guardrails.canary import detect_canary_leak
-from agent_runtime.llm.client import LLMGateway
+from agent_runtime.llm.client import LLMGateway, to_openai_messages
 from agent_runtime.nodes.base import NodeFn, to_tool_call_specs
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
 from tools.core.registry import ToolRegistry
@@ -40,6 +42,7 @@ def build_executor_node(
     prompts: PromptLibrary,
     context: ContextManager,
     recorder: Optional[TrajectoryRecorder] = None,
+    event_bus: Optional[TaskEventBus] = None,
 ) -> NodeFn:
     """构造 ``executor`` 节点。
 
@@ -49,6 +52,7 @@ def build_executor_node(
         prompts: 提示词库。
         context: 上下文装配器。
         recorder: 轨迹记录器（可选旁路）。
+        event_bus: 事件总线（可选旁路）。
 
     Returns:
         节点函数。
@@ -69,11 +73,47 @@ def build_executor_node(
         messages = context.assemble(state, node_instruction=prompts.load("executor"))
         tool_schemas = registry.to_openai_tools()
 
+        t0 = time.time()
         try:
             response = await gateway.invoke("fast", messages, tools=tool_schemas)
         except LLMUnavailableError as exc:
             logger.error(f"[Executor] LLM 全链路不可用: {exc}")
+            if event_bus is not None:
+                await event_bus.emit({
+                    "event": "llm.call",
+                    "id": f"llm-executor-{step_index}-{time.time()}",
+                    "node": "executor",
+                    "step": step_index,
+                    "tier": "fast",
+                    "model": "fast-model",
+                    "messages": to_openai_messages(messages),
+                    "tools": tool_schemas,
+                    "response": {"content": "", "tool_calls": [], "finish_reason": "error"},
+                    "tokens": 0,
+                    "duration_ms": int((time.time() - t0) * 1000),
+                    "error": str(exc),
+                })
             return {"should_terminate": True, "termination_reason": f"LLM 不可用: {exc}"}
+
+        duration_ms = int((time.time() - t0) * 1000)
+        if event_bus is not None:
+            await event_bus.emit({
+                "event": "llm.call",
+                "id": f"llm-executor-{step_index}-{time.time()}",
+                "node": "executor",
+                "step": step_index,
+                "tier": "fast",
+                "model": response.endpoint_name or "gpt-5.4-mini",
+                "messages": to_openai_messages(messages),
+                "tools": tool_schemas,
+                "response": {
+                    "content": response.content,
+                    "tool_calls": response.tool_calls,
+                    "finish_reason": response.finish_reason or "stop",
+                },
+                "tokens": response.total_tokens,
+                "duration_ms": duration_ms,
+            })
 
         tokens_after_llm = base_tokens + response.total_tokens
 

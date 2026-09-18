@@ -445,7 +445,13 @@ def _compile_app(deps: RuntimeDeps, task: TaskRuntime) -> Any:
     """装配节点并编译为可执行图。"""
     cfg = deps.config
     nodes: Dict[str, NodeFn] = {
-        "planner": build_planner_node(deps.gateway, task.context, deps.prompts, task.recorder),
+        "planner": build_planner_node(
+            deps.gateway,
+            task.context,
+            deps.prompts,
+            task.recorder,
+            event_bus=task.event_bus,
+        ),
         "budget_guard": build_budget_guard_node(task.guard),
         # executor 只生成 tool_calls（不含 LLM 之外的副作用）
         "executor": build_executor_node(
@@ -454,6 +460,7 @@ def _compile_app(deps: RuntimeDeps, task: TaskRuntime) -> Any:
             deps.prompts,
             task.context,
             task.recorder,
+            event_bus=task.event_bus,
         ),
         # tool_runner 承担权限闸门（人工审批挂起点）+ 并发派发 + 观察值治理 + 预算冲销
         "tool_runner": build_tool_runner_node(
@@ -466,7 +473,13 @@ def _compile_app(deps: RuntimeDeps, task: TaskRuntime) -> Any:
             approval_allowlist=task.approval_allowlist,
             recorder=task.recorder,
         ),
-        "evaluator": build_evaluator_node(deps.gateway, task.context, deps.prompts, task.recorder),
+        "evaluator": build_evaluator_node(
+            deps.gateway,
+            task.context,
+            deps.prompts,
+            task.recorder,
+            event_bus=task.event_bus,
+        ),
     }
     return build_agent_graph(nodes).compile(checkpointer=deps.checkpoints.saver)
 

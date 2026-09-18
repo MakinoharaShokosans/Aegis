@@ -23,7 +23,7 @@ from loguru import logger
 from agent_runtime.llm.endpoints import EndpointPool
 from agent_runtime.llm.fallback import FallbackChain
 
-__all__ = ["LLMGateway", "LLMResponse", "ModelTier"]
+__all__ = ["LLMGateway", "LLMResponse", "ModelTier", "to_openai_messages"]
 
 ModelTier = Literal["reasoning", "fast"]
 
@@ -103,6 +103,9 @@ def _to_openai_messages(messages: Sequence[BaseMessage]) -> List[Dict[str, Any]]
             # 兜底：未知消息类型按用户消息处理，避免整轮请求失败
             converted.append({"role": "user", "content": _as_text(message.content)})
     return converted
+
+
+to_openai_messages = _to_openai_messages
 
 
 def _as_text(content: Any) -> str:

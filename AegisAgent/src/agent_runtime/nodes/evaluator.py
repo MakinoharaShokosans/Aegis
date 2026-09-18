@@ -13,6 +13,7 @@ planner 主张里程碑完成，evaluator 独立复核并可以**打回**（不�
 
 from __future__ import annotations
 
+import time
 from typing import Any, Dict, List, Mapping, Optional
 
 from langchain_core.messages import AIMessage
@@ -21,7 +22,7 @@ from loguru import logger
 from agent_runtime.context import ContextManager
 from agent_runtime.errors import LLMUnavailableError
 from agent_runtime.guardrails.canary import detect_canary_leak
-from agent_runtime.llm.client import LLMGateway
+from agent_runtime.llm.client import LLMGateway, to_openai_messages
 from agent_runtime.nodes.base import (
     NodeFn,
     coerce_failed_attempts,
@@ -29,6 +30,7 @@ from agent_runtime.nodes.base import (
     extract_json_object,
     merge_unique,
 )
+from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.state import Milestone
@@ -60,6 +62,7 @@ def build_evaluator_node(
     context: ContextManager,
     prompts: PromptLibrary,
     recorder: Optional[TrajectoryRecorder] = None,
+    event_bus: Optional[TaskEventBus] = None,
 ) -> NodeFn:
     """构造 ``evaluator`` 节点。
 
@@ -68,6 +71,7 @@ def build_evaluator_node(
         context: 上下文装配器。
         prompts: 提示词库。
         recorder: 轨迹记录器（可选旁路）。
+        event_bus: 事件总线（可选旁路）。
 
     Returns:
         节点函数。
@@ -83,12 +87,49 @@ def build_evaluator_node(
             里程碑、摘要、事实、踩坑与终止标记的增量。
         """
         messages = context.assemble(state, node_instruction=prompts.load("evaluator"))
+        step_num = int(state.get("step_count", 0))
 
+        t0 = time.time()
         try:
             response = await gateway.invoke("reasoning", messages, force_json=True)
         except LLMUnavailableError as exc:
             logger.error(f"[Evaluator] LLM 全链路不可用: {exc}")
+            if event_bus is not None:
+                await event_bus.emit({
+                    "event": "llm.call",
+                    "id": f"llm-evaluator-{step_num}-{time.time()}",
+                    "node": "evaluator",
+                    "step": step_num,
+                    "tier": "reasoning",
+                    "model": "reasoning-model",
+                    "messages": to_openai_messages(messages),
+                    "tools": None,
+                    "response": {"content": "", "tool_calls": [], "finish_reason": "error"},
+                    "tokens": 0,
+                    "duration_ms": int((time.time() - t0) * 1000),
+                    "error": str(exc),
+                })
             return {"should_terminate": True, "termination_reason": f"LLM 不可用: {exc}"}
+
+        duration_ms = int((time.time() - t0) * 1000)
+        if event_bus is not None:
+            await event_bus.emit({
+                "event": "llm.call",
+                "id": f"llm-evaluator-{step_num}-{time.time()}",
+                "node": "evaluator",
+                "step": step_num,
+                "tier": "reasoning",
+                "model": response.endpoint_name or "gpt-5.6-terra",
+                "messages": to_openai_messages(messages),
+                "tools": None,
+                "response": {
+                    "content": response.content,
+                    "tool_calls": response.tool_calls,
+                    "finish_reason": response.finish_reason or "stop",
+                },
+                "tokens": response.total_tokens,
+                "duration_ms": duration_ms,
+            })
 
         tokens_after = int(state.get("total_tokens", 0)) + response.total_tokens
 
@@ -132,19 +173,23 @@ def build_evaluator_node(
             or str(verdict.get("status", "")).lower() == "completed"
         )
 
-        # 若是直接纯文本回复（如日常问候/直接问答/概念解答），且无未完成的工具调用，直接验收通过并收敛
-        if has_direct_reply:
-            accepted = True
+        all_completed = bool(
+            verdict.get("all_completed")
+            or (accepted and (not milestones or current_index >= len(milestones) - 1))
+        )
 
         if accepted and milestones:
-            milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
-        elif has_direct_reply and not milestones:
-            accepted = True
+            if all_completed:
+                milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
+            else:
+                milestones = _mark_milestone_completed(milestones, current_index)
+        elif accepted and not milestones:
+            all_completed = True
 
         all_done = (
             all(milestone.status == "completed" for milestone in milestones)
             if milestones
-            else (accepted or has_direct_reply)
+            else all_completed
         )
 
         # 验收通过且仍有后续里程碑时，推进指针；全部完成则保持在末尾
@@ -176,7 +221,16 @@ def build_evaluator_node(
                 consecutive_errors=int(state.get("consecutive_errors", 0)),
             )
 
-        msg_updates = [] if has_direct_reply else [AIMessage(content=summary or response.content or "验收完成。")]
+        if not accepted:
+            msg_updates = [
+                AIMessage(
+                    content=f"【阶段验收未通过，需要继续推进】{summary or '当前目标尚未达成，请调度相应工具完成实际操作。'}"
+                )
+            ]
+        elif has_direct_reply:
+            msg_updates = []
+        else:
+            msg_updates = [AIMessage(content=summary or response.content or "验收完成。")]
 
         return {
             "messages": msg_updates,
