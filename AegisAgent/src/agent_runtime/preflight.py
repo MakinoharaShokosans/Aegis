@@ -82,6 +82,28 @@ def run_preflight_checks(config: AegisConfig) -> PreflightReport:
     """
     report = PreflightReport()
 
+    # 0. 检查 .env 配置文件
+    from agent_runtime.config import find_dotenv_file
+    dotenv_file = find_dotenv_file()
+    if dotenv_file:
+        report.items.append(
+            CheckItem(
+                category="Environment & Keys",
+                name=".env Source",
+                status=CheckStatus.OK,
+                detail=f"已加载: {dotenv_file.name} ({dotenv_file})",
+            )
+        )
+    else:
+        report.items.append(
+            CheckItem(
+                category="Environment & Keys",
+                name=".env Source",
+                status=CheckStatus.WARN,
+                detail="未检测到 .env 文件 (仅读取系统环境变量)",
+            )
+        )
+
     # 1. 检查 LLM API 密钥环境变量
     checked_envs: set[str] = set()
     all_endpoints = (

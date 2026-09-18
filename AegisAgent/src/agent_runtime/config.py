@@ -440,6 +440,48 @@ class PermissionsConfig(BaseModel):
     )
 
 
+from dotenv import load_dotenv
+
+def find_dotenv_file() -> Optional[Path]:
+    """定位 .env 文件的候选绝对路径。"""
+    override = os.getenv("AEGIS_ENV_FILE", "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_file():
+            return candidate
+
+    candidates = (
+        Path(".env"),
+        Path("AegisAgent/.env"),
+        Path(__file__).resolve().parents[2] / ".env",
+        Path(__file__).resolve().parents[3] / ".env",
+    )
+    for c in candidates:
+        if c.is_file():
+            return c.resolve()
+    return None
+
+
+def find_config_file() -> Optional[Path]:
+    """定位 config.toml 文件的候选绝对路径。"""
+    override = os.getenv("AEGIS_CONFIG", "").strip()
+    if override:
+        candidate = Path(override).expanduser()
+        if candidate.is_file():
+            return candidate
+
+    candidates = (
+        Path("config/config.toml"),
+        Path("AegisAgent/config/config.toml"),
+        Path(__file__).resolve().parents[2] / "config" / "config.toml",
+        Path(__file__).resolve().parents[3] / "config" / "config.toml",
+    )
+    for c in candidates:
+        if c.is_file():
+            return c.resolve()
+    return None
+
+
 # ==============================================================================
 # 15. 全局配置根对象 (AegisConfig)
 # ==============================================================================
@@ -450,7 +492,7 @@ class AegisConfig(BaseSettings):
     支持从 config/config.toml 读取结构化业务参数，并结合 .env 环境变量完成装配
     """
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=find_dotenv_file() or ".env",
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -482,13 +524,7 @@ class AegisConfig(BaseSettings):
         3. 系统环境变量
         4. .env 文件 (最低保底)
         """
-        # 寻找配置文件绝对路径
-        possible_paths = [
-            Path("config/config.toml"),
-            Path("AegisAgent/config/config.toml"),
-            Path(__file__).resolve().parent.parent.parent / "config" / "config.toml",
-        ]
-        toml_path = next((p for p in possible_paths if p.is_file()), None)
+        toml_path = find_config_file()
 
         sources: list[PydanticBaseSettingsSource] = [init_settings]
         if toml_path:
@@ -514,6 +550,10 @@ def get_config(reload: bool = False) -> AegisConfig:
     """
     global _GLOBAL_CONFIG
     if _GLOBAL_CONFIG is None or reload:
+        dotenv_file = find_dotenv_file()
+        if dotenv_file:
+            load_dotenv(dotenv_path=dotenv_file, override=False)
         _GLOBAL_CONFIG = AegisConfig()
         logger.info("已成功加载 Aegis 系统全局配置")
     return _GLOBAL_CONFIG
+
