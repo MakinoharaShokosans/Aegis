@@ -127,3 +127,13 @@ blob-report/
 **/blob-report/
 test-results/
 **/test-results/
+
+# Archives & Compressed Packages
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.gz
+*.7z
+*.rar
+
