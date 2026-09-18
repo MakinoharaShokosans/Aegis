@@ -105,12 +105,10 @@ sse_heartbeat_sec = 15
 sse_buffer_events = 1000
 artifact_preview_chars = 200
 
-# ---- 接入层安全闸门（Host → Origin → 令牌，三道不可跳过） --------------------
-# 为什么回环还不够：用户浏览器里的任意页面都能向 127.0.0.1:8000 发请求，
-# 一旦被诱导调用 POST /approve，等于让攻击者替用户批准一次高危操作。
-# 令牌优先取环境变量 AEGIS_API_TOKEN；未设置时自动生成并写入 api_token_file（0600），
-# 日志只打印文件路径、不打印令牌本身。该文件已在 .gitignore 中排除。
-auth_enabled = true
+# ---- 接入层安全闸门（Host → Origin → 令牌） --------------------
+# 单机本地直接访问设为 false（Host 与 Origin 闸门仍会严格防护 DNS rebinding 与 CSRF 跨站脚本）
+# 如需强制本地令牌校验可设为 true
+auth_enabled = false
 api_token_env = "AEGIS_API_TOKEN"
 api_token_file = "storage/api_token"
 allowed_hosts = []                  # 回环名始终允许；仅反代/自定义本地域名时补充
