@@ -10,6 +10,9 @@ import {
   Zap,
   AlertTriangle,
   ExternalLink,
+  FileText,
+  Code2,
+  Terminal,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
 import { useRagStore } from '@/stores/useRagStore';
@@ -52,6 +55,16 @@ export const RagCenterModal: React.FC = () => {
     setRagCenterModalOpen(false);
   };
 
+  const isOnline = !!health && (
+    health.status === 'ok' ||
+    health.status === 'healthy' ||
+    health.status === 'degraded' ||
+    health.embedding_model_loaded !== undefined ||
+    health.qdrant?.collection_ready !== undefined
+  );
+
+  const qdrantReady = isOnline && (health?.qdrant?.collection_ready !== false && health?.qdrant_connected !== false);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
       <div className="bg-white rounded-xl shadow-2xl border border-border-subtle w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
@@ -64,8 +77,14 @@ export const RagCenterModal: React.FC = () => {
             <div>
               <h2 className="font-bold text-gray-900 text-base flex items-center gap-2">
                 AegisRAG 知识库与文档索引控制台
-                <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-mono">
-                  :8001 Connected
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-mono ${
+                    isOnline
+                      ? 'bg-emerald-100 text-emerald-800'
+                      : 'bg-amber-100 text-amber-800'
+                  }`}
+                >
+                  {isOnline ? ':8001 Connected (已连接)' : ':8001 Offline (未启动)'}
                 </span>
               </h2>
               <p className="text-xs text-gray-500">
@@ -109,6 +128,25 @@ export const RagCenterModal: React.FC = () => {
 
         {/* Modal Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6 text-xs">
+          {/* Offline Notice Banner */}
+          {!isOnline && (
+            <div className="p-3.5 rounded-xl border border-amber-200 bg-amber-50/80 flex items-start gap-3 text-amber-900 animate-in fade-in">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <div className="space-y-1">
+                <div className="font-semibold text-xs flex items-center gap-2">
+                  <span>AegisRAG 独立检索服务未连接 (127.0.0.1:8001)</span>
+                </div>
+                <div className="text-[11px] text-amber-800 leading-relaxed">
+                  AegisRAG 是独立的文档与代码向量检索微服务。如需启用向量索引与三阶段检索调试，请在终端执行：
+                  <code className="mx-1.5 px-2 py-0.5 rounded bg-amber-200/60 font-mono text-[11px] text-amber-950 font-semibold">
+                    ./start rag
+                  </code>
+                  （或通过 <code className="mx-1 px-1.5 py-0.5 rounded bg-amber-200/60 font-mono text-[11px]">./start</code> 启动全部组件）。
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'overview' ? (
             <>
               {/* Topology & Stats Cards */}
@@ -120,11 +158,15 @@ export const RagCenterModal: React.FC = () => {
                       <Cpu className="w-4 h-4 text-purple-600" />
                       RAG 独立微服务
                     </span>
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span
+                      className={`w-2 h-2 rounded-full ${
+                        isOnline ? 'bg-emerald-500' : 'bg-amber-400'
+                      }`}
+                    />
                   </div>
                   <div className="text-lg font-bold text-gray-900 font-mono">127.0.0.1:8001</div>
                   <div className="text-[11px] text-gray-500 space-y-0.5">
-                    <div>FastAPI v1.0.0 (Python 3.11)</div>
+                    <div>状态: {isOnline ? (health?.status === 'degraded' ? '降级运行' : '正常运行 (OK)') : '未启动 / 离线'}</div>
                     <div>跨进程通信: Sidecar ServiceClient</div>
                   </div>
                 </div>
@@ -136,14 +178,24 @@ export const RagCenterModal: React.FC = () => {
                       <Database className="w-4 h-4 text-blue-600" />
                       Qdrant 向量库状态
                     </span>
-                    <span className={`text-[10px] font-mono font-bold ${health?.qdrant_connected !== false ? 'text-blue-600' : 'text-rose-500'}`}>
-                      {health?.qdrant_connected !== false ? '● 就绪' : '○ 未连接'}
+                    <span
+                      className={`text-[10px] font-mono font-bold ${
+                        qdrantReady
+                          ? 'text-emerald-600'
+                          : 'text-slate-400'
+                      }`}
+                    >
+                      {isOnline
+                        ? qdrantReady
+                          ? '● 就绪'
+                          : '○ 未连接'
+                        : '○ 离线'}
                     </span>
                   </div>
                   <div className="text-lg font-bold text-gray-900 font-mono">aegis_docs_collection</div>
                   <div className="text-[11px] text-gray-500 space-y-0.5">
-                    <div>嵌入模型: {health?.dense_model || 'BAAI/bge-m3 (1024-dim)'}</div>
-                    <div>稀疏引擎: {health?.sparse_model || 'FastEmbed BM25'}</div>
+                    <div>切片点数: {health?.qdrant?.point_count !== undefined ? `${health.qdrant.point_count} 个向量切片` : (isOnline ? '已就绪' : '未统计')}</div>
+                    <div>嵌入模型: {health?.dense_model || (isOnline ? (health?.embedding_model_loaded !== false ? 'BAAI/bge-m3' : '未加载') : '未加载')}</div>
                   </div>
                 </div>
 
@@ -172,17 +224,26 @@ export const RagCenterModal: React.FC = () => {
                 </h4>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-gray-600">
                   <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                    <div className="font-medium text-gray-900">📄 Markdown 规范文档</div>
+                    <div className="font-medium text-gray-900 flex items-center gap-1.5">
+                      <FileText className="w-4 h-4 text-purple-600 shrink-0" />
+                      <span>Markdown 规范文档</span>
+                    </div>
                     <div className="text-[11px] text-gray-500 mt-1">documents/*.md (42 个文件, 780 个切片)</div>
                     <div className="text-[10px] text-purple-600 mt-1 font-mono">按 H1/H2/H3 标题与语义段落切分</div>
                   </div>
                   <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                    <div className="font-medium text-gray-900">🐍 Python 源码</div>
+                    <div className="font-medium text-gray-900 flex items-center gap-1.5">
+                      <Code2 className="w-4 h-4 text-blue-600 shrink-0" />
+                      <span>Python 源码</span>
+                    </div>
                     <div className="text-[11px] text-gray-500 mt-1">AegisAgent/src/*.py (85 个文件, 520 个切片)</div>
                     <div className="text-[10px] text-blue-600 mt-1 font-mono">Tree-sitter AST 类与函数精准切分</div>
                   </div>
                   <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                    <div className="font-medium text-gray-900">🇨 C/C++ 核心</div>
+                    <div className="font-medium text-gray-900 flex items-center gap-1.5">
+                      <Terminal className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>C/C++ 核心</span>
+                    </div>
                     <div className="text-[11px] text-gray-500 mt-1">services/bash/*.c (12 个文件, 120 个切片)</div>
                     <div className="text-[10px] text-emerald-600 mt-1 font-mono">Tree-sitter C AST 语法切分</div>
                   </div>
@@ -200,7 +261,7 @@ export const RagCenterModal: React.FC = () => {
                 <div className="flex items-center gap-2">
                   <button
                     onClick={() => triggerIngest({ incremental: true })}
-                    disabled={isIngesting}
+                    disabled={isIngesting || !isOnline}
                     className="flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-xs transition disabled:opacity-50"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 ${isIngesting ? 'animate-spin' : ''}`} />
@@ -208,8 +269,8 @@ export const RagCenterModal: React.FC = () => {
                   </button>
                   <button
                     onClick={() => triggerIngest({ incremental: false })}
-                    disabled={isIngesting}
-                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-white hover:bg-gray-100 text-gray-700 border border-border-subtle font-medium transition"
+                    disabled={isIngesting || !isOnline}
+                    className="flex items-center gap-1 px-3 py-2 rounded-lg bg-white hover:bg-gray-100 text-gray-700 border border-border-subtle font-medium transition disabled:opacity-50"
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
                     <span>清空全量重建</span>
@@ -234,7 +295,7 @@ export const RagCenterModal: React.FC = () => {
                   </div>
                   <button
                     type="submit"
-                    disabled={isSearching}
+                    disabled={isSearching || !isOnline}
                     className="flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium shadow-xs transition disabled:opacity-50"
                   >
                     <Zap className="w-3.5 h-3.5" />

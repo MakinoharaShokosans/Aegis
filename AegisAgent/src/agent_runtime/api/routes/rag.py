@@ -29,7 +29,7 @@ async def rag_health(runtime: RuntimeDep) -> Dict[str, Any]:
     """检查 AegisRAG (:8001) 服务存活与向量模型就绪状态。"""
     client = ServiceClient(runtime.config.services.rag_url, runtime.config.services.timeout_sec)
     try:
-        return await client.request_json("GET", "/health")
+        return await client.request_json("GET", "/api/v1/health")
     finally:
         await client.aclose()
 

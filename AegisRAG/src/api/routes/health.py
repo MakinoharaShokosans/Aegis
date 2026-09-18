@@ -14,6 +14,7 @@ __all__ = ["router"]
 
 
 @router.get("/api/v1/health", response_model=HealthResponse)
+@router.get("/health", response_model=HealthResponse)
 def health(request: Request) -> HealthResponse:
     """健康检查：Collection 未就绪或 Embedding 模型未加载时整体降级（01 §5）。
 
