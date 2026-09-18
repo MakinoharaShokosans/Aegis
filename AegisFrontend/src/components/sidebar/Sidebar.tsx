@@ -205,7 +205,7 @@ export const Sidebar: React.FC = () => {
             activeSessionId={activeSessionId}
             onSelectSession={(id) => {
               setActiveSession(id);
-              setCurrentTaskId('task-mock-default');
+              setCurrentTaskId(null);
             }}
             onDeleteSession={deleteSession}
             onNewSession={handleNewSession}

@@ -12,33 +12,57 @@ import type {
   RecordFailurePayload,
 } from '@/types';
 
+function normalizeWorkspace(raw: any): Workspace {
+  if (!raw) return raw;
+  return {
+    id: raw.workspace_id || raw.id || '',
+    name: raw.name || '',
+    root_path: raw.root_path || '',
+    description: raw.description || '',
+    created_at:
+      typeof raw.created_at === 'number'
+        ? new Date(raw.created_at * 1000).toISOString()
+        : raw.created_at || new Date().toISOString(),
+    updated_at:
+      typeof raw.updated_at === 'number'
+        ? new Date(raw.updated_at * 1000).toISOString()
+        : raw.updated_at || new Date().toISOString(),
+    session_count: raw.session_count,
+    memory_count: raw.memory_count,
+  };
+}
+
 export const workspaceApi = {
   /**
    * List all registered workspaces
    */
-  list(): Promise<Workspace[]> {
-    return httpClient.get<Workspace[]>('/api/v1/workspaces');
+  async list(): Promise<Workspace[]> {
+    const data = await httpClient.get<any[]>('/api/v1/workspaces');
+    return Array.isArray(data) ? data.map(normalizeWorkspace) : [];
   },
 
   /**
    * Get single workspace by ID
    */
-  get(workspaceId: string): Promise<Workspace> {
-    return httpClient.get<Workspace>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`);
+  async get(workspaceId: string): Promise<Workspace> {
+    const data = await httpClient.get<any>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`);
+    return normalizeWorkspace(data);
   },
 
   /**
    * Create a new workspace (idempotent by root_path)
    */
-  create(payload: WorkspaceCreatePayload): Promise<Workspace> {
-    return httpClient.post<Workspace>('/api/v1/workspaces', payload);
+  async create(payload: WorkspaceCreatePayload): Promise<Workspace> {
+    const data = await httpClient.post<any>('/api/v1/workspaces', payload);
+    return normalizeWorkspace(data);
   },
 
   /**
    * Update workspace metadata (name, description)
    */
-  update(workspaceId: string, payload: WorkspaceUpdatePayload): Promise<Workspace> {
-    return httpClient.patch<Workspace>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`, payload);
+  async update(workspaceId: string, payload: WorkspaceUpdatePayload): Promise<Workspace> {
+    const data = await httpClient.patch<any>(`/api/v1/workspaces/${encodeURIComponent(workspaceId)}`, payload);
+    return normalizeWorkspace(data);
   },
 
   /**

@@ -97,7 +97,7 @@ export type TaskStatus =
   | 'failed'
   | 'cancelled';
 
-export type PermissionLevel = 'readonly' | 'workspace_write' | 'full_access';
+export type PermissionLevel = 'read_only' | 'workspace_write' | 'full_permissions';
 
 export type ModelTier = 'reasoning' | 'fast';
 
@@ -324,16 +324,22 @@ export interface RecordFailurePayload {
 }
 
 export interface TaskCreatePayload {
-  prompt: string;
+  task_goal?: string;
+  prompt?: string;
   permission_level?: PermissionLevel;
+  parent_task_id?: string;
   model?: string;
 }
 
 export interface TaskCreateResponse {
   task_id: string;
+  session_id?: string;
+  workspace_id?: string;
+  task_goal?: string;
   status: string;
-  stream_url: string;
+  stream_url?: string;
 }
+
 
 export interface HitlApprovalPayload {
   approval_id: string;

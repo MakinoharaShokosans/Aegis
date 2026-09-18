@@ -16,9 +16,18 @@ export const taskApi = {
    * Submit and launch a new agent task under a session
    */
   create(sessionId: string, payload: TaskCreatePayload): Promise<TaskCreateResponse> {
+    const body: Record<string, unknown> = {
+      task_goal: payload.task_goal || payload.prompt || '',
+    };
+    if (payload.permission_level) {
+      body.permission_level = payload.permission_level;
+    }
+    if (payload.parent_task_id) {
+      body.parent_task_id = payload.parent_task_id;
+    }
     return httpClient.post<TaskCreateResponse>(
       `/api/v1/sessions/${encodeURIComponent(sessionId)}/tasks`,
-      payload
+      body
     );
   },
 

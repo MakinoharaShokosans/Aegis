@@ -103,15 +103,12 @@ export const useRagStore = create<RagState>((set) => ({
         ingestStatus: `索引完成！纳管 ${res.total_files} 个文件，生成 ${res.total_chunks} 个 AST 切片`,
         ingestProgress: { total_files: res.total_files, total_chunks: res.total_chunks },
       });
-    } catch {
-      // Mock progress fallback
-      setTimeout(() => {
-        set({
-          isIngesting: false,
-          ingestStatus: '增量再索引完成！42 个文档与 85 个源码文件已同步 Qdrant',
-          ingestProgress: { total_files: 127, total_chunks: 1420 },
-        });
-      }, 1200);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : '索引失败';
+      set({
+        isIngesting: false,
+        ingestStatus: `索引失败: ${errorMsg}`,
+      });
     }
   },
 
@@ -122,14 +119,14 @@ export const useRagStore = create<RagState>((set) => ({
     try {
       const res: RagRetrieveResult = await ragApi.retrieve({ query: q, top_k: 5 });
       set({
-        hits: res.hits,
+        hits: res.hits || [],
         searchDurationMs: res.elapsed_ms || Date.now() - start,
         isSearching: false,
       });
     } catch {
-      // Filter mock fallback
       set({
-        searchDurationMs: Date.now() - start + 35,
+        hits: [],
+        searchDurationMs: Date.now() - start,
         isSearching: false,
       });
     }

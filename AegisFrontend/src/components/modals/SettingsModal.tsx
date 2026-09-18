@@ -371,7 +371,10 @@ export const SettingsModal: React.FC = () => {
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 px-6 py-3 border-t border-border-subtle bg-gray-50">
           <button
-            onClick={() => setSettingsModalOpen(false)}
+            onClick={() => {
+              httpClient.setToken(tokenVal);
+              setSettingsModalOpen(false);
+            }}
             className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white font-medium transition"
           >
             保存并关闭

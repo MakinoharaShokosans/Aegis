@@ -5,15 +5,40 @@
 import { httpClient } from '../client';
 import type { FileNode, FileContentResponse, FileSaveResponse } from '@/types';
 
+function normalizeFileItem(item: any): FileNode {
+  const isDir = item.type === 'directory' || item.is_dir === true;
+  return {
+    name: item.name || '',
+    path: item.path || '',
+    type: isDir ? 'directory' : 'file',
+    size: item.size || item.size_bytes,
+    modified_at:
+      typeof item.updated_at === 'number'
+        ? item.updated_at
+        : typeof item.modified_at === 'number'
+        ? item.modified_at
+        : undefined,
+    language: item.language,
+    children: item.children ? item.children.map(normalizeFileItem) : undefined,
+  };
+}
+
 export const fileApi = {
   /**
    * Recursively retrieve workspace file tree
    */
-  getTree(workspaceId: string, maxDepth: number = 5): Promise<FileNode> {
-    return httpClient.get<FileNode>(
+  async getTree(workspaceId: string, maxDepth: number = 8): Promise<FileNode> {
+    const raw = await httpClient.get<any>(
       `/api/v1/workspaces/${encodeURIComponent(workspaceId)}/files/tree`,
       { max_depth: maxDepth }
     );
+    const items = raw.items || (Array.isArray(raw) ? raw : [raw]);
+    return {
+      name: raw.root_path ? raw.root_path.split('/').filter(Boolean).pop() || 'workspace' : 'workspace',
+      path: '',
+      type: 'directory',
+      children: items.map(normalizeFileItem),
+    };
   },
 
   /**
