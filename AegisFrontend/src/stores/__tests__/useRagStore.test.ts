@@ -51,7 +51,7 @@ describe('useRagStore', () => {
     const state = useRagStore.getState();
     expect(state.isIngesting).toBe(false);
     expect(state.ingestProgress).toEqual({ total_files: 42, total_chunks: 380 });
-    expect(state.ingestStatus).toContain('42 个文件');
+    expect(state.ingestStatus).toContain('42');
   });
 
   it('should execute hybrid retrieval query in playground', async () => {

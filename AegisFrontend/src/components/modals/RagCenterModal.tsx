@@ -18,6 +18,8 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 export const RagCenterModal: React.FC = () => {
   const { ragCenterModalOpen, setRagCenterModalOpen } = useUiStore();
   const {
+    health,
+    fetchHealth,
     isIngesting,
     ingestStatus,
     query,
@@ -31,6 +33,12 @@ export const RagCenterModal: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'overview' | 'playground'>('overview');
   const [searchInput, setSearchInput] = useState(query);
+
+  React.useEffect(() => {
+    if (ragCenterModalOpen) {
+      fetchHealth();
+    }
+  }, [ragCenterModalOpen, fetchHealth]);
 
   if (!ragCenterModalOpen) return null;
 
@@ -128,12 +136,14 @@ export const RagCenterModal: React.FC = () => {
                       <Database className="w-4 h-4 text-blue-600" />
                       Qdrant 向量库状态
                     </span>
-                    <span className="text-[10px] text-blue-600 font-mono font-bold">1,420 Points</span>
+                    <span className={`text-[10px] font-mono font-bold ${health?.qdrant_connected !== false ? 'text-blue-600' : 'text-rose-500'}`}>
+                      {health?.qdrant_connected !== false ? '● 就绪' : '○ 未连接'}
+                    </span>
                   </div>
                   <div className="text-lg font-bold text-gray-900 font-mono">aegis_docs_collection</div>
                   <div className="text-[11px] text-gray-500 space-y-0.5">
-                    <div>内存占用: 48.2 MB / 维数: 384-dim</div>
-                    <div>Dense: BAAI/bge-small-en-v1.5</div>
+                    <div>嵌入模型: {health?.dense_model || 'BAAI/bge-m3 (1024-dim)'}</div>
+                    <div>稀疏引擎: {health?.sparse_model || 'FastEmbed BM25'}</div>
                   </div>
                 </div>
 

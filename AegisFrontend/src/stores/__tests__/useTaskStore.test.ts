@@ -26,13 +26,13 @@ describe('useTaskStore', () => {
     const mockCreate = vi.spyOn(taskApi, 'create').mockResolvedValue({
       task_id: 'task-new-1',
       status: 'running',
-      stream_url: '/api/v1/tasks/task-new-1/events',
+      stream_url: '/api/v1/tasks/task-new-1/stream',
     });
 
     const store = useTaskStore.getState();
     const taskId = await store.submitTask('sess-1', '测试任务目标', {
       permissionLevel: 'workspace_write',
-      model: 'Reasoning: DeepSeek-R1',
+      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
     });
 
     expect(taskId).toBeTruthy();

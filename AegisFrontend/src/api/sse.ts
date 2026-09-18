@@ -20,7 +20,7 @@ export function subscribeTaskEvents(taskId: string, options: SSEOptions = {}): (
   
   // Construct SSE URL with token query param fallback for event streams
   const tokenQuery = token ? `?token=${encodeURIComponent(token)}` : '';
-  const url = `/api/v1/tasks/${encodeURIComponent(taskId)}/events${tokenQuery}`;
+  const url = `/api/v1/tasks/${encodeURIComponent(taskId)}/stream${tokenQuery}`;
 
   const headers: Record<string, string> = {
     Accept: 'text/event-stream',
