@@ -232,6 +232,44 @@ export interface TelemetryStats {
   maxWaterLevelPct: number; // e.g. 80 for 80% (高水位压缩触发线)
 }
 
+export interface LlmMessageItem {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content?: string;
+  tool_call_id?: string;
+  tool_calls?: Array<{
+    id?: string;
+    type?: string;
+    function?: {
+      name: string;
+      arguments: string;
+    };
+  }>;
+}
+
+export interface LlmCallRecord {
+  id: string;
+  task_id?: string;
+  node: string;
+  step: number;
+  tier: ModelTier | 'reasoning' | 'fast';
+  model: string;
+  messages: LlmMessageItem[];
+  tools?: Array<Record<string, unknown>>;
+  response: {
+    content?: string;
+    tool_calls?: Array<{
+      id?: string;
+      name: string;
+      args: Record<string, unknown>;
+    }>;
+    finish_reason?: string;
+  };
+  tokens?: number;
+  durationMs?: number;
+  timestamp: string;
+  error?: string;
+}
+
 export interface Task {
   id: string;
   session_id?: string;
@@ -244,6 +282,7 @@ export interface Task {
   updatedAt: string;
   messages: TaskMessage[];
   traceSteps: TraceStep[];
+  llmCalls?: LlmCallRecord[];
   subagents: SubagentInfo[];
   telemetry: TelemetryStats;
   pendingApproval?: HITLApprovalRequest;

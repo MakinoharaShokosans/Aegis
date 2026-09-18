@@ -3,6 +3,7 @@ import type {
   Task,
   TaskMessage,
   TraceStep,
+  LlmCallRecord,
   SubagentInfo,
   TelemetryStats,
   HITLApprovalRequest,
@@ -20,6 +21,7 @@ interface TaskState {
   upsertTask: (task: Task) => void;
   appendMessage: (taskId: string, message: TaskMessage) => void;
   appendTraceStep: (taskId: string, step: TraceStep) => void;
+  appendLlmCall: (taskId: string, call: LlmCallRecord) => void;
   updateSubagents: (taskId: string, subagents: SubagentInfo[]) => void;
   updateTelemetry: (taskId: string, stats: Partial<TelemetryStats>) => void;
   setTaskStatus: (taskId: string, status: Task['status']) => void;
@@ -350,6 +352,26 @@ function handleIncomingEvent(
       break;
     }
 
+    case 'llm.call': {
+      const callRecord: LlmCallRecord = {
+        id: data.id || `llm-${data.node || 'node'}-${data.step || 1}-${Date.now()}`,
+        task_id: taskId,
+        node: data.node || 'unknown',
+        step: data.step || 1,
+        tier: data.tier || 'reasoning',
+        model: data.model || 'model',
+        messages: Array.isArray(data.messages) ? data.messages : [],
+        tools: Array.isArray(data.tools) ? data.tools : undefined,
+        response: data.response || { content: data.content || '' },
+        tokens: data.tokens || 0,
+        durationMs: data.duration_ms || data.durationMs || 0,
+        timestamp: data.timestamp || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        error: data.error,
+      };
+      get().appendLlmCall(taskId, callRecord);
+      break;
+    }
+
     case 'task.finished': {
       const finalStatus = data.status === 'succeeded' || data.status === 'completed' ? 'completed' : 'failed';
       get().setTaskStatus(taskId, finalStatus);
@@ -458,6 +480,28 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           [taskId]: {
             ...task,
             traceSteps: [...task.traceSteps, step],
+            updatedAt: new Date().toISOString(),
+          },
+        },
+      };
+    }),
+
+  appendLlmCall: (taskId, call) =>
+    set((state) => {
+      const task = state.tasks[taskId];
+      if (!task) return state;
+      const existingCalls = task.llmCalls || [];
+      const existingIdx = existingCalls.findIndex((c) => c.id === call.id);
+      const nextCalls =
+        existingIdx >= 0
+          ? existingCalls.map((c, idx) => (idx === existingIdx ? call : c))
+          : [...existingCalls, call];
+      return {
+        tasks: {
+          ...state.tasks,
+          [taskId]: {
+            ...task,
+            llmCalls: nextCalls,
             updatedAt: new Date().toISOString(),
           },
         },
@@ -608,6 +652,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         },
       ],
+      llmCalls: sessionTask?.llmCalls ? [...sessionTask.llmCalls] : [],
       subagents: [],
       telemetry: {
         rounds: previousRounds + 1,

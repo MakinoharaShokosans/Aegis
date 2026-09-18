@@ -3,9 +3,10 @@ import { create } from 'zustand';
 interface UiState {
   // Sidebar & Views
   sidebarOpen: boolean;
-  activeView: 'chat' | 'trace' | 'context';
+  activeView: 'chat' | 'trace' | 'llm' | 'context';
   previewSplitMode: 'horizontal' | 'vertical';
   previewFullScreen: boolean;
+  selectedLlmCallId: string | null;
 
   // Modals & Drawers
   workspaceModalOpen: boolean;
@@ -18,7 +19,9 @@ interface UiState {
   // View Actions
   toggleSidebar: () => void;
   setSidebarOpen: (open: boolean) => void;
-  setActiveView: (view: 'chat' | 'trace' | 'context') => void;
+  setActiveView: (view: 'chat' | 'trace' | 'llm' | 'context') => void;
+  setSelectedLlmCallId: (id: string | null) => void;
+  inspectLlmCall: (id: string) => void;
   setPreviewSplitMode: (mode: 'horizontal' | 'vertical') => void;
   togglePreviewFullScreen: () => void;
 
@@ -36,6 +39,7 @@ export const useUiStore = create<UiState>((set) => ({
   activeView: 'chat',
   previewSplitMode: 'horizontal',
   previewFullScreen: false,
+  selectedLlmCallId: null,
 
   workspaceModalOpen: false,
   workspaceModalMode: 'create',
@@ -47,6 +51,8 @@ export const useUiStore = create<UiState>((set) => ({
   toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   setActiveView: (view) => set({ activeView: view }),
+  setSelectedLlmCallId: (id) => set({ selectedLlmCallId: id }),
+  inspectLlmCall: (id) => set({ activeView: 'llm', selectedLlmCallId: id }),
   setPreviewSplitMode: (mode) => set({ previewSplitMode: mode }),
   togglePreviewFullScreen: () => set((state) => ({ previewFullScreen: !state.previewFullScreen })),
 

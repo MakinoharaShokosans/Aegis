@@ -39,6 +39,13 @@ export const taskApi = {
   },
 
   /**
+   * Get recorded LLM request and response snapshots for a task
+   */
+  getLlmCalls(taskId: string): Promise<any[]> {
+    return httpClient.get<any[]>(`/api/v1/tasks/${encodeURIComponent(taskId)}/llm_calls`);
+  },
+
+  /**
    * Approve a blocked HITL privilege/network action
    */
   approve(
