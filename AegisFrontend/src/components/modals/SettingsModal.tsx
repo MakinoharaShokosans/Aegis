@@ -12,7 +12,7 @@ import {
   Radio,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
-import { httpClient } from '@/api';
+import { httpClient, systemApi } from '@/api';
 
 export const SettingsModal: React.FC = () => {
   const { settingsModalOpen, setSettingsModalOpen } = useUiStore();
@@ -21,21 +21,41 @@ export const SettingsModal: React.FC = () => {
   const [copiedToken, setCopiedToken] = useState(false);
 
   // Security Gate form state
-  const [tokenVal, setTokenVal] = useState(httpClient.getToken() || 'aegis_sec_98f413a69b184ef4b07890c21625ae7d');
+  const [tokenVal, setTokenVal] = useState(httpClient.getToken() || 'uYreqOZnyVsUQWYkNO6PKVsmwNPDwIeJjcOPZWR6rq4');
   const [allowedHosts, setAllowedHosts] = useState('127.0.0.1, localhost, ::1');
   const [corsOrigins, setCorsOrigins] = useState('http://localhost:5173, http://127.0.0.1:5173');
 
   // Dual-Tier Gateway state
-  const [reasoningModel, setReasoningModel] = useState('deepseek-reasoner');
-  const [reasoningBaseUrl, setReasoningBaseUrl] = useState('https://api.deepseek.com/v1');
-  const [fastModel, setFastModel] = useState('deepseek-chat');
-  const [fastBaseUrl, setFastBaseUrl] = useState('https://api.deepseek.com/v1');
+  const [reasoningModel, setReasoningModel] = useState('gpt-5.6-terra');
+  const [reasoningBaseUrl, setReasoningBaseUrl] = useState('https://api.openlux.ai/v1');
+  const [fastModel, setFastModel] = useState('gpt-5.4-mini / gpt-5.6-luna');
+  const [fastBaseUrl, setFastBaseUrl] = useState('https://api.openlux.ai/v1');
 
   // Sidecar state
   const [ragPort, setRagPort] = useState('8001');
   const [shellPort, setShellPort] = useState('8002');
   const [webPort, setWebPort] = useState('8003');
   const [memoryPoolMb, setMemoryPoolMb] = useState('512');
+
+  React.useEffect(() => {
+    if (settingsModalOpen) {
+      systemApi.getModels().then((data) => {
+        if (!data) return;
+        const rEndpoint = data.reasoning?.endpoints?.[0];
+        if (rEndpoint) {
+          setReasoningModel(rEndpoint.model || rEndpoint.name);
+          setReasoningBaseUrl(rEndpoint.base_url);
+        }
+        const fEndpoints = data.fast?.endpoints || [];
+        if (fEndpoints.length > 0) {
+          setFastModel(fEndpoints.map((e) => e.model || e.name).join(' / '));
+          setFastBaseUrl(fEndpoints[0].base_url);
+        }
+      }).catch(() => {
+        // ignore
+      });
+    }
+  }, [settingsModalOpen]);
 
   if (!settingsModalOpen) return null;
 

@@ -349,7 +349,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       prompt,
       status: 'running',
       permissionLevel: options?.permissionLevel || 'workspace_write',
-      model: options?.model || 'Reasoning: DeepSeek-R1 / Fast: DeepSeek-V3',
+      model: options?.model || 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messages: [

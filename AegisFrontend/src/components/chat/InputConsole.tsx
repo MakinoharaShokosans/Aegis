@@ -3,7 +3,7 @@
  * Floating bottom console with Slash command helpers, dual-model gateway selector, and token telemetry.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   ArrowUp,
   Shield,
@@ -15,12 +15,37 @@ import {
 } from 'lucide-react';
 import type { PermissionLevel, TelemetryStats } from '@/types';
 import { WaterLevelMeter } from '@/components/domain/WaterLevelMeter';
+import { systemApi } from '@/api';
 
 interface InputConsoleProps {
   onSend: (prompt: string, options: { permissionLevel: PermissionLevel; model: string }) => void;
   telemetry?: TelemetryStats;
   disabled?: boolean;
 }
+
+interface ModelOption {
+  value: string;
+  label: string;
+}
+
+const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
+  {
+    value: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
+    label: '🧠 Dual-Tier: gpt-5.6-terra + gpt-5.4-mini (默认)',
+  },
+  {
+    value: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna',
+    label: '🧠 Dual-Tier: gpt-5.6-terra + gpt-5.6-luna (高性能)',
+  },
+  {
+    value: 'Fast Only: gpt-5.4-mini',
+    label: '⚡ Fast Only: gpt-5.4-mini',
+  },
+  {
+    value: 'Fast Only: gpt-5.6-luna',
+    label: '⚡ Fast Only: gpt-5.6-luna',
+  },
+];
 
 export const InputConsole: React.FC<InputConsoleProps> = ({
   onSend,
@@ -29,8 +54,47 @@ export const InputConsole: React.FC<InputConsoleProps> = ({
 }) => {
   const [inputVal, setInputVal] = useState('');
   const [permissionLevel, setPermissionLevel] = useState<PermissionLevel>('workspace_write');
-  const [selectedModel, setSelectedModel] = useState('Reasoning: DeepSeek-R1 / Fast: DeepSeek-V3');
+  const [modelOptions, setModelOptions] = useState<ModelOption[]>(DEFAULT_MODEL_OPTIONS);
+  const [selectedModel, setSelectedModel] = useState<string>(DEFAULT_MODEL_OPTIONS[0].value);
   const [showSlashMenu, setShowSlashMenu] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    systemApi.getModels().then((data) => {
+      if (!mounted || !data) return;
+      const opts: ModelOption[] = [];
+      const reasoningEndpoints = data.reasoning?.endpoints || [];
+      const fastEndpoints = data.fast?.endpoints || [];
+
+      if (reasoningEndpoints.length > 0 && fastEndpoints.length > 0) {
+        reasoningEndpoints.forEach((r) => {
+          fastEndpoints.forEach((f) => {
+            opts.push({
+              value: `Dual-Tier: ${r.model} + ${f.model}`,
+              label: `🧠 Dual-Tier: ${r.name || r.model} + ${f.name || f.model}`,
+            });
+          });
+        });
+      }
+      fastEndpoints.forEach((f) => {
+        opts.push({
+          value: `Fast Only: ${f.model}`,
+          label: `⚡ Fast Only: ${f.name || f.model}`,
+        });
+      });
+
+      if (opts.length > 0) {
+        setModelOptions(opts);
+        setSelectedModel((prev) => (opts.some((o) => o.value === prev) ? prev : opts[0].value));
+      }
+    }).catch(() => {
+      // Keep defaults
+    });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const handleSubmit = () => {
     if (!inputVal.trim() || disabled) return;
@@ -126,9 +190,9 @@ export const InputConsole: React.FC<InputConsoleProps> = ({
                   onChange={(e) => setPermissionLevel(e.target.value as PermissionLevel)}
                   className="px-2 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-700 focus:outline-none cursor-pointer"
                 >
-                  <option value="readonly">🔒 只读免审批 (readonly)</option>
+                  <option value="read_only">🔒 只读免审批 (read_only)</option>
                   <option value="workspace_write">🛡 工作区写入 (workspace_write - 默认)</option>
-                  <option value="full_access">⚡ 全权限模式 (full_access - 需审批)</option>
+                  <option value="full_permissions">⚡ 全权限模式 (full_permissions - 需审批)</option>
                 </select>
               </div>
 
@@ -140,13 +204,11 @@ export const InputConsole: React.FC<InputConsoleProps> = ({
                   onChange={(e) => setSelectedModel(e.target.value)}
                   className="px-2 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-700 focus:outline-none cursor-pointer"
                 >
-                  <option value="Reasoning: DeepSeek-R1 / Fast: DeepSeek-V3">
-                    🧠 Dual-Tier: DeepSeek-R1 + V3
-                  </option>
-                  <option value="Reasoning: OpenAI o1 / Fast: GPT-4o-mini">
-                    🧠 Dual-Tier: OpenAI o1 + 4o-mini
-                  </option>
-                  <option value="Fast Only: DeepSeek-V3">⚡ Fast Only: DeepSeek-V3</option>
+                  {modelOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>

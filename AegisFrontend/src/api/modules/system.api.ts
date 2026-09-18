@@ -51,4 +51,32 @@ export const systemApi = {
   getConfig(): Promise<{ config: Record<string, unknown> }> {
     return httpClient.get<{ config: Record<string, unknown> }>('/api/v1/introspection/config');
   },
+
+  /**
+   * Introspect Dual-Tier reasoning and fast model endpoints topology
+   */
+  getModels(): Promise<{
+    reasoning?: {
+      temperature: number;
+      endpoints: Array<{
+        name: string;
+        model: string;
+        base_url: string;
+        timeout_sec: number;
+        available: boolean;
+      }>;
+    };
+    fast?: {
+      temperature: number;
+      endpoints: Array<{
+        name: string;
+        model: string;
+        base_url: string;
+        timeout_sec: number;
+        available: boolean;
+      }>;
+    };
+  }> {
+    return httpClient.get('/api/v1/introspection/models');
+  },
 };

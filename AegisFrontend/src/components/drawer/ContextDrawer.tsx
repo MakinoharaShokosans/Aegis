@@ -26,7 +26,7 @@ export const ContextDrawer: React.FC = () => {
 
   const systemPrompt = `You are AegisAgent, an advanced deterministic autonomous coding and engineering assistant.
 Workspace is Ground Truth. Always verify contracts against documents/*.md before modifying source code.
-Dual-Tier Execution: High-level planning with Reasoning model (DeepSeek-R1), leaf actions with Fast model.
+Dual-Tier Execution: High-level planning with Reasoning model (gpt-5.6-terra), leaf actions with Fast model (gpt-5.4-mini / gpt-5.6-luna).
 HITL Security Discipline: Out-of-bounds file writes or network egress commands must be suspended for human approval.`;
 
   const assembledPreview = `# [Layer 1: System Prompt & Rules]\n${systemPrompt}\n\n# [Layer 2: Workspace Shared Memories]\n${memories

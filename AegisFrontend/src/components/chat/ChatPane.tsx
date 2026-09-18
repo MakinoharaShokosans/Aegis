@@ -55,7 +55,7 @@ export const ChatPane: React.FC = () => {
   const handleQuickPrompt = (prompt: string) => {
     handleSend(prompt, {
       permissionLevel: 'workspace_write',
-      model: 'Reasoning: DeepSeek-R1 / Fast: DeepSeek-V3',
+      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
     });
   };
 
