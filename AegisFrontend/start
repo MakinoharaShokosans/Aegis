@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+set -e
+
+# 定位 AegisFrontend 根目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+echo -e "\033[1;35m[AegisFrontend]\033[0m 正在启动前端开发服务器 (Vite on Port 5173)..."
+if command -v pnpm &> /dev/null; then
+    exec pnpm dev "$@"
+elif command -v npm &> /dev/null; then
+    exec npm run dev "$@"
+else
+    echo "错误：未检测到 pnpm 或 npm，请先安装 Node.js 环境。" >&2
+    exit 1
+fi

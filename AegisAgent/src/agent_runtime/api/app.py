@@ -22,6 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import APIKeyHeader, HTTPBearer
 from loguru import logger
 
+import httpx
 from agent_runtime.api.auth import SecurityGateMiddleware, provision_api_token
 from agent_runtime.api.errors import install_exception_handlers
 from agent_runtime.api.routes import (
@@ -37,6 +38,8 @@ from agent_runtime.api.routes import (
 from agent_runtime.api.task_registry import TaskRegistry
 from agent_runtime.config import AegisConfig, get_config
 from agent_runtime.observability.logging import setup_logging
+from agent_runtime.preflight import render_startup_dashboard, run_preflight_checks
+from agent_runtime.supervisor import SidecarSupervisor, build_default_supervisor
 from agent_runtime.workflow import build_runtime, close_runtime
 
 __all__ = ["create_app"]
@@ -61,9 +64,30 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
         setup_logging(log_dir=Path(cfg.runtime.storage.metadata_db_path).parent / "logs")
         logger.info(f"[API] 启动 Agent HTTP API on {cfg.server.host}:{cfg.server.port}")
 
-        # 令牌在这里准备（而非模块导入期）：环境变量/文件都可能在进程启动后才就绪
+        # 1. 令牌在这里准备（而非模块导入期）：环境变量/文件都可能在进程启动后才就绪
         app.state.api_token = provision_api_token(cfg.server)
 
+        # 2. 运行启动前环境与持久化自检
+        preflight_report = run_preflight_checks(cfg)
+
+        # 3. 连带拉起托管的 Sidecar 子进程（若开启）
+        supervisor: Optional[SidecarSupervisor] = None
+        sidecar_statuses = None
+        if cfg.services.auto_start_sidecars:
+            supervisor = build_default_supervisor(cfg)
+            app.state.supervisor = supervisor
+            sidecar_statuses = await supervisor.start_all()
+
+        # 4. 探测外部依赖微服务（如 AegisRAG）
+        rag_reachable: Optional[bool] = None
+        try:
+            async with httpx.AsyncClient(timeout=0.6) as client:
+                resp = await client.get(f"{cfg.services.rag_url}/api/v1/health")
+                rag_reachable = resp.status_code < 500
+        except Exception:
+            rag_reachable = False
+
+        # 5. 装配核心 Agent 运行时
         runtime = await build_runtime(cfg)
         app.state.runtime = runtime
         app.state.started_at = time.time()
@@ -71,12 +95,31 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
             max_concurrent=cfg.server.max_concurrent_tasks,
             buffer_size=cfg.server.sse_buffer_events,
         )
+
+        # 6. 打印结构化终端启动就绪看板
+        token_hint = (
+            f"已开启 (文件: {cfg.server.api_token_file} / env: {cfg.server.api_token_env})"
+            if cfg.server.auth_enabled
+            else "未开启"
+        )
+        dashboard_banner = render_startup_dashboard(
+            report=preflight_report,
+            config=cfg,
+            sidecar_statuses=sidecar_statuses,
+            rag_reachable=rag_reachable,
+            token_hint=token_hint,
+        )
+        logger.info(f"\n{dashboard_banner}")
+
         try:
             yield
         finally:
             logger.info("[API] 开始关闭 Agent HTTP API")
             await app.state.task_registry.shutdown()
             await close_runtime(runtime)
+            if supervisor:
+                await supervisor.stop_all()
+
 
     app = FastAPI(
         title="Aegis Agent Runtime API",

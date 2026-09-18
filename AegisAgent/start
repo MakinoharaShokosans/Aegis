@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -e
+
+# 定位 AegisAgent 根目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# 虚拟环境检查与解释器解析
+if [ -f ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+elif [ -f "../.venv/bin/python" ]; then
+    PYTHON="../.venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+export PYTHONPATH="src:$PYTHONPATH"
+
+echo -e "\033[1;36m[AegisAgent]\033[0m 正在启动 Agent 运行时服务 (按 Q 或 Ctrl+C 优雅退出)..."
+exec "$PYTHON" -m agent_runtime.api "$@"

@@ -88,6 +88,9 @@ rag_url = "http://127.0.0.1:8001"
 shell_url = "http://127.0.0.1:8002"
 web_url = "http://127.0.0.1:8003"
 timeout_sec = 60
+auto_start_sidecars = true          # 启动 Agent 时是否连带拉起并托管 bash_shell 与 web_search 独立子进程
+sidecar_startup_timeout_sec = 10    # 等待 sidecar 子进程就绪探针的最长超时（秒）
+
 
 # ------------------------------------------------------------------------------
 # 8. Agent HTTP API 接入层 (唯一用户入口)

@@ -127,6 +127,15 @@ class ServicesConfig(BaseModel):
     shell_url: str = Field(default="http://127.0.0.1:8002", description="独立 Shell 容器服务地址")
     web_url: str = Field(default="http://127.0.0.1:8003", description="独立 Web 抓取服务地址")
     timeout_sec: float = Field(default=60.0, description="微服务 HTTP 调用超时上限 (秒)")
+    auto_start_sidecars: bool = Field(
+        default=True,
+        description="是否在 Agent 启动时自动拉起并托管同工程的 sidecar 子进程 (bash_shell, web_search)",
+    )
+    sidecar_startup_timeout_sec: float = Field(
+        default=10.0,
+        description="等待 sidecar 子进程就绪探针的最长秒数",
+    )
+
 
 
 # ==============================================================================

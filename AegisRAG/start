@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -e
+
+# 定位 AegisRAG 根目录
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR"
+
+# 虚拟环境检查与解释器解析
+if [ -f ".venv/bin/python" ]; then
+    PYTHON=".venv/bin/python"
+elif [ -f "../.venv/bin/python" ]; then
+    PYTHON="../.venv/bin/python"
+else
+    PYTHON="python3"
+fi
+
+export PYTHONPATH="src:$PYTHONPATH"
+
+echo -e "\033[1;32m[AegisRAG]\033[0m 正在启动 RAG 检索微服务 (Port: 8001)..."
+exec "$PYTHON" -m api "$@"
