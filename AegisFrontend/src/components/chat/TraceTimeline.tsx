@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Compass,
   Cpu,
@@ -13,8 +13,14 @@ import {
   Workflow,
   Sparkles,
   ArrowRight,
+  Share2,
+  Check,
 } from 'lucide-react';
 import type { TraceStep } from '@/types';
+import { useUiStore } from '@/stores/useUiStore';
+import { useTaskStore } from '@/stores/useTaskStore';
+import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { generateWorkflowMarkdown } from '@/utils/exportWorkflow';
 
 interface TraceTimelineProps {
   steps: TraceStep[];
@@ -89,6 +95,30 @@ const nodeConfigs: Record<
 };
 
 export const TraceTimeline: React.FC<TraceTimelineProps> = ({ steps }) => {
+  const { setActiveView, setSelectedLlmCallId } = useUiStore();
+  const { currentTaskId, tasks } = useTaskStore();
+  const { workspaces, activeWorkspaceId } = useWorkspaceStore();
+  const [copied, setCopied] = useState(false);
+  const currentTask = currentTaskId ? tasks[currentTaskId] : null;
+
+  const handleInspectLlm = (stepNode: string, stepNum: number) => {
+    const matchingCall =
+      currentTask?.llmCalls?.find((c) => c.node === stepNode && c.step === stepNum) ||
+      currentTask?.llmCalls?.find((c) => c.node === stepNode);
+    if (matchingCall) {
+      setSelectedLlmCallId(matchingCall.id);
+    }
+    setActiveView('llm');
+  };
+
+  const handleCopyWorkflow = () => {
+    const currentWs = workspaces.find((w) => w.id === activeWorkspaceId);
+    const md = generateWorkflowMarkdown(currentTask, currentWs);
+    navigator.clipboard.writeText(md);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   if (!steps || steps.length === 0) {
     return (
       <div className="py-16 flex flex-col items-center justify-center text-center max-w-md mx-auto select-none space-y-4">
@@ -115,6 +145,25 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ steps }) => {
         </div>
         <div className="flex items-center gap-3 text-[11px]">
           <span>共 {steps.length} 个轨迹步</span>
+          {currentTask && (
+            <button
+              onClick={handleCopyWorkflow}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition"
+              title="一键复制全流程报告"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3 h-3 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold">已复制</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3 h-3 text-brand-600" />
+                  <span>复制全流程</span>
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
@@ -136,6 +185,7 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ steps }) => {
       <div className="relative pl-6 border-l-2 border-slate-200 space-y-4 pt-1">
         {steps.map((step, idx) => {
           const config = nodeConfigs[step.node] || nodeConfigs.executor;
+          const isLlmNode = ['planner', 'executor', 'evaluator', 'subagent'].includes(step.node);
 
           return (
             <div key={step.id || `step-${idx}`} className="relative group">
@@ -148,7 +198,7 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ steps }) => {
 
               {/* Step Card */}
               <div className="p-3.5 rounded-xl border border-slate-200/90 bg-white hover:border-slate-300 shadow-2xs space-y-2.5 transition">
-                {/* 1. Header: Node Badge, Step #, Time, Tokens */}
+                {/* 1. Header: Node Badge, Step #, Time, Tokens, AI Inspect Link */}
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2">
                   <div className="flex items-center gap-2">
                     <span
@@ -157,6 +207,17 @@ export const TraceTimeline: React.FC<TraceTimelineProps> = ({ steps }) => {
                       {config.icon}
                       <span>Step #{step.step}: {config.name}</span>
                     </span>
+
+                    {isLlmNode && (
+                      <button
+                        onClick={() => handleInspectLlm(step.node, step.step)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 transition"
+                        title="查看本步底层发送给大模型的 Prompt 与原始返回"
+                      >
+                        <Cpu className="w-3 h-3 text-blue-600" />
+                        <span>AI 请求透视</span>
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">

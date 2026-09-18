@@ -3,27 +3,32 @@
  * Main conversation pane with dual-view mode (Chat / Trace), Hero Dashboard, and HITL gate cards.
  */
 
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import {
   Bot,
   Activity,
+  Cpu,
   Zap,
   AlertTriangle,
   FolderTree,
   Plus,
+  Share2,
+  Check,
 } from 'lucide-react';
 import { AegisLogo } from '@/components/common/AegisLogo';
 import { useUiStore } from '@/stores/useUiStore';
 import { useTaskStore } from '@/stores/useTaskStore';
 import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
+import { generateWorkflowMarkdown } from '@/utils/exportWorkflow';
 import type { PermissionLevel } from '@/types';
 import { MessageBubble } from './MessageBubble';
 import { HitlApprovalCard } from './HitlApprovalCard';
 import { TraceTimeline } from './TraceTimeline';
+import { LlmInvocationInspector } from './LlmInvocationInspector';
 import { InputConsole } from './InputConsole';
 
 export const ChatPane: React.FC = () => {
-  const { activeView, setActiveView, openWorkspaceModal } = useUiStore();
+  const { activeView, setActiveView, selectedLlmCallId, setSelectedLlmCallId, openWorkspaceModal } = useUiStore();
   const {
     currentTaskId,
     tasks,
@@ -41,12 +46,13 @@ export const ChatPane: React.FC = () => {
     createSession,
   } = useWorkspaceStore();
 
+  const [workflowCopied, setWorkflowCopied] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const currentTask = currentTaskId ? tasks[currentTaskId] : null;
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [currentTask?.messages, currentTask?.traceSteps]);
+  }, [currentTask?.messages, currentTask?.traceSteps, currentTask?.llmCalls]);
 
   const handleSend = async (prompt: string, options: { permissionLevel: PermissionLevel; model: string }) => {
     let wsId = activeWorkspaceId;
@@ -72,6 +78,17 @@ export const ChatPane: React.FC = () => {
   const handleOpenFile = (path: string) => {
     openFileFromWorkspace(path);
   };
+
+  const handleCopyWorkflow = () => {
+    const currentWs = workspaces.find((w) => w.id === activeWorkspaceId);
+    const md = generateWorkflowMarkdown(currentTask, currentWs);
+    navigator.clipboard.writeText(md);
+    setWorkflowCopied(true);
+    setTimeout(() => setWorkflowCopied(false), 2000);
+  };
+
+  const traceCount = currentTask?.traceSteps?.length || 0;
+  const llmCount = currentTask?.llmCalls?.length || 0;
 
   return (
     <div className="flex flex-col h-full bg-white select-none relative">
@@ -100,11 +117,54 @@ export const ChatPane: React.FC = () => {
           >
             <Activity className="w-3.5 h-3.5 text-purple-600" />
             <span>执行轨迹 (Trace)</span>
+            {traceCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-purple-100 text-purple-800 text-[10px] font-mono font-bold">
+                {traceCount}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveView('llm')}
+            className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition ${
+              activeView === 'llm'
+                ? 'bg-white text-slate-900 shadow-2xs font-semibold'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Cpu className="w-3.5 h-3.5 text-blue-600" />
+            <span>AI 请求透视</span>
+            {llmCount > 0 && (
+              <span className="px-1.5 py-0.2 rounded-full bg-blue-100 text-blue-800 text-[10px] font-mono font-bold">
+                {llmCount}
+              </span>
+            )}
           </button>
         </div>
 
-        {/* Subagent / HITL Status Badge */}
+        {/* Right Side: One-click Workflow Exporter & Subagent / HITL Status Badge */}
         <div className="flex items-center gap-2">
+          {/* One-click Export / Copy Full Workflow */}
+          {currentTask && (
+            <button
+              onClick={handleCopyWorkflow}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200/90 bg-white hover:bg-slate-50 text-slate-700 text-[11px] font-mono font-medium shadow-2xs transition"
+              title="一键复制本次对话与执行全流程 Markdown 报告（方便存取与转发）"
+            >
+              {workflowCopied ? (
+                <>
+                  <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  <span className="text-emerald-700 font-bold">全流程已复制</span>
+                </>
+              ) : (
+                <>
+                  <Share2 className="w-3.5 h-3.5 text-brand-600" />
+                  <span>一键复制全流程</span>
+                </>
+              )}
+            </button>
+          )}
+
           {currentTask?.subagents && currentTask.subagents.some((s) => s.status === 'running') && (
             <span className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 border border-purple-200 text-purple-700 text-[11px] font-medium animate-pulse">
               <Zap className="w-3 h-3 text-purple-600" />
@@ -125,6 +185,12 @@ export const ChatPane: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-6">
         {activeView === 'trace' ? (
           <TraceTimeline steps={currentTask?.traceSteps || []} />
+        ) : activeView === 'llm' ? (
+          <LlmInvocationInspector
+            calls={currentTask?.llmCalls || []}
+            selectedCallId={selectedLlmCallId}
+            onSelectCall={setSelectedLlmCallId}
+          />
         ) : (
           <div className="space-y-6 max-w-3xl mx-auto">
             {/* 1. When no workspace connected at all */}
