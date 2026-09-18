@@ -115,7 +115,7 @@ async def test_full_workflow_success_loop(test_config: AegisConfig, mock_gateway
 
         # 校验事件流
         assert len(events) >= 4
-        nodes_executed = [ev["node"] for ev in events]
+        nodes_executed = [ev["node"] for ev in events if "node" in ev]
         assert "planner" in nodes_executed
         assert "budget_guard" in nodes_executed
         assert "executor" in nodes_executed
@@ -614,3 +614,91 @@ async def test_workflow_always_allowlist_across_steps(test_config: AegisConfig, 
         assert resume_outcome.state["milestones"][1].status == "completed"
     finally:
         await close_runtime(deps)
+
+
+@pytest.mark.asyncio
+async def test_workflow_conversational_direct_reply_closure(test_config: AegisConfig, mock_gateway_factory, tmp_path: Path):
+    """测试纯对话/无工具调用场景（如发送'你好'）：
+    Planner 决策 -> BudgetGuard 放行 -> Executor 直接输出问候文本（无 tool_calls） -> Evaluator 验收收敛 -> 1 步完成，不进入死循环。
+    """
+    ws_dir = tmp_path / "chat_ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+
+    planner_resp = {
+        "thought": "用户向我打招呼，回复问候并询问需要什么帮助",
+        "milestones": [],
+        "next_step": "你好！我是 Aegis 研发助手，有什么我可以帮您的吗？",
+    }
+    executor_resp = LLMResponse(
+        content="你好！我是 Aegis 研发助手，很高兴为你服务。请问今天有什么开发任务需要我协助？",
+        tool_calls=[],
+        total_tokens=15,
+        endpoint_name="mock-fast",
+    )
+    evaluator_resp = {
+        "milestone_ok": True,
+        "task_completed": True,
+        "summary": "已向用户打招呼并等待指令",
+        "confirmed_facts": [],
+        "failed_attempts": [],
+    }
+
+    mock_gateway = mock_gateway_factory([
+        planner_resp,
+        executor_resp,
+        evaluator_resp,
+    ])
+
+    store = SqliteMemoryStore(db_path=test_config.runtime.storage.metadata_db_path)
+    memory = MemoryManager(store=store)
+    await memory.initialize()
+
+    checkpoints = SqliteCheckpointStore(test_config.runtime.storage.checkpoint_db_path)
+    await checkpoints.open()
+
+    ws = await memory.create_workspace(name="chat_ws", root_path=str(ws_dir), description="Chat workspace")
+    session = await memory.create_session(workspace_id=ws.workspace_id, title="Chat Session")
+
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    deps = RuntimeDeps(
+        config=test_config,
+        memory=memory,
+        gateway=mock_gateway,  # type: ignore[arg-type]
+        prompts=PromptLibrary(),
+        skills=SkillsRegistry.from_workspace(workspace_root=ws_dir, builtin_dir=skills_dir),
+        mcp_manager=MCPManager(test_config.mcp),
+        checkpoints=checkpoints,
+        builtin_skills_dir=skills_dir,
+    )
+
+    events = []
+    async def capture_event(ev):
+        events.append(ev)
+
+    try:
+        outcome = await run_streaming(
+            deps,
+            workspace_id=ws.workspace_id,
+            session_id=session.session_id,
+            task_goal="你好",
+            event_sink=capture_event,
+        )
+        final_state = outcome.state
+
+        # 校验：单步收敛、should_terminate 为 True、不循环
+        assert final_state["should_terminate"] is True
+        assert final_state["termination_reason"] == "task_goal achieved"
+        assert final_state["step_count"] == 1
+
+        nodes_executed = [ev["node"] for ev in events if "node" in ev]
+        assert nodes_executed == ["planner", "budget_guard", "executor", "evaluator"]
+        assert "tool_runner" not in nodes_executed
+
+        # 校验提取的交付答复包含 executor 输出
+        from agent_runtime.execution_context import ExecutionContextManager
+        delivery = ExecutionContextManager.extract_delivery(final_state)
+        assert "Aegis 研发助手" in delivery
+    finally:
+        await close_runtime(deps)
+

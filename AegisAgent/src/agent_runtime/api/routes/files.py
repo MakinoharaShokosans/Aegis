@@ -14,10 +14,13 @@ from fastapi import APIRouter, Query, status
 
 from agent_runtime.api.deps import MemoryDep
 from agent_runtime.api.schemas import (
+    DirectoryBrowseResponse,
+    DirectoryEntry,
     FileContentOut,
     FileContentUpdate,
     FileItem,
     FileTreeResponse,
+    QuickLocation,
 )
 from agent_runtime.errors import PathEscapeDetectedError, WorkspaceNotFoundError
 from agent_runtime.memory.models import Workspace
@@ -242,3 +245,168 @@ async def save_file_content(
         "size_bytes": stat.st_size,
         "updated_at": stat.st_mtime,
     }
+
+
+@router.get(
+    "/system/fs/directories",
+    response_model=DirectoryBrowseResponse,
+    summary="浏览并选择本地目录",
+)
+async def browse_directories(
+    path: Optional[str] = Query(None, description="要浏览的物理绝对路径，留空时默认为当前工作目录或用户主目录"),
+) -> DirectoryBrowseResponse:
+    """供前端工作区创建/接入选择器浏览本地物理目录。"""
+    if path and path.strip():
+        target_path = Path(path.strip()).expanduser().resolve()
+    else:
+        target_path = Path.cwd().resolve()
+
+    if not target_path.exists() or not target_path.is_dir():
+        if target_path.parent.exists() and target_path.parent.is_dir():
+            target_path = target_path.parent
+        else:
+            target_path = Path.home().resolve()
+
+    is_root = target_path == target_path.parent
+    parent_str = str(target_path.parent) if not is_root else None
+
+    subdirs: List[DirectoryEntry] = []
+    try:
+        for entry in sorted(target_path.iterdir(), key=lambda p: p.name.lower()):
+            if not entry.is_dir():
+                continue
+            if entry.name.startswith(".") or entry.name in _IGNORED_DIRS:
+                continue
+            has_sub = False
+            try:
+                has_sub = any(child.is_dir() and not child.name.startswith(".") for child in entry.iterdir())
+            except (OSError, PermissionError):
+                has_sub = False
+
+            subdirs.append(
+                DirectoryEntry(
+                    name=entry.name,
+                    path=str(entry.resolve()),
+                    is_directory=True,
+                    has_subdirectories=has_sub,
+                )
+            )
+    except (OSError, PermissionError):
+        pass
+
+    # 快捷路径推荐
+    home_dir = Path.home().resolve()
+    quick_locs: List[QuickLocation] = [
+        QuickLocation(label="当前工程", path=str(Path.cwd().resolve())),
+        QuickLocation(label="用户主目录 (~)", path=str(home_dir)),
+    ]
+
+    for rel_name, label in [
+        ("Projects", "Projects (项目)"),
+        ("Desktop", "Desktop (桌面)"),
+        ("Documents", "Documents (文档)"),
+        ("Downloads", "Downloads (下载)"),
+    ]:
+        candidate = home_dir / rel_name
+        if candidate.is_dir():
+            quick_locs.append(QuickLocation(label=label, path=str(candidate)))
+
+    if Path("/tmp").is_dir():
+        quick_locs.append(QuickLocation(label="临时目录 (/tmp)", path="/tmp"))
+
+    quick_locs.append(QuickLocation(label="系统根目录 (/)", path="/"))
+
+    return DirectoryBrowseResponse(
+        current_path=str(target_path),
+        parent_path=parent_str,
+        is_root=is_root,
+        directories=subdirs,
+        quick_locations=quick_locs,
+    )
+
+
+async def _open_native_directory_dialog(initial_path: Optional[str] = None) -> Optional[str]:
+    """在后台线程中唤起宿主机原生系统文件管理器/目录选择弹窗。"""
+    import asyncio
+    import shutil
+    import subprocess
+
+    def _sync_dialog() -> Optional[str]:
+        # 1. 优先尝试 Zenity (GNOME / GTK Linux 标准文件管理器选择器)
+        if shutil.which("zenity"):
+            cmd = ["zenity", "--file-selection", "--directory", "--title=选择 Aegis 工程工作区目录"]
+            if initial_path and os.path.isdir(initial_path):
+                cmd.append(f"--filename={initial_path.rstrip('/')}/")
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                if res.returncode == 0:
+                    val = res.stdout.strip()
+                    if val and os.path.isdir(val):
+                        return val
+                return None
+            except Exception:
+                pass
+
+        # 2. 尝试 Kdialog (KDE Linux 环境)
+        if shutil.which("kdialog"):
+            start_dir = initial_path if (initial_path and os.path.isdir(initial_path)) else str(Path.home())
+            cmd = ["kdialog", "--getexistingdirectory", start_dir, "--title", "选择 Aegis 工程工作区目录"]
+            try:
+                res = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+                if res.returncode == 0:
+                    val = res.stdout.strip()
+                    if val and os.path.isdir(val):
+                        return val
+                return None
+            except Exception:
+                pass
+
+        # 3. 尝试 Python Tkinter 图形对话框
+        try:
+            import tkinter as tk
+            from tkinter import filedialog
+
+            root = tk.Tk()
+            root.withdraw()
+            root.attributes("-topmost", True)
+            val = filedialog.askdirectory(
+                initialdir=initial_path or str(Path.home()),
+                title="选择 Aegis 工程工作区目录",
+            )
+            root.destroy()
+            if val and os.path.isdir(val):
+                return val
+            return None
+        except Exception:
+            pass
+
+        return None
+
+    return await asyncio.to_thread(_sync_dialog)
+
+
+@router.post(
+    "/system/fs/pick-directory",
+    summary="调用宿主机原生文件管理器选择目录",
+)
+async def pick_native_directory(
+    path: Optional[str] = Query(None, description="初始浏览路径"),
+) -> Dict[str, Any]:
+    """直接调出系统原生文件管理器 (Zenity/Kdialog/Tkinter) 让用户点选目录。"""
+    chosen = await _open_native_directory_dialog(path)
+    if chosen:
+        name = Path(chosen).name or "Workspace"
+        return {
+            "success": True,
+            "path": chosen,
+            "name": name,
+            "cancelled": False,
+        }
+    return {
+        "success": False,
+        "path": None,
+        "name": None,
+        "cancelled": True,
+    }
+
+

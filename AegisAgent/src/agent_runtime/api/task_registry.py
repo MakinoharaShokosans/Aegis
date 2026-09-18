@@ -182,6 +182,13 @@ class TaskRegistry:
             TaskQueueFullError: 全局并发已达上限。
         """
         async with self._lock:
+            # 自动收割/清理后台协程已退出的陈旧句柄
+            for h in list(self._tasks.values()):
+                if h.status in ("queued", "running") and h.runner and h.runner.done():
+                    h.status = "failed"
+                    h.finished_at = h.finished_at or time.time()
+                    self._running.discard(h.task_id)
+
             if any(
                 handle.session_id == session_id and handle.status in ("queued", "running")
                 for handle in self._tasks.values()
@@ -393,6 +400,10 @@ class TaskRegistry:
             # 挂起待审批不是终态：不发 task.finished，避免前端误判任务已结束
             if handle.status == "waiting_for_approval":
                 return
+            if handle.status in ("queued", "running"):
+                handle.status = "failed"
+            from agent_runtime.execution_context import ExecutionContextManager
+            delivery = ExecutionContextManager.extract_delivery(handle.state or {})
             await self.emit(
                 handle.task_id,
                 {
@@ -401,6 +412,7 @@ class TaskRegistry:
                     "termination_reason": str((handle.state or {}).get("termination_reason", "")),
                     "step_count": int((handle.state or {}).get("step_count", 0) or 0),
                     "total_tokens": int((handle.state or {}).get("total_tokens", 0) or 0),
+                    "delivery": delivery,
                 },
             )
             self._close_subscribers(handle)

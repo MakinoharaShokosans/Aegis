@@ -90,6 +90,7 @@ class SqliteMemoryStore:
                 """
                 CREATE TABLE IF NOT EXISTS workspace_memories (
                     workspace_id TEXT PRIMARY KEY,
+                    user_profile TEXT DEFAULT '[]',
                     project_conventions TEXT DEFAULT '[]',
                     confirmed_architecture TEXT DEFAULT '[]',
                     global_failed_attempts TEXT DEFAULT '[]',
@@ -98,6 +99,11 @@ class SqliteMemoryStore:
                 );
                 """
             )
+            # 兼容已有库的自动列追加
+            try:
+                await db.execute("ALTER TABLE workspace_memories ADD COLUMN user_profile TEXT DEFAULT '[]';")
+            except Exception:
+                pass
 
             # 2. 会话主表 (隶属于工作区，1:N 级联从属)
             await db.execute(
@@ -382,7 +388,7 @@ class SqliteMemoryStore:
             await self._ensure_workspace_exists(db, workspace_id)
             async with db.execute(
                 """
-                SELECT project_conventions, confirmed_architecture, global_failed_attempts, updated_at 
+                SELECT project_conventions, confirmed_architecture, global_failed_attempts, updated_at, user_profile 
                 FROM workspace_memories 
                 WHERE workspace_id = ?
                 """,
@@ -396,6 +402,7 @@ class SqliteMemoryStore:
                 archs_raw = row[1] or "[]"
                 fails_raw = row[2] or "[]"
                 updated_at = row[3] or time.time()
+                user_raw = (row[4] if len(row) > 4 else None) or "[]"
 
                 try:
                     convs = json.loads(convs_raw)
@@ -413,8 +420,14 @@ class SqliteMemoryStore:
                 except Exception:
                     fails = []
 
+                try:
+                    user_prof = json.loads(user_raw)
+                except Exception:
+                    user_prof = []
+
                 return WorkspaceMemory(
                     workspace_id=workspace_id,
+                    user_profile=user_prof,
                     project_conventions=convs,
                     confirmed_architecture=archs,
                     global_failed_attempts=fails,
@@ -433,6 +446,7 @@ class SqliteMemoryStore:
         memory.updated_at = now
         memory.deduplicate()
 
+        user_json = json.dumps(memory.user_profile, ensure_ascii=False)
         conv_json = json.dumps(memory.project_conventions, ensure_ascii=False)
         arch_json = json.dumps(memory.confirmed_architecture, ensure_ascii=False)
         fails_json = json.dumps([f.model_dump() for f in memory.global_failed_attempts], ensure_ascii=False)
@@ -442,14 +456,14 @@ class SqliteMemoryStore:
             await db.execute(
                 """
                 INSERT OR REPLACE INTO workspace_memories 
-                (workspace_id, project_conventions, confirmed_architecture, global_failed_attempts, updated_at)
-                VALUES (?, ?, ?, ?, ?)
+                (workspace_id, user_profile, project_conventions, confirmed_architecture, global_failed_attempts, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (memory.workspace_id, conv_json, arch_json, fails_json, now),
+                (memory.workspace_id, user_json, conv_json, arch_json, fails_json, now),
             )
             await db.commit()
 
-        logger.debug(f"已更新工作区全局记忆 [ws={memory.workspace_id}, convs={len(memory.project_conventions)}, archs={len(memory.confirmed_architecture)}]")
+        logger.debug(f"已更新工作区全局记忆 [ws={memory.workspace_id}, user_prof={len(memory.user_profile)}, convs={len(memory.project_conventions)}, archs={len(memory.confirmed_architecture)}]")
 
     # ==========================================================================
     # 2. 会话管理接口 (Session Management)

@@ -14,6 +14,7 @@ documents/
 ├── README.md                      # [当前文档] 全景总入口与实施导航
 ├── 技术栈.md                      # 全景技术栈清单 (Tech Stack BOM, 库/模型/版本/环境)
 ├── frontend_design.md             # 🎨 前端架构与交互设计规范 (DeepSeek Harness UI/UX 逆向与标准)
+├── frontend_workflow.md           # 🚀 前端工作流与用户旅程设计规范 (冷启动/会话流转/快捷键/时序图)
 ├── 测试路线/                      # 【测试路线全景】(分系统独立维护)
 │   ├── README.md                  # 测试路线总索引与双系统全景一览
 │   ├── AegisAgent/                # 👑 Agent 调度宿主系统测试路线 (基础 + 深度测试)

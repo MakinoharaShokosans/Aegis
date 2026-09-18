@@ -62,6 +62,8 @@ def test_route_after_budget_guard():
 
 def test_route_after_executor():
     """测试 executor 节点的路由决策。"""
+    from langchain_core.messages import AIMessage
+
     # 1. 致命错误熔断
     state_terminated = {
         "should_terminate": True,
@@ -69,9 +71,19 @@ def test_route_after_executor():
     }
     assert route_after_executor(state_terminated) == END
 
-    # 2. 正常回环到 planner 汇总观察值并安排下一步
-    state_ok = {"should_terminate": False}
-    assert route_after_executor(state_ok) == "tool_runner"
+    # 2. 产生工具调用 -> 进入 tool_runner 执行派发
+    state_with_tools = {
+        "should_terminate": False,
+        "messages": [AIMessage(content="调用工具", tool_calls=[{"id": "call_1", "name": "bash", "args": {}}])],
+    }
+    assert route_after_executor(state_with_tools) == "tool_runner"
+
+    # 3. 未产生工具调用（直接文本答复/无工具需求）-> 进入 evaluator 验收与收敛
+    state_no_tools = {
+        "should_terminate": False,
+        "messages": [AIMessage(content="你好！请问有什么我可以帮您？")],
+    }
+    assert route_after_executor(state_no_tools) == "evaluator"
 
 
 def test_route_after_tool_runner():

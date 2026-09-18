@@ -99,8 +99,21 @@ def build_planner_node(
         if not verdict and response.content:
             logger.warning("[Planner] 未能解析结构化输出，降级为纯文本指令")
 
-        thought = str(verdict.get("thought") or response.content or "").strip()
-        directive = str(verdict.get("next_step") or thought).strip()
+        raw_thought = verdict.get("thought") or response.content or ""
+        raw_directive = verdict.get("next_step") or verdict.get("message") or verdict.get("reply") or verdict.get("directive") or raw_thought
+
+        thought = str(raw_thought).strip()
+        directive = str(raw_directive).strip()
+
+        # 防御性清洗：若模型把结果封装在 {"message": ...} 或 {"thought": ...} 字符串内，提取纯文本
+        if thought.startswith("{") and thought.endswith("}"):
+            inner = extract_json_object(thought)
+            if inner:
+                thought = str(inner.get("thought") or inner.get("message") or inner.get("reply") or inner.get("next_step") or thought).strip()
+        if directive.startswith("{") and directive.endswith("}"):
+            inner = extract_json_object(directive)
+            if inner:
+                directive = str(inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
 
         # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
         # 这样"里程碑"是模型自主分解的产物，而不是硬编码的固定流程。

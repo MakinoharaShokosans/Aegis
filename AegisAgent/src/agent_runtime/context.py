@@ -89,19 +89,22 @@ class ContextManager:
     def _workspace_section(self) -> str:
         """装配"工作区环境与全局记忆"层。"""
         lines = [
-            "## 工作区环境",
+            "## 工作区环境与工程基准",
             f"- 工作区名称：{self._workspace.name}",
             f"- 工作目录（工具执行的 cwd）：{self._workspace.root_path}",
         ]
         if self._workspace.description:
-            lines.append(f"- 工程背景：{self._workspace.description}")
+            lines.append(f"- 知识库与工程背景：{self._workspace.description}")
 
         memory = self._workspace_memory
+        if memory.user_profile:
+            lines.append("\n## 用户画像与个性偏好（跨会话全局生效）")
+            lines.extend(f"- {item}" for item in memory.user_profile)
         if memory.confirmed_architecture:
-            lines.append("\n## 已确认的项目架构定论（跨会话共享）")
+            lines.append("\n## 知识库与领域架构定论（跨会话共享）")
             lines.extend(f"- {item}" for item in memory.confirmed_architecture)
         if memory.project_conventions:
-            lines.append("\n## 项目编码与工程规范（跨会话共享）")
+            lines.append("\n## 工程准则与业务规范（跨会话共享）")
             lines.extend(f"- {item}" for item in memory.project_conventions)
         if memory.global_failed_attempts:
             lines.append("\n## 全局避坑黑名单（跨会话共享，严禁重犯）")

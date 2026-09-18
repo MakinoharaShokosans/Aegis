@@ -86,36 +86,34 @@ class WorkspaceMemory(BaseModel):
     
     属性说明：
         workspace_id: 工作区唯一标识 (如项目绝对路径哈希或代号)
-        project_conventions: 项目全局代码风格、构建规范与用户偏好 (跨会话有效)
-        confirmed_architecture: 已探明的核心系统架构定论与代码入口 (跨会话有效)
+        user_profile: 用户画像与个性偏好 (角色设定、技术背景、交互习惯与个性指令)
+        project_conventions: 工程准则与业务规范 (工程约束、流程规范与质量标准)
+        confirmed_architecture: 知识库与领域架构定论 (知识库事实、领域模型与核心定论)
         global_failed_attempts: 全局避坑黑名单 (跨会话有效，避免新会话再犯)
         updated_at: 记忆最后更新时间戳
     """
     workspace_id: str = Field(default="default", description="工作区唯一标识")
-    project_conventions: List[str] = Field(default_factory=list, description="项目全局编码规范与用户习惯")
-    confirmed_architecture: List[str] = Field(default_factory=list, description="核心架构定论与关键入口")
+    user_profile: List[str] = Field(default_factory=list, description="用户画像与个性偏好")
+    project_conventions: List[str] = Field(default_factory=list, description="工程准则与业务规范")
+    confirmed_architecture: List[str] = Field(default_factory=list, description="知识库与领域架构定论")
     global_failed_attempts: List[FailedAttempt] = Field(default_factory=list, description="全局避坑黑名单")
     updated_at: float = Field(default_factory=time.time, description="最后更新时间戳")
 
     def deduplicate(self) -> None:
-        """对规范与架构事实进行顺序保留的唯一性去重"""
-        seen_conv = set()
-        dedup_conv: List[str] = []
-        for c in self.project_conventions:
-            clean_c = c.strip()
-            if clean_c and clean_c not in seen_conv:
-                seen_conv.add(clean_c)
-                dedup_conv.append(clean_c)
-        self.project_conventions = dedup_conv
+        """对画像、规范与架构事实进行顺序保留的唯一性去重"""
+        def _dedup(items: List[str]) -> List[str]:
+            seen = set()
+            result = []
+            for item in items:
+                clean = item.strip()
+                if clean and clean not in seen:
+                    seen.add(clean)
+                    result.append(clean)
+            return result
 
-        seen_arch = set()
-        dedup_arch: List[str] = []
-        for a in self.confirmed_architecture:
-            clean_a = a.strip()
-            if clean_a and clean_a not in seen_arch:
-                seen_arch.add(clean_a)
-                dedup_arch.append(clean_a)
-        self.confirmed_architecture = dedup_arch
+        self.user_profile = _dedup(self.user_profile)
+        self.project_conventions = _dedup(self.project_conventions)
+        self.confirmed_architecture = _dedup(self.confirmed_architecture)
 
 
 

@@ -121,3 +121,49 @@ async def test_file_tree_and_content_lifecycle(api_client: AsyncClient, tmp_path
         params={"path": "docs/non_existent.md"},
     )
     assert not_found_resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_browse_directories(api_client: AsyncClient, tmp_path: Path):
+    """测试本地目录浏览与选择接口。"""
+    sample_dir = tmp_path / "browse_root"
+    (sample_dir / "project_a").mkdir(parents=True, exist_ok=True)
+    (sample_dir / "project_b").mkdir(parents=True, exist_ok=True)
+    (sample_dir / ".git").mkdir(parents=True, exist_ok=True)
+    (sample_dir / "regular_file.txt").write_text("hello", encoding="utf-8")
+
+    resp = await api_client.get(
+        "/api/v1/system/fs/directories",
+        params={"path": str(sample_dir)},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["current_path"] == str(sample_dir)
+    assert len(data["directories"]) == 2
+    dir_names = [d["name"] for d in data["directories"]]
+    assert "project_a" in dir_names
+    assert "project_b" in dir_names
+    assert ".git" not in dir_names
+    assert "regular_file.txt" not in dir_names
+    assert len(data["quick_locations"]) > 0
+
+
+@pytest.mark.asyncio
+async def test_pick_native_directory(api_client: AsyncClient, monkeypatch: pytest.MonkeyPatch):
+    """测试原生文件管理器目录选择端点。"""
+    from agent_runtime.api.routes import files
+
+    async def mock_dialog(path=None):
+        return "/home/Skualeilu/Projects/Aegis"
+
+    monkeypatch.setattr(files, "_open_native_directory_dialog", mock_dialog)
+
+    resp = await api_client.post("/api/v1/system/fs/pick-directory")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["success"] is True
+    assert data["path"] == "/home/Skualeilu/Projects/Aegis"
+    assert data["name"] == "Aegis"
+    assert data["cancelled"] is False
+
+

@@ -51,6 +51,7 @@ class SqliteCheckpointStore:
 
         try:
             from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+            from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
         except ImportError as exc:  # pragma: no cover - 依赖已在 pyproject 声明
             raise RuntimeError(
                 "缺少 langgraph-checkpoint-sqlite，请执行 uv add \"langgraph-checkpoint-sqlite\""
@@ -62,7 +63,13 @@ class SqliteCheckpointStore:
         await self._connection.execute("PRAGMA busy_timeout=5000;")
         await self._connection.commit()
 
-        self._saver = AsyncSqliteSaver(self._connection)
+        serde = JsonPlusSerializer(
+            allowed_msgpack_modules=[
+                ("agent_runtime.state", "Milestone"),
+                ("agent_runtime.state", "FailedAttempt"),
+            ]
+        )
+        self._saver = AsyncSqliteSaver(self._connection, serde=serde)
         # 显式建表，避免首次调用时才懒建表导致的偶发并发竞争
         setup = getattr(self._saver, "setup", None)
         if callable(setup):

@@ -120,15 +120,31 @@ def build_evaluator_node(
 
         milestones: List[Milestone] = coerce_milestones(list(state.get("milestones") or []))
         current_index = int(state.get("current_milestone_idx", 0))
-        accepted = bool(verdict.get("milestone_ok"))
+
+        existing_msgs = list(state.get("messages") or [])
+        latest_msg = existing_msgs[-1] if existing_msgs else None
+        has_direct_reply = isinstance(latest_msg, AIMessage) and bool(latest_msg.content) and not getattr(latest_msg, "tool_calls", None)
+
+        accepted = bool(
+            verdict.get("milestone_ok")
+            or verdict.get("is_completed")
+            or verdict.get("all_completed")
+            or str(verdict.get("status", "")).lower() == "completed"
+        )
+
+        # 若是直接纯文本回复（如日常问候/直接问答/概念解答），且无未完成的工具调用，直接验收通过并收敛
+        if has_direct_reply:
+            accepted = True
 
         if accepted and milestones:
-            milestones = _mark_milestone_completed(milestones, current_index)
+            milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
+        elif has_direct_reply and not milestones:
+            accepted = True
 
         all_done = (
             all(milestone.status == "completed" for milestone in milestones)
             if milestones
-            else accepted
+            else (accepted or has_direct_reply)
         )
 
         # 验收通过且仍有后续里程碑时，推进指针；全部完成则保持在末尾
@@ -160,8 +176,10 @@ def build_evaluator_node(
                 consecutive_errors=int(state.get("consecutive_errors", 0)),
             )
 
+        msg_updates = [] if has_direct_reply else [AIMessage(content=summary or response.content or "验收完成。")]
+
         return {
-            "messages": [AIMessage(content=summary or response.content or "验收完成。")],
+            "messages": msg_updates,
             "milestones": milestones,
             "current_milestone_idx": next_index,
             "rolling_summary": summary,

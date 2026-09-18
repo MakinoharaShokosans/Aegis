@@ -156,7 +156,7 @@ async def build_runtime(config: Optional[AegisConfig] = None) -> RuntimeDeps:
     """
     cfg = config or get_config()
 
-    memory = MemoryManager()
+    memory = MemoryManager.from_config(cfg)
     await memory.initialize()
 
     checkpoints = SqliteCheckpointStore(cfg.runtime.storage.checkpoint_db_path)
@@ -509,17 +509,212 @@ async def _drive_graph(
                     continue
                 delta_dict = delta if isinstance(delta, dict) else {}
                 seq += 1
-                if event_sink is not None:
-                    await event_sink(
-                        {
-                            "event": "node.finished",
-                            "node": node_name,
-                            "seq": seq,
-                            "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
-                            "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
-                            "should_terminate": bool(delta_dict.get("should_terminate", False)),
+
+                messages_in_delta = delta_dict.get("messages") or []
+                raw_milestones = delta_dict.get("milestones") or []
+                milestones_in_delta = [
+                    m.model_dump()
+                    if hasattr(m, "model_dump")
+                    else (
+                        m
+                        if isinstance(m, dict)
+                        else {
+                            "id": getattr(m, "id", 0),
+                            "title": getattr(m, "title", ""),
+                            "status": getattr(m, "status", "pending"),
                         }
                     )
+                    for m in raw_milestones
+                ]
+
+                # 1. 针对具体节点派发精准语义事件
+                if node_name == "planner":
+                    directive = ""
+                    if messages_in_delta and hasattr(messages_in_delta[0], "content"):
+                        directive = str(messages_in_delta[0].content)
+                    elif messages_in_delta and isinstance(messages_in_delta[0], dict):
+                        directive = str(messages_in_delta[0].get("content", ""))
+
+                    if event_sink is not None:
+                        await event_sink(
+                            {
+                                "event": "plan",
+                                "thought": delta_dict.get("thought", directive),
+                                "directive": directive,
+                                "milestones": milestones_in_delta,
+                                "step": seq,
+                            }
+                        )
+                        await event_sink(
+                            {
+                                "event": "node.finished",
+                                "node": "planner",
+                                "seq": seq,
+                                "input_summary": "接收任务目标与上下文，规划下一步动作与里程碑",
+                                "output_summary": f"【规划决策】{directive[:200] if directive else '继续推进当前目标'}",
+                                "decision": directive,
+                                "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
+                                "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
+                                "should_terminate": False,
+                                "milestones": milestones_in_delta,
+                            }
+                        )
+
+                elif node_name == "budget_guard":
+                    if event_sink is not None:
+                        await event_sink(
+                            {
+                                "event": "node.finished",
+                                "node": "budget_guard",
+                                "seq": seq,
+                                "input_summary": "物理 Token 消耗与执行步数安全阈值巡检",
+                                "output_summary": "【看门狗】预算与循环检测正常，准予进入执行节点",
+                                "decision": "pass",
+                                "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
+                                "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
+                                "should_terminate": False,
+                            }
+                        )
+
+                elif node_name == "executor":
+                    has_tool_call = False
+                    for msg in messages_in_delta:
+                        tool_calls = (
+                            getattr(msg, "tool_calls", None)
+                            or (msg.get("tool_calls") if isinstance(msg, dict) else None)
+                            or []
+                        )
+                        content = (
+                            getattr(msg, "content", "")
+                            if hasattr(msg, "content")
+                            else (msg.get("content", "") if isinstance(msg, dict) else "")
+                        )
+                        if tool_calls:
+                            has_tool_call = True
+                            for tc in tool_calls:
+                                tc_name = (
+                                    tc.get("name")
+                                    if isinstance(tc, dict)
+                                    else getattr(tc, "name", "tool")
+                                )
+                                tc_args = (
+                                    tc.get("args")
+                                    if isinstance(tc, dict)
+                                    else getattr(tc, "args", {})
+                                )
+                                if event_sink is not None:
+                                    await event_sink(
+                                        {
+                                            "event": "tool.call",
+                                            "tool": tc_name,
+                                            "args": tc_args,
+                                            "step": seq,
+                                        }
+                                    )
+                        elif content and event_sink is not None:
+                            await event_sink(
+                                {
+                                    "event": "node.finished",
+                                    "node": "executor",
+                                    "seq": seq,
+                                    "input_summary": "Planner 决策落地为自然语言回复",
+                                    "output_summary": f"【直接答复】{content[:200]}",
+                                    "decision": "reply",
+                                    "content": content,
+                                    "step_count": int(
+                                        delta_dict.get("step_count", task.state.get("step_count", 0))
+                                    ),
+                                    "total_tokens": int(
+                                        delta_dict.get("total_tokens", task.state.get("total_tokens", 0))
+                                    ),
+                                    "should_terminate": False,
+                                }
+                            )
+                    if has_tool_call and event_sink is not None:
+                        await event_sink(
+                            {
+                                "event": "node.finished",
+                                "node": "executor",
+                                "seq": seq,
+                                "input_summary": "翻译 Planner 决策为具体工具调用",
+                                "output_summary": "【动作生成】已生成工具调用并派发至 tool_runner",
+                                "decision": "call_tools",
+                                "step_count": int(
+                                    delta_dict.get("step_count", task.state.get("step_count", 0))
+                                ),
+                                "total_tokens": int(
+                                    delta_dict.get("total_tokens", task.state.get("total_tokens", 0))
+                                ),
+                                "should_terminate": False,
+                            }
+                        )
+
+                elif node_name == "tool_runner":
+                    for msg in messages_in_delta:
+                        t_name = (
+                            getattr(msg, "name", None)
+                            or (msg.get("name") if isinstance(msg, dict) else "tool")
+                        )
+                        t_content = (
+                            getattr(msg, "content", "")
+                            if hasattr(msg, "content")
+                            else (msg.get("content", "") if isinstance(msg, dict) else "")
+                        )
+                        if event_sink is not None:
+                            await event_sink(
+                                {
+                                    "event": "tool.result",
+                                    "tool": t_name or "tool",
+                                    "result": t_content[:500],
+                                    "step": seq,
+                                }
+                            )
+                    if event_sink is not None:
+                        await event_sink(
+                            {
+                                "event": "node.finished",
+                                "node": "tool_runner",
+                                "seq": seq,
+                                "input_summary": "执行工作区受限工具派发与权限校验",
+                                "output_summary": "【工具执行完成】结果已回填至状态机上下文",
+                                "decision": "executed",
+                                "step_count": int(
+                                    delta_dict.get("step_count", task.state.get("step_count", 0))
+                                ),
+                                "total_tokens": int(
+                                    delta_dict.get("total_tokens", task.state.get("total_tokens", 0))
+                                ),
+                                "should_terminate": False,
+                            }
+                        )
+
+                elif node_name == "evaluator":
+                    summary = str(delta_dict.get("rolling_summary", "") or "")
+                    should_term = bool(delta_dict.get("should_terminate", False))
+                    term_reason = str(delta_dict.get("termination_reason", ""))
+                    completed_count = sum(
+                        1 for m in milestones_in_delta if m.get("status") == "completed"
+                    )
+                    total_count = len(milestones_in_delta)
+                    if event_sink is not None:
+                        await event_sink(
+                            {
+                                "event": "node.finished",
+                                "node": "evaluator",
+                                "seq": seq,
+                                "input_summary": f"复核阶段达成情况 (里程碑 {completed_count}/{total_count})",
+                                "output_summary": f"【验收结论】{'验收通过，准予交付' if should_term else '尚未收敛，继续推进'}。{summary or term_reason}",
+                                "decision": "accepted" if should_term else "continue",
+                                "step_count": int(
+                                    delta_dict.get("step_count", task.state.get("step_count", 0))
+                                ),
+                                "total_tokens": int(
+                                    delta_dict.get("total_tokens", task.state.get("total_tokens", 0))
+                                ),
+                                "should_terminate": should_term,
+                                "milestones": milestones_in_delta,
+                            }
+                        )
     finally:
         task.event_bus.unbind()
 

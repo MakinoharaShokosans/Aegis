@@ -110,6 +110,7 @@ async def get_workspace_memory(workspace_id: str, memory: MemoryDep) -> MemoryVi
     return MemoryView(
         scope="workspace",
         updated_at=record.updated_at,
+        user_profile=list(record.user_profile),
         project_conventions=list(record.project_conventions),
         confirmed_architecture=list(record.confirmed_architecture),
         failed_attempts=[item.model_dump() for item in record.global_failed_attempts],

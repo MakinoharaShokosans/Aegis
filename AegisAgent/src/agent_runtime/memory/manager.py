@@ -13,11 +13,13 @@ Aegis 记忆系统顶层管理器 (manager.py)
 4. 为上层 ContextManager 提供极简异步 API。
 """
 
+from __future__ import annotations
+
 import uuid
 from typing import Dict, List, Literal, Optional, Tuple
 from loguru import logger
 
-from agent_runtime.config import get_config
+from agent_runtime.config import AegisConfig, get_config
 from agent_runtime.memory.compactor import MemoryCompactor, select_turns_for_compaction
 from agent_runtime.memory.models import (
     CompressedMemory,
@@ -87,7 +89,25 @@ class MemoryManager:
 
         logger.debug(
             f"MemoryManager 初始化就绪: Token上限={self.session_token_limit}, "
-            f"高水位触发线={self.compaction_high_watermark:.0%}, 目标压缩率={self.compaction_ratio:.0%}"
+            f"高水位触发线={int(self.compaction_high_watermark * 100)}%, "
+            f"目标压缩率={int(self.compaction_ratio * 100)}%"
+        )
+
+    @classmethod
+    def from_config(
+        cls,
+        cfg: AegisConfig,
+        store: Optional[SqliteMemoryStore] = None,
+        compactor: Optional[MemoryCompactor] = None,
+    ) -> MemoryManager:
+        """根据配置对象构造 MemoryManager，确保存储与阈值与 cfg 完全对齐。"""
+        return cls(
+            store=store or SqliteMemoryStore(cfg.runtime.storage.metadata_db_path),
+            compactor=compactor,
+            session_token_limit=cfg.runtime.context.session_token_limit,
+            compaction_high_watermark=cfg.runtime.context.compaction_high_watermark,
+            compaction_ratio=cfg.runtime.context.compaction_ratio,
+            active_window_turns=cfg.runtime.context.active_window_turns,
         )
 
     def count_tokens(self, text: str) -> int:
@@ -327,24 +347,33 @@ class MemoryManager:
         self,
         workspace_id: str,
         fact: str,
-        category: Literal["convention", "architecture"] = "architecture",
+        category: Literal[
+            "convention",
+            "architecture",
+            "user_profile",
+            "knowledge",
+            "project_conventions",
+            "confirmed_architecture",
+        ] = "architecture",
     ) -> None:
         """
-        将单会话中探索出的全局性结论上浮沉淀到工作区共享库 (所有会话可见)
+        将单会话或外部录入的全局性结论/用户画像上浮沉淀到工作区共享库 (所有会话可见)
         
         Args:
             workspace_id: 工作区标识
-            fact: 确凿的技术事实
-            category: 类别 ('convention' 编码规范 或 'architecture' 核心架构)
+            fact: 确凿的知识事实、画像偏好或规范
+            category: 类别 ('user_profile', 'convention' / 'project_conventions', 'architecture' / 'confirmed_architecture')
         """
         ws_mem = await self.store.get_workspace_memory(workspace_id)
-        if category == "convention":
+        if category in ("user_profile",):
+            ws_mem.user_profile.append(fact)
+        elif category in ("convention", "project_conventions"):
             ws_mem.project_conventions.append(fact)
         else:
             ws_mem.confirmed_architecture.append(fact)
         ws_mem.deduplicate()
         await self.store.save_workspace_memory(ws_mem)
-        logger.info(f"已上浮全局事实至工作区 [{workspace_id}]: [{category}] {fact}")
+        logger.info(f"已上浮全局记忆至工作区 [{workspace_id}]: [{category}] {fact}")
 
     async def record_global_failure(
         self,

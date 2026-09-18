@@ -49,6 +49,8 @@ logs/
 # IDEs & System Files
 .idea/
 .vscode/
+.obsidian/
+**/.obsidian/
 *.swp
 *.swo
 *~
