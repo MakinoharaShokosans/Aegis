@@ -32,9 +32,9 @@ async def test_live_fallback_chain_transparent_failover():
         timeout_sec=1.5,
     )
     real_endpoint = ModelEndpoint(
-        name="real-openlux-mini",
+        name="real-openlux-luna",
         base_url="https://api.openlux.ai/v1",
-        model="gpt-5.4-mini",
+        model="gpt-5.6-luna",
         api_key_env="LUNA_KEY",
         timeout_sec=30.0,
     )
@@ -55,5 +55,5 @@ async def test_live_fallback_chain_transparent_failover():
 
     # 3. 验证透明切换到第二端点且执行成功
     assert response.content, "降级后应成功获取模型回复"
-    assert response.endpoint_name == "real-openlux-mini", f"预期命中备用真实端点，实际命中: {response.endpoint_name}"
+    assert response.endpoint_name == "real-openlux-luna", f"预期命中备用真实端点，实际命中: {response.endpoint_name}"
     assert response.total_tokens > 0, "真实 Token 消耗应大于 0"

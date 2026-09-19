@@ -16,7 +16,7 @@ describe('exportWorkflow', () => {
       prompt: '重构鉴权模块并执行测试',
       status: 'completed',
       permissionLevel: 'workspace_write',
-      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
+      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna',
       createdAt: '2026-09-18 18:00:00',
       updatedAt: '2026-09-18 18:05:00',
       telemetry: {

@@ -636,7 +636,7 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       prompt,
       status: 'running',
       permissionLevel: options?.permissionLevel || 'workspace_write',
-      model: options?.model || 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
+      model: options?.model || 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna',
       createdAt: sessionTask?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       messages: allMessages,

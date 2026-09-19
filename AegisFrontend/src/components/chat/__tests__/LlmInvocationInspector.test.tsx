@@ -39,7 +39,7 @@ describe('LlmInvocationInspector', () => {
         node: 'executor',
         step: 2,
         tier: 'fast',
-        model: 'gpt-5.4-mini',
+        model: 'gpt-5.6-luna',
         messages: [
           { role: 'system', content: 'You are Aegis Executor.' },
           { role: 'user', content: '执行第1步' },
@@ -89,7 +89,7 @@ describe('LlmInvocationInspector', () => {
     expect(screen.getByText(/Step #1: planner/)).toBeInTheDocument();
     expect(screen.getByText(/Step #2: executor/)).toBeInTheDocument();
     expect(screen.getByText('gpt-5.6-terra')).toBeInTheDocument();
-    expect(screen.getByText('gpt-5.4-mini')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-luna')).toBeInTheDocument();
 
     // 3. Check selected detail inspection
     expect(screen.getByText('Step #1 : PLANNER')).toBeInTheDocument();
@@ -104,6 +104,6 @@ describe('LlmInvocationInspector', () => {
     // 5. Test filtering by node
     fireEvent.click(screen.getByRole('button', { name: 'Executor' }));
     expect(screen.queryByText('gpt-5.6-terra')).not.toBeInTheDocument();
-    expect(screen.getByText('gpt-5.4-mini')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5.6-luna')).toBeInTheDocument();
   });
 });

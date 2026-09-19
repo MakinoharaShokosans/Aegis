@@ -34,20 +34,16 @@ interface ModelOption {
 
 const DEFAULT_MODEL_OPTIONS: ModelOption[] = [
   {
-    value: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
-    label: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini (默认)',
-  },
-  {
     value: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna',
-    label: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna (高性能)',
-  },
-  {
-    value: 'Fast Only: gpt-5.4-mini',
-    label: 'Fast Only: gpt-5.4-mini',
+    label: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna (默认)',
   },
   {
     value: 'Fast Only: gpt-5.6-luna',
     label: 'Fast Only: gpt-5.6-luna',
+  },
+  {
+    value: 'Reasoning Only: gpt-5.6-terra',
+    label: 'Reasoning Only: gpt-5.6-terra',
   },
 ];
 

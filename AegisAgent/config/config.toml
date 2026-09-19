@@ -67,13 +67,6 @@ timeout_sec = 180
 temperature = 0.2               # 快速工具调度，保持输出格式稳定
 
 [[models.fast.endpoints]]
-name = "gpt-5.4-mini"
-base_url = "https://api.openlux.ai/v1"
-model = "gpt-5.4-mini"
-api_key_env = "LUNA_KEY"
-timeout_sec = 60
-
-[[models.fast.endpoints]]
 name = "gpt-5.6-luna"
 base_url = "https://api.openlux.ai/v1"
 model = "gpt-5.6-luna"

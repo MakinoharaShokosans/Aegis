@@ -50,7 +50,7 @@ export const ContextDrawer: React.FC = () => {
   // 基础系统提示词
   const systemPrompt = `You are AegisAgent, an advanced deterministic autonomous coding and engineering assistant.
 Workspace is Ground Truth. Always verify contracts against documents/*.md before modifying source code.
-Dual-Tier Execution: High-level planning with Reasoning model (gpt-5.6-terra), leaf actions with Fast model (gpt-5.4-mini / gpt-5.6-luna).
+Dual-Tier Execution: High-level planning with Reasoning model (gpt-5.6-terra), leaf actions with Fast model (gpt-5.6-luna).
 HITL Security Discipline: Out-of-bounds file writes or network egress commands must be suspended for human approval.`;
 
   // 计算四层 Token 真实分布

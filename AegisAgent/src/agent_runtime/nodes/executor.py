@@ -103,7 +103,7 @@ def build_executor_node(
                 "node": "executor",
                 "step": step_index,
                 "tier": "fast",
-                "model": response.endpoint_name or "gpt-5.4-mini",
+                "model": response.endpoint_name or "gpt-5.6-luna",
                 "messages": to_openai_messages(messages),
                 "tools": tool_schemas,
                 "response": {

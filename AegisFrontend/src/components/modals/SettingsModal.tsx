@@ -29,7 +29,7 @@ export const SettingsModal: React.FC = () => {
   // Dual-Tier Gateway state
   const [reasoningModel, setReasoningModel] = useState('gpt-5.6-terra');
   const [reasoningBaseUrl, setReasoningBaseUrl] = useState('https://api.openlux.ai/v1');
-  const [fastModel, setFastModel] = useState('gpt-5.4-mini / gpt-5.6-luna');
+  const [fastModel, setFastModel] = useState('gpt-5.6-luna');
   const [fastBaseUrl, setFastBaseUrl] = useState('https://api.openlux.ai/v1');
 
   // Sidecar state

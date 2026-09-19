@@ -8,7 +8,7 @@ describe('InputConsole', () => {
 
     expect(screen.getByPlaceholderText(/输入任务目标/i)).toBeInTheDocument();
     expect(screen.getByDisplayValue(/工作区写入/i)).toBeInTheDocument();
-    expect(screen.getByDisplayValue(/gpt-5.6-terra \+ gpt-5.4-mini/i)).toBeInTheDocument();
+    expect(screen.getByDisplayValue(/gpt-5.6-terra \+ gpt-5.6-luna/i)).toBeInTheDocument();
   });
 
   it('triggers onSend on clicking submit button with prompt and selected options', () => {
@@ -24,7 +24,7 @@ describe('InputConsole', () => {
     expect(handleSend).toHaveBeenCalledTimes(1);
     expect(handleSend).toHaveBeenCalledWith('实现新特性', {
       permissionLevel: 'workspace_write',
-      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.4-mini',
+      model: 'Dual-Tier: gpt-5.6-terra + gpt-5.6-luna',
     });
   });
 
