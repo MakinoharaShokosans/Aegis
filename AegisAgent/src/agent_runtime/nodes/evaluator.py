@@ -166,16 +166,57 @@ def build_evaluator_node(
         latest_msg = existing_msgs[-1] if existing_msgs else None
         has_direct_reply = isinstance(latest_msg, AIMessage) and bool(latest_msg.content) and not getattr(latest_msg, "tool_calls", None)
 
-        accepted = bool(
-            verdict.get("milestone_ok")
-            or verdict.get("is_completed")
-            or verdict.get("all_completed")
-            or str(verdict.get("status", "")).lower() == "completed"
+        # ------------------------------------------------------------------
+        # 1. 显式判定（Explicit Verdict）
+        # ------------------------------------------------------------------
+        explicit_positive = bool(
+            verdict.get("milestone_ok") is True
+            or verdict.get("is_completed") is True
+            or verdict.get("all_completed") is True
+            or str(verdict.get("status", "")).lower() in ("completed", "succeeded", "success", "passed", "done", "ok")
         )
+        explicit_negative = bool(
+            verdict.get("milestone_ok") is False
+            or verdict.get("is_completed") is False
+            or verdict.get("all_completed") is False
+            or str(verdict.get("status", "")).lower() in ("failed", "rejected", "in_progress", "pending")
+        )
+
+        all_milestones_completed_in_state = bool(milestones and all(m.status == "completed" for m in milestones))
+
+        # ------------------------------------------------------------------
+        # 2. 连续打回检测与死循环熔断（Rejection Loop Breaker）
+        # ------------------------------------------------------------------
+        prior_rejections = sum(
+            1 for m in existing_msgs
+            if isinstance(m, AIMessage) and "【阶段验收未通过" in (m.content or "")
+        )
+
+        if explicit_positive:
+            accepted = True
+        elif explicit_negative:
+            # 若已连续打回 >= 2 次且当前已有完整直接答复交付，触发死循环熔断放行
+            if prior_rejections >= 2 and has_direct_reply:
+                logger.warning(
+                    f"[Evaluator] 触发打回死循环熔断保护（历史打回 {prior_rejections} 次且已有直接交付），放行任务"
+                )
+                accepted = True
+            else:
+                accepted = False
+        else:
+            # 既非显式通过亦非显式打回（模型输出了业务分析载荷如 workspace/files/data 等 Schema 漂移）
+            if (all_milestones_completed_in_state or not milestones) and has_direct_reply:
+                logger.info("[Evaluator] 捕获业务分析载荷：前序里程碑已全完工且已有直接答复，智能判定验收通过")
+                accepted = True
+            elif prior_rejections >= 2 and has_direct_reply:
+                logger.warning(f"[Evaluator] 已连续打回 {prior_rejections} 次且已有直接回复，触发死循环熔断放行")
+                accepted = True
+            else:
+                accepted = False
 
         all_completed = bool(
             verdict.get("all_completed")
-            or (accepted and (not milestones or current_index >= len(milestones) - 1))
+            or (accepted and (not milestones or current_index >= len(milestones) - 1 or all_milestones_completed_in_state))
         )
 
         if accepted and milestones:
@@ -195,10 +236,27 @@ def build_evaluator_node(
         # 验收通过且仍有后续里程碑时，推进指针；全部完成则保持在末尾
         next_index = min(current_index + 1, len(milestones) - 1) if (accepted and milestones) else current_index
 
-        summary = str(verdict.get("summary") or state.get("rolling_summary") or "").strip()
+        # ------------------------------------------------------------------
+        # 3. 事实与摘要抽取（支持从业务载荷中自适应萃取）
+        # ------------------------------------------------------------------
+        summary = str(verdict.get("summary") or "").strip()
+        if not summary:
+            if isinstance(verdict.get("files"), list):
+                summary = f"工作区文件分析已完成，共包含 {len(verdict['files'])} 个文件。"
+            elif isinstance(verdict.get("topic"), str):
+                summary = f"已完成关于【{verdict['topic']}】的调研与总结。"
+            elif state.get("rolling_summary"):
+                summary = str(state.get("rolling_summary")).strip()
+
+        facts_extracted = [str(item) for item in (verdict.get("confirmed_facts") or [])]
+        if not facts_extracted and isinstance(verdict.get("files"), list):
+            for f in verdict["files"]:
+                if isinstance(f, dict) and f.get("path"):
+                    facts_extracted.append(f"文件 {f['path']}: {f.get('responsibility', '')}")
+
         confirmed_facts = merge_unique(
             state.get("confirmed_facts") or [],
-            [str(item) for item in (verdict.get("confirmed_facts") or [])],
+            facts_extracted,
         )
         failed_attempts = list(state.get("failed_attempts") or []) + coerce_failed_attempts(
             verdict.get("failed_attempts")
