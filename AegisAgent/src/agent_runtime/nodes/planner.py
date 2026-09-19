@@ -34,6 +34,7 @@ from agent_runtime.nodes.base import (
 from agent_runtime.observability.event_bus import TaskEventBus
 from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
+from agent_runtime.state import Milestone
 
 __all__ = ["build_planner_node"]
 
@@ -141,7 +142,8 @@ def build_planner_node(
             logger.warning("[Planner] 未能解析结构化输出，降级为纯文本指令")
 
         raw_thought = verdict.get("thought") or response.content or ""
-        raw_directive = verdict.get("next_step") or verdict.get("message") or verdict.get("reply") or verdict.get("directive") or raw_thought
+        direct_response = verdict.get("direct_response") or verdict.get("reply") or verdict.get("answer") or verdict.get("direct_answer")
+        raw_directive = direct_response or verdict.get("next_step") or verdict.get("message") or verdict.get("directive") or raw_thought
 
         thought = str(raw_thought).strip()
         directive = str(raw_directive).strip()
@@ -150,11 +152,11 @@ def build_planner_node(
         if thought.startswith("{") and thought.endswith("}"):
             inner = extract_json_object(thought)
             if inner:
-                thought = str(inner.get("thought") or inner.get("message") or inner.get("reply") or inner.get("next_step") or thought).strip()
+                thought = str(inner.get("thought") or inner.get("direct_response") or inner.get("message") or inner.get("reply") or inner.get("next_step") or thought).strip()
         if directive.startswith("{") and directive.endswith("}"):
             inner = extract_json_object(directive)
             if inner:
-                directive = str(inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
+                directive = str(inner.get("direct_response") or inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
 
         # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
         # 这样"里程碑"是模型自主分解的产物，而不是硬编码的固定流程。
@@ -167,7 +169,8 @@ def build_planner_node(
             milestones = []
 
         is_completed = bool(
-            verdict.get("is_completed")
+            direct_response
+            or verdict.get("is_completed")
             or verdict.get("all_completed")
             or str(verdict.get("status", "")).lower() == "completed"
         )
@@ -175,7 +178,7 @@ def build_planner_node(
             if milestones:
                 milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
             else:
-                milestones = [Milestone(id=1, title="完成任务目标", status="completed")]
+                milestones = [Milestone(id=1, title="响应用户咨询与问候", status="completed")]
 
         logger.info(f"[Planner] 决策指令已生成（tokens={response.total_tokens}）")
 

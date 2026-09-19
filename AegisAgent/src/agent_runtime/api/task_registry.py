@@ -421,7 +421,10 @@ class TaskRegistry:
     def _derive_status(final_state: AgentState) -> TaskStatus:
         """由终态推导对外状态。"""
         reason = str(final_state.get("termination_reason") or "")
-        if reason == "task_goal achieved":
+        if reason in ("task_goal achieved", "conversational_completed"):
+            return "succeeded"
+        from agent_runtime.edges.base import all_milestones_completed
+        if all_milestones_completed(final_state):
             return "succeeded"
         if final_state.get("should_terminate"):
             return "terminated"

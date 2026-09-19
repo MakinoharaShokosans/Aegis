@@ -37,6 +37,10 @@ def route_after_planner(state: Mapping[str, Any]) -> str:
         return END
 
     if all_milestones_completed(state):
+        step_count = int(state.get("step_count", 0))
+        if step_count == 0:
+            logger.info("[Router] 纯直接答复/无工具执行，直接交付结束")
+            return END
         logger.info("[Router] 全部里程碑标记完成，进入 evaluator 复核")
         return "evaluator"
 

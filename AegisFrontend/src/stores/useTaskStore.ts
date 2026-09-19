@@ -164,8 +164,8 @@ function handleIncomingEvent(
         }
       }
 
-      // 3. 若为 executor 直接答复，更新/写入面向用户的最终对话气泡
-      if (nodeName === 'executor' && data.content) {
+      // 3. 若为 executor 或 planner 直接答复，更新/写入面向用户的最终对话气泡
+      if ((nodeName === 'executor' || (nodeName === 'planner' && data.decision === 'reply')) && data.content) {
         const task = get().tasks[taskId];
         if (task) {
           const lastMsg = task.messages[task.messages.length - 1];
@@ -188,7 +188,7 @@ function handleIncomingEvent(
             });
           } else {
             get().appendMessage(taskId, {
-              id: `msg-exec-${Date.now()}`,
+              id: `msg-${nodeName}-${Date.now()}`,
               role: 'assistant',
               content: data.content,
               tokensUsed: data.total_tokens,

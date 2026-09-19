@@ -19,15 +19,25 @@ def test_route_after_planner():
     }
     assert route_after_planner(state_terminated) == END
 
-    # 2. 里程碑已全部完成 -> 进入 evaluator 复核
-    state_all_done = {
+    # 2. 里程碑已全部完成 -> 若执行过工具(step_count > 0)进入 evaluator 复核；若无工具执行(step_count == 0)直接交付到 END
+    state_all_done_with_steps = {
         "should_terminate": False,
+        "step_count": 1,
         "milestones": [
             SimpleNamespace(status="completed"),
             SimpleNamespace(status="completed"),
         ],
     }
-    assert route_after_planner(state_all_done) == "evaluator"
+    assert route_after_planner(state_all_done_with_steps) == "evaluator"
+
+    state_direct_done = {
+        "should_terminate": False,
+        "step_count": 0,
+        "milestones": [
+            SimpleNamespace(status="completed"),
+        ],
+    }
+    assert route_after_planner(state_direct_done) == END
 
     # 3. 里程碑部分完成或为空 -> 前往 budget_guard 继续执行主循环
     state_in_progress = {

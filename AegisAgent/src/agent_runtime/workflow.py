@@ -548,6 +548,13 @@ async def _drive_graph(
                     elif messages_in_delta and isinstance(messages_in_delta[0], dict):
                         directive = str(messages_in_delta[0].get("content", ""))
 
+                    is_all_completed = bool(
+                        milestones_in_delta
+                        and all(m.get("status") == "completed" for m in milestones_in_delta)
+                    )
+                    step_count = int(delta_dict.get("step_count", task.state.get("step_count", 0)))
+                    is_direct_done = is_all_completed and step_count == 0
+
                     if event_sink is not None:
                         await event_sink(
                             {
@@ -564,11 +571,12 @@ async def _drive_graph(
                                 "node": "planner",
                                 "seq": seq,
                                 "input_summary": "接收任务目标与上下文，规划下一步动作与里程碑",
-                                "output_summary": f"【规划决策】{directive[:200] if directive else '继续推进当前目标'}",
-                                "decision": directive,
-                                "step_count": int(delta_dict.get("step_count", task.state.get("step_count", 0))),
+                                "output_summary": f"【直接答复交付】{directive[:200]}" if is_direct_done else f"【规划决策】{directive[:200] if directive else '继续推进当前目标'}",
+                                "decision": "reply" if is_direct_done else directive,
+                                "content": directive if is_direct_done else None,
+                                "step_count": step_count,
                                 "total_tokens": int(delta_dict.get("total_tokens", task.state.get("total_tokens", 0))),
-                                "should_terminate": False,
+                                "should_terminate": is_direct_done,
                                 "milestones": milestones_in_delta,
                             }
                         )
