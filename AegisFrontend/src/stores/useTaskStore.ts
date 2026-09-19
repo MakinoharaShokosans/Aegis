@@ -38,19 +38,25 @@ interface TaskState {
 }
 
 /**
- * 估算当前会话在活跃上下文滑动窗口中送入大模型 Prompt 的总 Token 规模
- * 对应四层上下文架构：
- * Layer 1 (底模 System Prompt & Canary 纪律): ~850 Token
- * Layer 2 (工作区共享记忆与用户画像): 动态估算
- * Layer 3 & 4 (会话记忆与活跃滑窗轮次): 轮次 Token 累计
+ * 估算当前会话在活跃上下文滑动窗口中送入大模型的 Token 规模
+ * 对应真实单次请求的上下文构成：
+ * Layer 1 (底模 System Prompt & 工具契约): ~1200 Token
+ * Layer 2 (工作区共享记忆与工程背景): 动态估算 (memoryCount * 60)
+ * Layer 3 & 4 (会话记忆与活跃滑窗轮次): 轮次文本 Token 累计
+ *
+ * 注：严禁将工作流多次 API 请求的累计物理消耗（total_tokens）叠加为单条消息的上下文开销。
  */
-export function estimateSessionContextTokens(messages: TaskMessage[] = [], memoryCount: number = 0): number {
-  const baseSystemTokens = 850;
+export function estimateSessionContextTokens(
+  messages: TaskMessage[] = [],
+  memoryCount: number = 0,
+  latestPromptTokens?: number
+): number {
+  if (latestPromptTokens && latestPromptTokens > 0) {
+    return latestPromptTokens;
+  }
+  const baseSystemTokens = 1200;
   const memoryTokens = memoryCount * 60;
   const turnsTokens = messages.reduce((acc, m) => {
-    if (m.tokensUsed && m.tokensUsed > 0) {
-      return acc + m.tokensUsed;
-    }
     const est = Math.max(8, Math.ceil((m.content || '').length / 2));
     return acc + est;
   }, 0);
@@ -124,11 +130,12 @@ function handleIncomingEvent(
         status: m.status === 'completed' ? 'completed' : m.status === 'in_progress' ? 'in_progress' : 'pending',
       }));
 
-      // 1. 同步遥测指标 (对齐：totalTokens 为任务执行累计物理消耗，contextTokens 为会话当前活跃窗口水位)
+      // 1. 同步遥测指标 (对齐：totalTokens 为任务执行累计物理消耗，contextTokens 为会话当前活跃窗口真实水位)
       if (data.total_tokens !== undefined || data.step_count !== undefined) {
         const task = get().tasks[taskId];
         const currentMsgs = task?.messages || [];
-        const ctxTokens = estimateSessionContextTokens(currentMsgs);
+        const lastLlmCall = task?.llmCalls && task.llmCalls.length > 0 ? task.llmCalls[task.llmCalls.length - 1] : undefined;
+        const ctxTokens = estimateSessionContextTokens(currentMsgs, 0, lastLlmCall?.tokens);
         get().updateTelemetry(taskId, {
           totalTokens: data.total_tokens ?? task?.telemetry?.totalTokens ?? 0,
           steps: data.step_count ?? seq,
@@ -169,6 +176,8 @@ function handleIncomingEvent(
         const task = get().tasks[taskId];
         if (task) {
           const lastMsg = task.messages[task.messages.length - 1];
+          const lastLlm = task.llmCalls && task.llmCalls.length > 0 ? task.llmCalls[task.llmCalls.length - 1] : undefined;
+          const msgTokens = lastLlm?.tokens || Math.max(8, Math.ceil(data.content.length / 2));
           if (lastMsg && lastMsg.role === 'assistant') {
             set((state: any) => {
               const current = state.tasks[taskId];
@@ -177,7 +186,7 @@ function handleIncomingEvent(
               msgs[msgs.length - 1] = {
                 ...lastMsg,
                 content: data.content,
-                tokensUsed: data.total_tokens,
+                tokensUsed: msgTokens,
               };
               return {
                 tasks: {
@@ -191,7 +200,7 @@ function handleIncomingEvent(
               id: `msg-${nodeName}-${Date.now()}`,
               role: 'assistant',
               content: data.content,
-              tokensUsed: data.total_tokens,
+              tokensUsed: msgTokens,
               timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
             });
           }
@@ -369,6 +378,14 @@ function handleIncomingEvent(
         error: data.error,
       };
       get().appendLlmCall(taskId, callRecord);
+
+      // 同步当前单次 Prompt 的真实活跃上下文窗口规模与水位
+      if (callRecord.tokens > 0) {
+        get().updateTelemetry(taskId, {
+          contextTokens: callRecord.tokens,
+          waterLevelPct: Number(((callRecord.tokens / 32000) * 100).toFixed(1)),
+        });
+      }
       break;
     }
 
@@ -378,7 +395,8 @@ function handleIncomingEvent(
       const totalTokens = data.total_tokens || 0;
       const task = get().tasks[taskId];
       const currentMsgs = task?.messages || [];
-      const ctxTokens = estimateSessionContextTokens(currentMsgs);
+      const lastLlmCall = task?.llmCalls && task.llmCalls.length > 0 ? task.llmCalls[task.llmCalls.length - 1] : undefined;
+      const ctxTokens = estimateSessionContextTokens(currentMsgs, 0, lastLlmCall?.tokens);
       get().updateTelemetry(taskId, {
         totalTokens,
         steps: data.step_count || 0,
