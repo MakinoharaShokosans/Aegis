@@ -46,6 +46,12 @@ ERROR_KEYWORDS: tuple[str, ...] = (
 #: 结构化轮廓中单个标量值的最大预览长度
 _SCALAR_PREVIEW = 120
 
+#: 豁免常规观察值截断的工具（返回专家指导/SOP 等核心上下文的工具）
+EXEMPT_TOOLS: tuple[str, ...] = ("load_skill",)
+
+#: 豁免工具的安全上限倍率（防止恶意超大 SOP 溢出，默认 8 倍预算）
+EXEMPT_TOOL_MULTIPLIER: int = 8
+
 
 @dataclass(slots=True)
 class PrunedObservation:
@@ -151,9 +157,17 @@ class ObservationPruner:
         head_lines: 蒸馏时保留的头部行数。
         tail_lines: 蒸馏时保留的尾部行数。
         artifacts_dir: 全量输出落盘根目录。
+        exempt_tools: 豁免常规低阈值裁剪的工具列表（如 load_skill）。
     """
 
-    __slots__ = ("_count_tokens", "max_tokens", "head_lines", "tail_lines", "artifacts_dir")
+    __slots__ = (
+        "_count_tokens",
+        "max_tokens",
+        "head_lines",
+        "tail_lines",
+        "artifacts_dir",
+        "exempt_tools",
+    )
 
     def __init__(
         self,
@@ -162,12 +176,14 @@ class ObservationPruner:
         head_lines: int,
         tail_lines: int,
         artifacts_dir: str | Path,
+        exempt_tools: tuple[str, ...] = EXEMPT_TOOLS,
     ) -> None:
         self._count_tokens = token_counter
         self.max_tokens = max_tokens
         self.head_lines = head_lines
         self.tail_lines = tail_lines
         self.artifacts_dir = Path(artifacts_dir)
+        self.exempt_tools = tuple(exempt_tools)
 
     @classmethod
     def from_config(
@@ -236,8 +252,15 @@ class ObservationPruner:
         original_chars = len(raw)
         original_tokens = self._count_tokens(raw)
 
+        # 豁免工具检查：如 load_skill 等专家知识载入工具，在安全上限内完整保留
+        effective_max_tokens = (
+            self.max_tokens * EXEMPT_TOOL_MULTIPLIER
+            if tool_name in self.exempt_tools
+            else self.max_tokens
+        )
+
         # 未超预算：原样返回，不产生磁盘副作用
-        if original_tokens <= self.max_tokens:
+        if original_tokens <= effective_max_tokens:
             return PrunedObservation(
                 summary=raw,
                 is_truncated=False,

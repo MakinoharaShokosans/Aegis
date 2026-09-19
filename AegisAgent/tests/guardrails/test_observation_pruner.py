@@ -108,3 +108,39 @@ async def test_observation_pruner_long_json(tmp_path: Path):
     # 验证轮廓提取生效
     assert "结构化输出轮廓" in result.summary
     assert "alice" in result.summary
+
+
+@pytest.mark.asyncio
+async def test_observation_pruner_exempt_tools(tmp_path: Path):
+    """测试 load_skill 等豁免工具在安全倍率内不发生裁剪。"""
+    pruner = ObservationPruner(
+        token_counter=lambda s: len(s.split()),
+        max_tokens=20,
+        head_lines=2,
+        tail_lines=2,
+        artifacts_dir=tmp_path,
+    )
+
+    # 50 个 words 的 SOP 文本：对于普通工具（阈值 20）会触发截断，但对 load_skill（阈值 20*8=160）不触发
+    sop_text = " ".join([f"sop_rule_{i}" for i in range(50)])
+
+    # 1. 普通工具应被截断
+    normal_res = await pruner.prune(
+        raw=sop_text,
+        task_id="task_test_4",
+        step_id=4,
+        tool_name="bash",
+    )
+    assert normal_res.is_truncated is True
+
+    # 2. 豁免工具 load_skill 应完整保留
+    skill_res = await pruner.prune(
+        raw=sop_text,
+        task_id="task_test_5",
+        step_id=5,
+        tool_name="load_skill",
+    )
+    assert skill_res.is_truncated is False
+    assert skill_res.summary == sop_text
+    assert skill_res.artifact_path is None
+
