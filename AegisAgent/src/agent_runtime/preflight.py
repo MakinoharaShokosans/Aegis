@@ -214,24 +214,15 @@ def run_preflight_checks(config: AegisConfig) -> PreflightReport:
             )
         )
 
-    if server.auth_enabled:
-        report.items.append(
-            CheckItem(
-                category="Security & Network",
-                name="API Token Gate",
-                status=CheckStatus.OK,
-                detail=f"已启用 (来源: {server.api_token_file} / env:{server.api_token_env})",
-            )
+    cors_count = len(server.cors_allow_origins)
+    report.items.append(
+        CheckItem(
+            category="Security & Network",
+            name="Origin Gate",
+            status=CheckStatus.OK,
+            detail=f"CORS 跨站防护生效 ({cors_count} 个允许域)" if cors_count > 0 else "同源/非浏览器安全隔离已就绪",
         )
-    else:
-        report.items.append(
-            CheckItem(
-                category="Security & Network",
-                name="API Token Gate",
-                status=CheckStatus.WARN,
-                detail="未启用令牌鉴权 (仅 Host 与 Origin 闸门生效)",
-            )
-        )
+    )
 
     # 5. 技能包与 MCP 状态
     builtin_skills_dir = Path(__file__).resolve().parents[1] / "skills"
@@ -284,7 +275,7 @@ def render_startup_dashboard(
         config: 全局配置。
         sidecar_statuses: 托管 Sidecar 状态字典。
         rag_reachable: 外部 RAG 服务连通性。
-        token_hint: 令牌提示文案。
+        token_hint: 兼容保留字段。
 
     Returns:
         看板格式化字符串。
@@ -327,8 +318,6 @@ def render_startup_dashboard(
     lines.append(f"    🚀 Endpoint Listening      : http://{server.host}:{server.port}")
     lines.append(f"    📄 Swagger Docs            : http://{server.host}:{server.port}/docs")
     lines.append(f"    🪵 Unified JSONL Log Sink  : {config.runtime.storage.metadata_db_path.replace('aegis_meta.db', 'logs/aegis.jsonl')}")
-    if token_hint:
-        lines.append(f"    🔑 Authentication          : {token_hint}")
     lines.append("    ⌨️  Quick Control           : 按 [Q] 或 [Ctrl+C] 优雅关闭所有服务并退出")
 
     lines.append("=" * width)

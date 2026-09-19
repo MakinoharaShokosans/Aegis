@@ -98,13 +98,9 @@ sse_heartbeat_sec = 15
 sse_buffer_events = 1000
 artifact_preview_chars = 200
 
-# ---- 接入层安全闸门（Host → Origin → 令牌） --------------------
-# 单机本地直接访问设为 false（Host 与 Origin 闸门仍会严格防护 DNS rebinding 与 CSRF 跨站脚本）
-# 如需强制本地令牌校验可设为 true
-auth_enabled = false
-api_token_env = "AEGIS_API_TOKEN"
-api_token_file = "storage/api_token"
-allowed_hosts = []                  # 回环名始终允许；仅反代/自定义本地域名时补充
+# ---- 接入层安全闸门（Host 与 Origin 双道网络隔离） --------------------
+# 回环名（127.0.0.1 / localhost / ::1）始终允许；通过反代或自定义本地域名访问时补充
+allowed_hosts = []
 
 # ------------------------------------------------------------------------------
 # 9. MCP (Model Context Protocol) 外部扩展服务器

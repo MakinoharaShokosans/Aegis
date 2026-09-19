@@ -3,12 +3,8 @@ import {
   X,
   Settings,
   Shield,
-  Key,
   Server,
   Cpu,
-  Copy,
-  Check,
-  RefreshCw,
   Radio,
 } from 'lucide-react';
 import { useUiStore } from '@/stores/useUiStore';
@@ -19,10 +15,8 @@ export const SettingsModal: React.FC = () => {
   const { settingsModalOpen, setSettingsModalOpen } = useUiStore();
 
   const [activeTab, setActiveTab] = useState<'security' | 'gateway' | 'sidecars' | 'mcp'>('security');
-  const [copiedToken, setCopiedToken] = useState(false);
 
   // Security Gate form state
-  const [tokenVal, setTokenVal] = useState(httpClient.getToken() || 'uYreqOZnyVsUQWYkNO6PKVsmwNPDwIeJjcOPZWR6rq4');
   const [allowedHosts, setAllowedHosts] = useState('127.0.0.1, localhost, ::1');
   const [corsOrigins, setCorsOrigins] = useState('http://localhost:5173, http://127.0.0.1:5173');
 
@@ -68,18 +62,6 @@ export const SettingsModal: React.FC = () => {
   }, [settingsModalOpen]);
 
   if (!settingsModalOpen) return null;
-
-  const handleCopyToken = () => {
-    navigator.clipboard.writeText(tokenVal);
-    setCopiedToken(true);
-    setTimeout(() => setCopiedToken(false), 2000);
-  };
-
-  const handleRotateToken = () => {
-    const newToken = `aegis_sec_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
-    setTokenVal(newToken);
-    httpClient.setToken(newToken);
-  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
@@ -157,45 +139,6 @@ export const SettingsModal: React.FC = () => {
         <div className="flex-1 overflow-y-auto p-6 space-y-5 text-xs">
           {activeTab === 'security' && (
             <div className="space-y-4">
-              {/* Token Gate */}
-              <div className="p-4 rounded-xl border border-border-subtle bg-gray-50/50 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="font-semibold text-gray-900 flex items-center gap-1.5">
-                    <Key className="w-4 h-4 text-brand-600" />
-                    <span>3. 令牌闸门 (X-API-Token Guard)</span>
-                  </div>
-                  <span className="text-[10px] text-emerald-600 font-mono">secrets.compare_digest</span>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-gray-600 block">系统接入令牌 (保存在 storage/api_token，权限 0600)</label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="password"
-                      value={tokenVal}
-                      onChange={(e) => {
-                        setTokenVal(e.target.value);
-                        httpClient.setToken(e.target.value);
-                      }}
-                      className="flex-1 px-3 py-2 border border-border-subtle rounded-lg font-mono text-xs bg-white"
-                    />
-                    <button
-                      onClick={handleCopyToken}
-                      className="flex items-center gap-1 px-3 py-2 bg-white hover:bg-gray-100 border border-border-subtle rounded-lg text-gray-700 transition"
-                    >
-                      {copiedToken ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
-                      <span>{copiedToken ? '已复制' : '复制'}</span>
-                    </button>
-                    <button
-                      onClick={handleRotateToken}
-                      className="flex items-center gap-1 px-3 py-2 bg-white hover:bg-gray-100 border border-border-subtle rounded-lg text-gray-700 transition"
-                      title="生成新令牌"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      <span>轮转</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
 
               {/* Host & Origin Gates */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

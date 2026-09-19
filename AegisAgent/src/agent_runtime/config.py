@@ -154,24 +154,16 @@ class ServerConfig(BaseModel):
     artifact_preview_chars: int = Field(default=200, description="产物预览字符数")
 
     auth_enabled: bool = Field(
-        default=True,
-        description=(
-            "接入层令牌校验总开关。默认开启：本 API 等价于对本机工程目录的读写与执行权限，"
-            "而回环监听挡不住浏览器发起的跨站请求（CSRF / DNS rebinding）——"
-            "用户浏览器里的任意页面都能 POST /approve 替用户批准高危操作。"
-            "关闭后 Host 与 Origin 闸门仍然生效"
-        ),
+        default=False,
+        description="接入层令牌校验总开关（单用户本机开发默认关闭）。",
     )
     api_token_env: str = Field(
         default="AEGIS_API_TOKEN",
-        description="令牌来源环境变量名（优先级最高；设置后不再读写令牌文件）",
+        description="兼容保留：令牌来源环境变量名",
     )
     api_token_file: str = Field(
         default="storage/api_token",
-        description=(
-            "令牌落盘路径（0600）。环境变量未设置时：已存在则复用（重启不失效），"
-            "不存在则生成。该文件**绝不入版本库**（.gitignore 已排除），日志只打印路径不打印令牌"
-        ),
+        description="兼容保留：令牌落盘路径",
     )
     allowed_hosts: List[str] = Field(
         default_factory=list,

@@ -17,13 +17,12 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import APIKeyHeader, HTTPBearer
 from loguru import logger
 
 import httpx
-from agent_runtime.api.auth import SecurityGateMiddleware, provision_api_token
+from agent_runtime.api.auth import SecurityGateMiddleware
 from agent_runtime.api.errors import install_exception_handlers
 from agent_runtime.api.routes import (
     artifacts,
@@ -64,13 +63,11 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
         setup_logging(log_dir=Path(cfg.runtime.storage.metadata_db_path).parent / "logs")
         logger.info(f"[API] 启动 Agent HTTP API on {cfg.server.host}:{cfg.server.port}")
 
-        # 1. 令牌在这里准备（而非模块导入期）：环境变量/文件都可能在进程启动后才就绪
-        app.state.api_token = provision_api_token(cfg.server)
-
-        # 2. 运行启动前环境与持久化自检
+        # 1. 运行启动前环境与持久化自检
+        app.state.api_token = None
         preflight_report = run_preflight_checks(cfg)
 
-        # 3. 连带拉起托管的 Sidecar 子进程（若开启）
+        # 2. 连带拉起托管的 Sidecar 子进程（若开启）
         supervisor: Optional[SidecarSupervisor] = None
         sidecar_statuses = None
         if cfg.services.auto_start_sidecars:
@@ -78,7 +75,7 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
             app.state.supervisor = supervisor
             sidecar_statuses = await supervisor.start_all()
 
-        # 4. 探测外部依赖微服务（如 AegisRAG）
+        # 3. 探测外部依赖微服务（如 AegisRAG）
         rag_reachable: Optional[bool] = None
         try:
             async with httpx.AsyncClient(timeout=0.6) as client:
@@ -87,7 +84,7 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
         except Exception:
             rag_reachable = False
 
-        # 5. 装配核心 Agent 运行时
+        # 4. 装配核心 Agent 运行时
         runtime = await build_runtime(cfg)
         app.state.runtime = runtime
         app.state.started_at = time.time()
@@ -96,18 +93,12 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
             buffer_size=cfg.server.sse_buffer_events,
         )
 
-        # 6. 打印结构化终端启动就绪看板
-        token_hint = (
-            f"已开启 (文件: {cfg.server.api_token_file} / env: {cfg.server.api_token_env})"
-            if cfg.server.auth_enabled
-            else "未开启"
-        )
+        # 5. 打印结构化终端启动就绪看板
         dashboard_banner = render_startup_dashboard(
             report=preflight_report,
             config=cfg,
             sidecar_statuses=sidecar_statuses,
             rag_reachable=rag_reachable,
-            token_hint=token_hint,
         )
         logger.info(f"\n{dashboard_banner}")
 
@@ -126,21 +117,11 @@ def create_app(config: Optional[AegisConfig] = None) -> FastAPI:
         description="工程研究智能体的唯一用户入口：工作区/会话/任务 + SSE 执行事件流。",
         version="0.1.0",
         lifespan=lifespan,
-        # 说明：真正的强制校验在 SecurityGateMiddleware（中间件无法被漏挂），
-        # 这里的 Security 依赖只做一件事——让 /docs 广告出两种凭据方案，
-        # 便于在 Swagger UI 里点 Authorize 直接联调。auto_error=False 故不会拦请求。
-        dependencies=[
-            Depends(APIKeyHeader(name="X-API-Token", auto_error=False, scheme_name="ApiTokenHeader")),
-            Depends(HTTPBearer(auto_error=False, scheme_name="BearerToken")),
-        ],
     )
 
-    # 安全闸门（先注册 → 在内层）：Host → Origin → 令牌，见 api/auth.py。
-    # 令牌用 provider 动态读取：中间件在构造期挂载，而令牌要等 lifespan 才就绪
+    # 安全闸门（先注册 → 在内层）：Host → Origin，见 api/auth.py。
     app.add_middleware(
         SecurityGateMiddleware,
-        require_token=bool(cfg.server.auth_enabled),
-        token_provider=lambda: str(getattr(app.state, "api_token", "") or ""),
         allowed_hosts=list(cfg.server.allowed_hosts),
         allow_origins=list(cfg.server.cors_allow_origins),
     )
