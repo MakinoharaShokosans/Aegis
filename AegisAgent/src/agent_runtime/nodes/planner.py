@@ -16,7 +16,7 @@
 from __future__ import annotations
 
 import time
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from langchain_core.messages import AIMessage
 from loguru import logger
@@ -36,7 +36,104 @@ from agent_runtime.observability.trajectory import TrajectoryRecorder
 from agent_runtime.prompt_loader import PromptLibrary
 from agent_runtime.state import Milestone
 
-__all__ = ["build_planner_node"]
+__all__ = ["build_planner_node", "format_structured_verdict_to_markdown"]
+
+
+def format_structured_verdict_to_markdown(verdict: Dict[str, Any]) -> Optional[str]:
+    """若模型产出了自定义的结构化分析/总结字典而非标准 direct_response 纯文本，
+    防御性地自动将其转换为结构清晰、排版优美的 Markdown 交付文本。
+
+    Args:
+        verdict: 模型返回并提取出的 JSON 字典。
+
+    Returns:
+        转换后的 Markdown 文本字符串；若无需转换或不符合数据结构特征则返回 None。
+    """
+    if not isinstance(verdict, dict) or not verdict:
+        return None
+
+    # 如果有显式直接文本字段且不是裸 JSON 字符串，优先使用
+    direct = (
+        verdict.get("direct_response")
+        or verdict.get("reply")
+        or verdict.get("answer")
+        or verdict.get("direct_answer")
+    )
+    if direct and isinstance(direct, str):
+        trimmed = direct.strip()
+        if not (trimmed.startswith("{") and trimmed.endswith("}")):
+            return trimmed
+
+    # 检查是否包含自定义结构化业务结果字段
+    known_keys = {
+        "topic", "summary", "result", "findings", "sources", "limitations",
+        "notes", "data", "details", "content", "file", "verified",
+    }
+    present_keys = set(verdict.keys()) & known_keys
+    if not present_keys:
+        return None
+
+    parts: List[str] = []
+
+    # 1. 标题 / 主题
+    topic = verdict.get("topic") or verdict.get("title")
+    if topic and isinstance(topic, str):
+        parts.append(f"### {topic.strip()}\n")
+
+    # 2. 核心结论 / 摘要
+    summary = verdict.get("summary") or verdict.get("result") or verdict.get("findings")
+    if isinstance(summary, dict):
+        for k, v in summary.items():
+            k_clean = str(k).replace("_", " ").capitalize()
+            parts.append(f"- **{k_clean}**：{v}")
+    elif isinstance(summary, list):
+        for item in summary:
+            parts.append(f"- {item}")
+    elif summary and isinstance(summary, str):
+        parts.append(summary.strip())
+
+    # 3. 详细数据 / 文件信息
+    if "file" in verdict or "path" in verdict or "verified" in verdict:
+        file_info = []
+        if verdict.get("file"):
+            file_info.append(f"- **目标文件**：`{verdict['file']}`")
+        if verdict.get("path"):
+            file_info.append(f"- **绝对路径**：`{verdict['path']}`")
+        if verdict.get("verified"):
+            file_info.append(f"- **校验状态**：{verdict['verified']}")
+        if file_info:
+            parts.append("\n**文件操作详情**：")
+            parts.extend(file_info)
+
+    details = verdict.get("details") or verdict.get("data")
+    if isinstance(details, dict):
+        parts.append("\n**详细数据**：")
+        for k, v in details.items():
+            k_clean = str(k).replace("_", " ").capitalize()
+            parts.append(f"- **{k_clean}**：{v}")
+    elif isinstance(details, list):
+        parts.append("\n**详细列表**：")
+        for item in details:
+            parts.append(f"- {item}")
+    elif details and isinstance(details, str):
+        parts.append(f"\n{details.strip()}")
+
+    # 4. 来源引用
+    sources = verdict.get("sources") or verdict.get("references")
+    if isinstance(sources, list) and sources:
+        parts.append("\n**参考来源**：")
+        for s in sources:
+            parts.append(f"- {s}")
+
+    # 5. 局限性 / 补充说明
+    limitations = verdict.get("limitations") or verdict.get("notes")
+    if isinstance(limitations, list) and limitations:
+        parts.append("\n**补充说明与局限性**：")
+        for l in limitations:
+            parts.append(f"- {l}")
+
+    formatted = "\n".join(parts).strip()
+    return formatted if formatted else None
 
 
 def build_planner_node(
@@ -142,21 +239,27 @@ def build_planner_node(
             logger.warning("[Planner] 未能解析结构化输出，降级为纯文本指令")
 
         raw_thought = verdict.get("thought") or response.content or ""
-        direct_response = verdict.get("direct_response") or verdict.get("reply") or verdict.get("answer") or verdict.get("direct_answer")
+        direct_response = format_structured_verdict_to_markdown(verdict)
         raw_directive = direct_response or verdict.get("next_step") or verdict.get("message") or verdict.get("directive") or raw_thought
 
         thought = str(raw_thought).strip()
         directive = str(raw_directive).strip()
 
-        # 防御性清洗：若模型把结果封装在 {"message": ...} 或 {"thought": ...} 字符串内，提取纯文本
+        # 防御性清洗：若模型把结果封装在 {"message": ...} 或 {"thought": ...} 字符串内，提取并格式化纯文本
         if thought.startswith("{") and thought.endswith("}"):
             inner = extract_json_object(thought)
             if inner:
-                thought = str(inner.get("thought") or inner.get("direct_response") or inner.get("message") or inner.get("reply") or inner.get("next_step") or thought).strip()
+                thought = (
+                    format_structured_verdict_to_markdown(inner)
+                    or str(inner.get("thought") or inner.get("direct_response") or inner.get("message") or inner.get("reply") or inner.get("next_step") or thought).strip()
+                )
         if directive.startswith("{") and directive.endswith("}"):
             inner = extract_json_object(directive)
             if inner:
-                directive = str(inner.get("direct_response") or inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
+                directive = (
+                    format_structured_verdict_to_markdown(inner)
+                    or str(inner.get("direct_response") or inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
+                )
 
         # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
         # 这样"里程碑"是模型自主分解的产物，而不是硬编码的固定流程。
@@ -178,7 +281,7 @@ def build_planner_node(
             if milestones:
                 milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
             else:
-                milestones = [Milestone(id=1, title="响应用户咨询与问候", status="completed")]
+                milestones = [Milestone(id=1, title="响应用户咨询与交付任务", status="completed")]
 
         logger.info(f"[Planner] 决策指令已生成（tokens={response.total_tokens}）")
 

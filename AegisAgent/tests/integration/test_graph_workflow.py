@@ -867,3 +867,113 @@ async def test_workflow_multiturn_tool_capabilities_query(test_config: AegisConf
     finally:
         await close_runtime(deps)
 
+
+@pytest.mark.asyncio
+async def test_workflow_research_completion_delivers_formatted_markdown(test_config: AegisConfig, mock_gateway_factory, tmp_path: Path):
+    """测试实操任务执行工具后，Planner 产出自定义结构化结果时，系统能自动转换为排版优美的 Markdown 进行交付。"""
+    ws_dir = tmp_path / "research_ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Planner Step 1: 派发 delegate_research
+    planner_resp_1 = {
+        "thought": "用户要求调研三角洲最新赛季，调度 delegate_research",
+        "milestones": [
+            {"id": 1, "title": "外部调研最新赛季信息", "status": "in_progress"},
+            {"id": 2, "title": "汇总整理调研结论", "status": "pending"},
+        ],
+        "next_step": "调用 delegate_research 检索三角洲最新赛季官方信息",
+        "is_completed": False,
+    }
+
+    # 2. Executor Step 1: 生成 tool_calls
+    from agent_runtime.llm.client import LLMResponse
+    executor_resp_1 = LLMResponse(
+        content="正在读取研究资料",
+        tool_calls=[{
+            "id": "call_research_1",
+            "name": "view_file",
+            "args": {"path": "dummy.txt"},
+        }],
+        total_tokens=15,
+        endpoint_name="mock-fast",
+    )
+
+    # 3. Planner Step 2: 收到工具 observation 后，产出自定义 JSON 报告
+    planner_resp_2 = {
+        "status": "completed",
+        "topic": "《三角洲行动》最新赛季信息",
+        "summary": {
+            "season_name": "群星赛季",
+            "version": "1.201.3798.86",
+            "update_time": "9月26日",
+        },
+        "sources": ["https://df.qq.com/main.shtml"],
+        "limitations": ["未检索到完整官方更新条目清单"],
+    }
+
+    # 4. Evaluator: 验收通过
+    evaluator_resp = {
+        "milestone_ok": True,
+        "all_completed": True,
+        "summary": "调研完成，事实核验通过",
+        "confirmed_facts": ["三角洲行动最新赛季为群星赛季"],
+        "failed_attempts": [],
+    }
+
+    mock_gateway = mock_gateway_factory([
+        planner_resp_1,
+        executor_resp_1,
+        planner_resp_2,
+        evaluator_resp,
+    ])
+
+    store = SqliteMemoryStore(db_path=test_config.runtime.storage.metadata_db_path)
+    memory = MemoryManager(store=store)
+    await memory.initialize()
+
+    checkpoints = SqliteCheckpointStore(test_config.runtime.storage.checkpoint_db_path)
+    await checkpoints.open()
+
+    ws = await memory.create_workspace(name="res_ws", root_path=str(ws_dir), description="Research workspace")
+    session = await memory.create_session(workspace_id=ws.workspace_id, title="Research Session")
+
+    # 创建虚拟文件以便 view_file 成功执行
+    (ws_dir / "dummy.txt").write_text("dummy research context")
+
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    deps = RuntimeDeps(
+        config=test_config,
+        memory=memory,
+        gateway=mock_gateway,  # type: ignore[arg-type]
+        prompts=PromptLibrary(),
+        skills=SkillsRegistry.from_workspace(workspace_root=ws_dir, builtin_dir=skills_dir),
+        mcp_manager=MCPManager(test_config.mcp),
+        checkpoints=checkpoints,
+        builtin_skills_dir=skills_dir,
+    )
+
+    try:
+        outcome = await run_streaming(
+            deps,
+            workspace_id=ws.workspace_id,
+            session_id=session.session_id,
+            task_goal="搜索三角洲最新赛季信息",
+        )
+        final_state = outcome.state
+
+        assert final_state["should_terminate"] is True
+        from agent_runtime.execution_context import ExecutionContextManager
+        delivery = ExecutionContextManager.extract_delivery(final_state)
+
+        # 核心校验：delivery 绝不是裸 JSON 代码串，而是排版优美的 Markdown
+        assert not delivery.strip().startswith('{"status"')
+        assert "### 《三角洲行动》最新赛季信息" in delivery
+        assert "- **Season name**：群星赛季" in delivery
+        assert "- **Version**：1.201.3798.86" in delivery
+        assert "**参考来源**：" in delivery
+        assert "https://df.qq.com/main.shtml" in delivery
+        assert "**补充说明与局限性**：" in delivery
+    finally:
+        await close_runtime(deps)
+

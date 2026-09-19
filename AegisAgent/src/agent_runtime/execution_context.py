@@ -192,6 +192,15 @@ class ExecutionContextManager:
         if not delivery:
             delivery = str(state.get("termination_reason") or "任务结束")
 
+        if delivery.strip().startswith("{") and delivery.strip().endswith("}"):
+            from agent_runtime.nodes.base import extract_json_object
+            from agent_runtime.nodes.planner import format_structured_verdict_to_markdown
+            parsed = extract_json_object(delivery)
+            if parsed:
+                formatted = format_structured_verdict_to_markdown(parsed)
+                if formatted:
+                    delivery = formatted
+
         if canary_token:
             delivery = sanitize_canary(delivery, canary_token)
         return delivery
