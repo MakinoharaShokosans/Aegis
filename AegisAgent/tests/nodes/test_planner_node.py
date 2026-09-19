@@ -84,3 +84,126 @@ def test_extract_delivery_formats_raw_json_string():
     assert "- **Key1**：value1" in delivery
     assert "**参考来源**：" in delivery
     assert "http://example.com" in delivery
+
+
+class DummyLLMGateway:
+    """Mock LLM 网关，按预设返回。"""
+
+    def __init__(self, response_content: str):
+        self.response_content = response_content
+
+    async def invoke(self, tier: str, messages: list, force_json: bool = False, tools: list = None):
+        from agent_runtime.llm.client import LLMResponse
+        return LLMResponse(
+            content=self.response_content,
+            tool_calls=[],
+            total_tokens=100,
+            endpoint_name="test-model",
+        )
+
+
+class DummyContextManager:
+    """Mock 上下文装配器。"""
+
+    def assemble(self, state, node_instruction: str = ""):
+        from langchain_core.messages import HumanMessage
+        return [HumanMessage(content="test goal")]
+
+
+class DummyPromptLibrary:
+    """Mock 提示词库。"""
+
+    def load(self, name: str, default: str = "") -> str:
+        return f"instruction for {name}"
+
+
+@pytest.mark.asyncio
+async def test_planner_node_intermediate_step_preserves_next_step_action():
+    """测试中间推进轮次（包含调研 summary 但 is_completed 为 false 且有 next_step）不会被误判为完成，且正确派发 next_step 指令。"""
+    from agent_runtime.nodes.planner import build_planner_node
+    from agent_runtime.state import Milestone
+
+    # 模拟模型在第2轮返回：包含调研 summary，但明确 next_step 是写文件且 is_completed=false
+    intermediate_json = """{
+        "thought": "已完成调研，下一步写入文件",
+        "summary": {
+            "version": "5.0",
+            "characters": "玛拉妮"
+        },
+        "milestone_updates": [
+            {"id": 1, "status": "completed"},
+            {"id": 2, "status": "in_progress"}
+        ],
+        "next_step": "调用 write_file 将调研内容写入 genshin_latest_update.md",
+        "is_completed": false
+    }"""
+
+    gateway = DummyLLMGateway(intermediate_json)
+    context = DummyContextManager()
+    prompts = DummyPromptLibrary()
+    planner_node = build_planner_node(gateway=gateway, context=context, prompts=prompts)
+
+    state = {
+        "task_goal": "调研原神最新版本并写入 md 文件",
+        "step_count": 1,
+        "milestones": [
+            Milestone(id=1, title="调研原神更新", status="in_progress"),
+            Milestone(id=2, title="写入工作区 md 文件", status="pending"),
+        ],
+        "total_tokens": 500,
+        "messages": [],
+    }
+
+    result = await planner_node(state)
+
+    # 1. 验证下发的指令是具体的 next_step 动作，而非被 summary 覆盖
+    assert "调用 write_file" in result["messages"][0].content
+    assert "genshin_latest_update.md" in result["messages"][0].content
+
+    # 2. 验证里程碑未被粗暴全量置为 completed
+    milestones = result["milestones"]
+    assert len(milestones) == 2
+    assert milestones[0].status == "completed"
+    assert milestones[1].status == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_planner_node_terminal_step_delivers_direct_response():
+    """测试最终收敛轮次（is_completed=true）正确下发 Markdown 交付文本并将里程碑全绿。"""
+    from agent_runtime.nodes.planner import build_planner_node
+    from agent_runtime.state import Milestone
+
+    completion_json = """{
+        "thought": "所有操作已执行完毕",
+        "milestone_updates": [
+            {"id": 2, "status": "completed"}
+        ],
+        "direct_response": "### 原神最新版本更新报告\\n\\n文件已成功写入工作区 `genshin_latest_update.md`。",
+        "is_completed": true
+    }"""
+
+    gateway = DummyLLMGateway(completion_json)
+    context = DummyContextManager()
+    prompts = DummyPromptLibrary()
+    planner_node = build_planner_node(gateway=gateway, context=context, prompts=prompts)
+
+    state = {
+        "task_goal": "调研原神最新版本并写入 md 文件",
+        "step_count": 2,
+        "milestones": [
+            Milestone(id=1, title="调研原神更新", status="completed"),
+            Milestone(id=2, title="写入工作区 md 文件", status="in_progress"),
+        ],
+        "total_tokens": 1000,
+        "messages": [],
+    }
+
+    result = await planner_node(state)
+
+    # 1. 验证交付内容包含 Markdown 总结
+    assert "### 原神最新版本更新报告" in result["messages"][0].content
+
+    # 2. 验证所有里程碑均为 completed
+    milestones = result["milestones"]
+    assert all(m.status == "completed" for m in milestones)
+

@@ -239,13 +239,63 @@ def build_planner_node(
             logger.warning("[Planner] 未能解析结构化输出，降级为纯文本指令")
 
         raw_thought = verdict.get("thought") or response.content or ""
-        direct_response = format_structured_verdict_to_markdown(verdict)
-        raw_directive = direct_response or verdict.get("next_step") or verdict.get("message") or verdict.get("directive") or raw_thought
+        next_step = str(
+            verdict.get("next_step")
+            or verdict.get("action")
+            or verdict.get("next_action")
+            or ""
+        ).strip()
+
+        # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
+        existing = coerce_milestones(list(state.get("milestones") or []))
+        if not existing and verdict.get("milestones"):
+            milestones = coerce_milestones(verdict["milestones"])
+        elif existing:
+            milestones = apply_milestone_updates(existing, verdict.get("milestone_updates"))
+        else:
+            milestones = []
+
+        explicit_completed = verdict.get("is_completed")
+        explicit_all_completed = verdict.get("all_completed")
+        status_str = str(verdict.get("status", "")).lower().strip()
+
+        # 精准判定是否完工：
+        # 1. 显式声明未完成 (is_completed is False) 或状态为 in_progress/pending/running/failed -> 绝对未完成
+        if explicit_completed is False or explicit_all_completed is False or status_str in ("in_progress", "pending", "running", "failed"):
+            is_completed = False
+        # 2. 显式声明完成 (is_completed is True / all_completed is True / status == "completed")
+        elif explicit_completed is True or explicit_all_completed is True or status_str == "completed":
+            is_completed = True
+        # 3. 存在明确的待执行动作 (next_step) 或存在未完成的里程碑 -> 未完成
+        elif next_step or (milestones and any(m.status != "completed" for m in milestones)):
+            is_completed = False
+        # 4. 显式提供了 direct_response (且无待执行 next_step / 无未完成里程碑) -> 纯问答直接完工
+        elif verdict.get("direct_response") or verdict.get("reply") or verdict.get("answer"):
+            is_completed = True
+        # 5. 格式化提取出的结构化 Markdown 交付 (当且仅当无待执行动作且里程碑全绿时)
+        elif format_structured_verdict_to_markdown(verdict) and (not milestones or all(m.status == "completed" for m in milestones)):
+            is_completed = True
+        else:
+            is_completed = False
+
+        if is_completed:
+            if milestones:
+                milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
+            else:
+                milestones = [Milestone(id=1, title="响应用户咨询与交付任务", status="completed")]
+            # 完工交付状态：优先使用面向用户的交付文本（Markdown 格式）
+            direct_response = format_structured_verdict_to_markdown(verdict) or str(
+                verdict.get("direct_response") or verdict.get("reply") or verdict.get("answer") or ""
+            ).strip()
+            raw_directive = direct_response or next_step or verdict.get("message") or verdict.get("directive") or raw_thought or "任务已达成。"
+        else:
+            # 未完工推进状态：严格使用 next_step / action 动作指令，严禁被中间调研 summary 覆盖
+            raw_directive = next_step or verdict.get("message") or verdict.get("directive") or raw_thought or "继续推进当前里程碑。"
 
         thought = str(raw_thought).strip()
         directive = str(raw_directive).strip()
 
-        # 防御性清洗：若模型把结果封装在 {"message": ...} 或 {"thought": ...} 字符串内，提取并格式化纯文本
+        # 防谬性清洗：若模型把结果封装在 {"message": ...} 或 {"thought": ...} 字符串内，提取并格式化纯文本
         if thought.startswith("{") and thought.endswith("}"):
             inner = extract_json_object(thought)
             if inner:
@@ -261,29 +311,7 @@ def build_planner_node(
                     or str(inner.get("direct_response") or inner.get("next_step") or inner.get("message") or inner.get("reply") or inner.get("thought") or directive).strip()
                 )
 
-        # 首次规划：由 planner 产出完整里程碑计划；后续轮次只做状态增量更新。
-        # 这样"里程碑"是模型自主分解的产物，而不是硬编码的固定流程。
-        existing = coerce_milestones(list(state.get("milestones") or []))
-        if not existing and verdict.get("milestones"):
-            milestones = coerce_milestones(verdict["milestones"])
-        elif existing:
-            milestones = apply_milestone_updates(existing, verdict.get("milestone_updates"))
-        else:
-            milestones = []
-
-        is_completed = bool(
-            direct_response
-            or verdict.get("is_completed")
-            or verdict.get("all_completed")
-            or str(verdict.get("status", "")).lower() == "completed"
-        )
-        if is_completed:
-            if milestones:
-                milestones = [m.model_copy(update={"status": "completed"}) for m in milestones]
-            else:
-                milestones = [Milestone(id=1, title="响应用户咨询与交付任务", status="completed")]
-
-        logger.info(f"[Planner] 决策指令已生成（tokens={response.total_tokens}）")
+        logger.info(f"[Planner] 决策指令已生成（is_completed={is_completed}, tokens={response.total_tokens}）")
 
         if recorder is not None:
             await recorder.record(
