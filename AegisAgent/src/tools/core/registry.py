@@ -134,6 +134,27 @@ class ToolRegistry:
         """导出为 OpenAI function calling 定义列表。"""
         return to_openai_tools(self._tools.values())
 
+    def get_capabilities_summary(self) -> str:
+        """导出当前注册表内全部工具的能力概要清单（供 Planner 上下文动态感知）。
+
+        Returns:
+            结构化的 Markdown 能力清单。
+        """
+        if not self._tools:
+            return ""
+
+        lines = [
+            "## 智能体已装配工具与能力清单 (Available Capabilities)",
+            "你具备以下受限工具调用能力（当收到实操任务时，由下游状态机精准调度执行）：",
+        ]
+        for tool in self._tools.values():
+            desc = (getattr(tool, "description", "") or "").strip()
+            short_desc = desc.split("\n")[0] if desc else "执行特定工程操作"
+            trust = getattr(tool, "trust", "trusted")
+            trust_badge = " `[MCP]`" if trust != "trusted" else ""
+            lines.append(f"- `{tool.name}`{trust_badge}: {short_desc}")
+        return "\n".join(lines)
+
     def __len__(self) -> int:
         return len(self._tools)
 

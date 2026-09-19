@@ -770,3 +770,100 @@ async def test_workflow_conversational_fallback_via_executor(test_config: AegisC
     finally:
         await close_runtime(deps)
 
+
+@pytest.mark.asyncio
+async def test_workflow_multiturn_tool_capabilities_query(test_config: AegisConfig, mock_gateway_factory, tmp_path: Path):
+    """测试多轮对话下询问'你有哪些tool'场景：
+    1. Turn 1 问候并沉淀记忆；
+    2. Turn 2 提问工具能力，验证 messages 序列末尾为最新的 HumanMessage('你有哪些tool')；
+    3. Planner 结合注入的能力清单直接输出工具说明并 1 步直出收敛。
+    """
+    ws_dir = tmp_path / "tools_query_ws"
+    ws_dir.mkdir(parents=True, exist_ok=True)
+
+    planner_resp_1 = {
+        "thought": "用户问候",
+        "direct_response": "你好！我是 Aegis 研发助手。",
+        "milestones": [{"id": 1, "title": "响应问候", "status": "completed"}],
+        "is_completed": True,
+    }
+    planner_resp_2 = {
+        "thought": "用户询问我有哪些工具，根据当前装配的工具清单进行详细介绍",
+        "direct_response": "我具备以下工具能力：\n1. `bash`: 执行 Shell 命令\n2. `write_file`: 写入文件\n3. `rag_search`: 代码搜索",
+        "milestones": [{"id": 1, "title": "解答工具能力咨询", "status": "completed"}],
+        "is_completed": True,
+    }
+
+    mock_gateway = mock_gateway_factory([
+        planner_resp_1,
+        planner_resp_2,
+    ])
+
+    store = SqliteMemoryStore(db_path=test_config.runtime.storage.metadata_db_path)
+    memory = MemoryManager(store=store)
+    await memory.initialize()
+
+    checkpoints = SqliteCheckpointStore(test_config.runtime.storage.checkpoint_db_path)
+    await checkpoints.open()
+
+    ws = await memory.create_workspace(name="tools_query_ws", root_path=str(ws_dir), description="Tools query workspace")
+    session = await memory.create_session(workspace_id=ws.workspace_id, title="Tools Query Session")
+
+    skills_dir = tmp_path / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    deps = RuntimeDeps(
+        config=test_config,
+        memory=memory,
+        gateway=mock_gateway,  # type: ignore[arg-type]
+        prompts=PromptLibrary(),
+        skills=SkillsRegistry.from_workspace(workspace_root=ws_dir, builtin_dir=skills_dir),
+        mcp_manager=MCPManager(test_config.mcp),
+        checkpoints=checkpoints,
+        builtin_skills_dir=skills_dir,
+    )
+
+    try:
+        # Turn 1
+        outcome_1 = await run_streaming(
+            deps,
+            workspace_id=ws.workspace_id,
+            session_id=session.session_id,
+            task_goal="你好",
+        )
+        assert outcome_1.state["step_count"] == 0
+
+        # Turn 2
+        events_2 = []
+        async def capture_event_2(ev):
+            events_2.append(ev)
+
+        outcome_2 = await run_streaming(
+            deps,
+            workspace_id=ws.workspace_id,
+            session_id=session.session_id,
+            task_goal="你有哪些tool",
+            event_sink=capture_event_2,
+        )
+        final_state_2 = outcome_2.state
+
+        # 校验：Turn 2 包含 Turn 1 历史，且 messages 序列最后一条严格为最新的 HumanMessage('你有哪些tool')
+        from langchain_core.messages import HumanMessage
+        messages = final_state_2["messages"]
+        # 第一条是 Turn 1 user，第二条是 Turn 1 AI，第三条是 Turn 2 user
+        user_msgs = [m for m in messages if isinstance(m, HumanMessage)]
+        assert len(user_msgs) >= 2
+        assert user_msgs[-1].content == "你有哪些tool"
+
+        # 校验 1 步直出与交付
+        assert final_state_2["step_count"] == 0
+        from agent_runtime.execution_context import ExecutionContextManager
+        delivery = ExecutionContextManager.extract_delivery(final_state_2)
+        assert "bash" in delivery
+        assert "rag_search" in delivery
+
+        nodes_executed = [ev["node"] for ev in events_2 if ev.get("event") == "node.finished"]
+        assert nodes_executed == ["planner"]
+        assert "executor" not in nodes_executed
+    finally:
+        await close_runtime(deps)
+

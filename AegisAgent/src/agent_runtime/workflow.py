@@ -392,6 +392,7 @@ async def prepare_task(
         workspace=workspace,
         workspace_memory=workspace_memory,
         skills=skills,
+        tools=registry,
         workspace_path=workspace.root_path,
     )
 

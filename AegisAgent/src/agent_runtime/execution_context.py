@@ -81,7 +81,13 @@ def build_initial_state(
     Returns:
         全新的 :class:`AgentState`。
     """
-    token = canary_token or (derive_session_canary(session_id) if session_id else generate_canary_token())
+    init_messages = _turns_to_messages(active_turns)
+    # 标准会话时序模型：将当前轮次任务目标作为最新的 HumanMessage 注入消息序列尾部
+    # 严格遵循主流 LLM 的 [Turn1_User, Turn1_AI, ..., Current_User] 预训练注意力分布
+    if task_goal and (not init_messages or not (isinstance(init_messages[-1], HumanMessage) and init_messages[-1].content == task_goal)):
+        init_messages.append(HumanMessage(content=task_goal))
+
+    token = canary_token or derive_session_canary(session_id)
 
     return AgentState(
         workspace_id=workspace_id,
@@ -91,7 +97,7 @@ def build_initial_state(
         task_goal=task_goal,
         milestones=[],
         current_milestone_idx=0,
-        messages=_turns_to_messages(active_turns),
+        messages=init_messages,
         rolling_summary=rolling_summary,
         confirmed_facts=list(confirmed_facts or []),
         failed_attempts=list(failed_attempts or []),

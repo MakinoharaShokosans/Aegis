@@ -44,7 +44,7 @@ class ContextManager:
         workspace_path: 工作区物理根路径（用于探测项目规则文件）。
     """
 
-    __slots__ = ("_prompts", "_workspace", "_workspace_memory", "_skills", "_workspace_path", "_rules_cache")
+    __slots__ = ("_prompts", "_workspace", "_workspace_memory", "_skills", "_tools", "_workspace_path", "_rules_cache")
 
     def __init__(
         self,
@@ -52,12 +52,14 @@ class ContextManager:
         workspace: Workspace,
         workspace_memory: WorkspaceMemory,
         skills: Optional[SkillsRegistry] = None,
+        tools: Optional[Any] = None,
         workspace_path: Optional[str | Path] = None,
     ) -> None:
         self._prompts = prompts
         self._workspace = workspace
         self._workspace_memory = workspace_memory
         self._skills = skills
+        self._tools = tools
         self._workspace_path = Path(workspace_path or workspace.root_path)
         self._rules_cache: Optional[str] = None
 
@@ -147,6 +149,18 @@ class ContextManager:
             logger.warning(f"[Context] 技能清单装配失败，已跳过: {exc}")
             return ""
 
+    def _tools_section(self) -> str:
+        """装配工具能力清单（由 ToolRegistry 自描述动态导出）。"""
+        if self._tools is None:
+            return ""
+        try:
+            if hasattr(self._tools, "get_capabilities_summary"):
+                return self._tools.get_capabilities_summary()
+            return ""
+        except Exception as exc:  # noqa: BLE001 - 工具清单是增强项，失败不应影响任务
+            logger.warning(f"[Context] 工具能力清单装配失败，已跳过: {exc}")
+            return ""
+
     # ==========================================================================
     # 对外装配
     # ==========================================================================
@@ -184,6 +198,10 @@ class ContextManager:
             session_section = self._session_section(state)
             if session_section:
                 sections.append(session_section)
+
+        tools_section = self._tools_section()
+        if tools_section:
+            sections.append(tools_section)
 
         skills_section = self._skills_section()
         if skills_section:

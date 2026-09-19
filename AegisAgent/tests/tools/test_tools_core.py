@@ -66,6 +66,12 @@ def test_tool_registry_registration_and_duplicate():
     with pytest.raises(ToolExecutionError, match="未注册的工具"):
         registry.require("not_exist")
 
+    # 动态能力清单自描述输出
+    summary = registry.get_capabilities_summary()
+    assert "## 智能体已装配工具与能力清单" in summary
+    assert "`dummy_echo`" in summary
+    assert "Echo tool for testing" in summary
+
 
 @pytest.mark.asyncio
 async def test_tool_dispatcher_concurrent_execution():
