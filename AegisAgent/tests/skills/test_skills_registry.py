@@ -37,12 +37,28 @@ def test_builtin_workspace_explorer_discovery(skills_registry: SkillsRegistry) -
     assert "勘测" in skill_meta.description or "探索" in skill_meta.description
 
 
+def test_builtin_web_research_synthesizer_discovery(skills_registry: SkillsRegistry) -> None:
+    """验证内置 web_research_synthesizer 技能能被正确扫描发现。"""
+    skills = skills_registry.list_skills()
+    skill_names = [s.name for s in skills]
+    assert "web_research_synthesizer" in skill_names
+
+    skill_meta = next(s for s in skills if s.name == "web_research_synthesizer")
+    assert skill_meta.source == SOURCE_BUILTIN
+    assert skill_meta.trust == "trusted"
+    assert "上网搜索" in skill_meta.triggers
+    assert "delegate_research" in skill_meta.required_tools
+    assert "调研" in skill_meta.description or "检索" in skill_meta.description
+
+
 def test_skills_registry_prompt_summary(skills_registry: SkillsRegistry) -> None:
     """验证轻量技能清单装配逻辑。"""
     summary = skills_registry.build_prompt_summary()
     assert '<available_skills source="builtin" trust="trusted">' in summary
     assert "workspace_explorer" in summary
+    assert "web_research_synthesizer" in summary
     assert "探索工作区" in summary
+    assert "上网搜索" in summary
     assert "</available_skills>" in summary
 
 
@@ -66,6 +82,23 @@ async def test_load_skill_tool_with_builtin_skill(skills_registry: SkillsRegistr
     assert bad_result.ok is False
     assert "未找到名为 'non_existent_skill' 的专家技能" in bad_result.content
     assert "workspace_explorer" in bad_result.content
+
+
+@pytest.mark.asyncio
+async def test_load_skill_tool_with_web_research_synthesizer(skills_registry: SkillsRegistry) -> None:
+    """验证 load_skill 工具能成功挂载并渲染 web_research_synthesizer 的 SOP。"""
+    tool = LoadSkillTool(registry=skills_registry)
+
+    result = await tool.invoke({"skill_name": "web_research_synthesizer"})
+    assert result.ok is True
+    assert '<skill_sop name="web_research_synthesizer" source="builtin" trust="trusted">' in result.content
+    assert "外部网络调研与信息合成标准作业程序" in result.content
+    assert "严禁使用 bash 尝试探测外网" in result.content
+    assert "严禁脑补未证实的细节" in result.content
+    assert "</skill_sop>" in result.content
+    assert result.meta["skill"] == "web_research_synthesizer"
+    assert result.meta["trust"] == "trusted"
+
 
 
 def test_untrusted_workspace_skill_rejected_by_default(tmp_path: Path, builtin_skills_dir: Path) -> None:
