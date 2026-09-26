@@ -137,3 +137,16 @@ test-results/
 *.7z
 *.rar
 
+# Personal Resumes & Career Materials (Protect personal privacy)
+resume/
+**/resume/
+RESUME_PROJECT_AEGIS.md
+documents/temp.md
+documents/简历Skills.md
+documents/interview_prep/
+
+# Local AI Agent IDE configurations & assistant skills
+.agents/
+**/.agents/
+
+
