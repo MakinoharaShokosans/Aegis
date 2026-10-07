@@ -1,9 +1,9 @@
 # AegisAgent LangGraph 状态机与工作流编排功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/03_node_specification.md` & `04_routing_and_control_flow.md`  
-> **责任模块**：`AegisAgent/src/agent_runtime/workflow.py`, `nodes/`, `edges/`  
-> **核心原则**：双层模型分工（Reasoning vs Fast）、独立验收打回、并发工具派发、条件边自愈。  
-> 
+> **对应设计规范**：`documents/agent_runtime/03_node_specification.md` & `04_routing_and_control_flow.md`
+> **责任模块**：`AegisAgent/src/agent_runtime/workflow.py`, `nodes/`, `edges/`
+> **核心原则**：双层模型分工（Reasoning vs Fast）、独立验收打回、并发工具派发、条件边自愈。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---
@@ -32,21 +32,21 @@
 ## 二、确定性条件路由边体系 (`edges/`)
 
 - [x] [x] **`route_after_planner`**
-  - [x] [x] 优先级 1：硬熔断（`should_terminate=True`）➔ 直接进入 `END`
-  - [x] [x] 优先级 2：全部里程碑自我声明完成 ➔ 导向 `evaluator` 独立复核
-  - [x] [x] 优先级 3：常规推进 ➔ 导向 `budget_guard` 进入主执行环
+  - [x] [x] 优先级 1：硬熔断（`should_terminate=True`）-> 直接进入 `END`
+  - [x] [x] 优先级 2：全部里程碑自我声明完成 -> 导向 `evaluator` 独立复核
+  - [x] [x] 优先级 3：常规推进 -> 导向 `budget_guard` 进入主执行环
 - [x] [x] **`route_after_budget_guard`**
-  - [x] [x] 预算超限熔断 ➔ 直接进入 `END`
-  - [x] [x] 预算正常 ➔ 导向 `executor`
+  - [x] [x] 预算超限熔断 -> 直接进入 `END`
+  - [x] [x] 预算正常 -> 导向 `executor`
 - [x] [x] **`route_after_executor`**
-  - [x] [x] 硬熔断（如金丝雀泄露）➔ 直接进入 `END`
-  - [x] [x] 正常 ➔ 导向 `tool_runner` 权限闸门与并发派发节点
+  - [x] [x] 硬熔断（如金丝雀泄露）-> 直接进入 `END`
+  - [x] [x] 正常 -> 导向 `tool_runner` 权限闸门与并发派发节点
 - [x] [x] **`route_after_tool_runner`**
-  - [x] [x] 硬熔断（`should_terminate=True`）➔ 直接进入 `END`
-  - [x] [x] 工具派发完毕（无论成功、连续失败或被拒绝）➔ 回流 `planner` 触发下一步或重规划
+  - [x] [x] 硬熔断（`should_terminate=True`）-> 直接进入 `END`
+  - [x] [x] 工具派发完毕（无论成功、连续失败或被拒绝）-> 回流 `planner` 触发下一步或重规划
 - [x] [x] **`route_after_evaluator`**
-  - [x] [x] 硬熔断或全部里程碑复核通过 ➔ 导向 `END`
-  - [x] [x] 验收打回或仍有后续里程碑 ➔ 回流 `planner` 继续推进
+  - [x] [x] 硬熔断或全部里程碑复核通过 -> 导向 `END`
+  - [x] [x] 验收打回或仍有后续里程碑 -> 回流 `planner` 继续推进
 
 ---
 

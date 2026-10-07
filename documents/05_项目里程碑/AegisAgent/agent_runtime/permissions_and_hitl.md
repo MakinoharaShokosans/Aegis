@@ -1,9 +1,9 @@
 # AegisAgent 三级权限分级与人机协同审批（HITL）功能与设计里程碑
 
-> **对应设计规范**：`documents/技术选型/bash_shell.md` §2.3、`documents/agent_runtime/04_routing_and_control_flow.md` §4.5、`documents/agent_runtime/11_http_api.md` §4.4  
-> **责任模块**：`AegisAgent/src/agent_runtime/guardrails/permission.py`, `nodes/tool_runner.py`, `edges/after_tool_runner.py`, `api/routes/tasks.py`, `api/task_registry.py`  
-> **核心原则**：只读/写入/全权三级偏序划分、确定性纯函数判定、越级挂起审批（HITL）、会话级永久放行白名单、原子对铁律保障。  
-> 
+> **对应设计规范**：`documents/技术选型/bash_shell.md` §2.3、`documents/agent_runtime/04_routing_and_control_flow.md` §4.5、`documents/agent_runtime/11_http_api.md` §4.4
+> **责任模块**：`AegisAgent/src/agent_runtime/guardrails/permission.py`, `nodes/tool_runner.py`, `edges/after_tool_runner.py`, `api/routes/tasks.py`, `api/task_registry.py`
+> **核心原则**：只读/写入/全权三级偏序划分、确定性纯函数判定、越级挂起审批（HITL）、会话级永久放行白名单、原子对铁律保障。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---
@@ -34,8 +34,8 @@
   - [x] [x] 无论批准/拒绝/死循环拦截/执行失败，严格保证 `tool_call_id` 与 `ToolMessage` 1:1 一一配对
   - [x] [x] 指纹死循环命中时拦截本次派发并合成提示信息
 - [x] [x] **`route_after_tool_runner` 路由边**
-  - [x] [x] 硬熔断（`should_terminate=True`）➔ 直接进入 `END`
-  - [x] [x] 正常执行或被拒绝后 ➔ 回流 `planner` 推进或重规划
+  - [x] [x] 硬熔断（`should_terminate=True`）-> 直接进入 `END`
+  - [x] [x] 正常执行或被拒绝后 -> 回流 `planner` 推进或重规划
 
 ---
 
@@ -58,8 +58,8 @@
 ## 四、全链路自动化集成测试闭环 (`tests/integration/`)
 
 - [x] [x] **API 全生命周期集成测试 (`test_api_lifecycle.py`)**
-  - [x] [x] 越级 ➔ `waiting_for_approval` ➔ `/approve` ➔ 恢复执行成功
-  - [x] [x] 越级 ➔ `waiting_for_approval` ➔ `/reject` ➔ 收到拒绝原因并完成
+  - [x] [x] 越级 -> `waiting_for_approval` -> `/approve` -> 恢复执行成功
+  - [x] [x] 越级 -> `waiting_for_approval` -> `/reject` -> 收到拒绝原因并完成
   - [x] [x] SSE 实时推送审批事件流断言
 - [x] [x] **状态机端到端工作流闭环 (`test_graph_workflow.py`)**
   - [x] [x] 完整规划-执行-挂起-批准-验收全链路闭环

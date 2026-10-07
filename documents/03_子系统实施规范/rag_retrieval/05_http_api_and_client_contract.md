@@ -1,11 +1,11 @@
 # RAG 检索服务 - 服务契约与客户端适配规范
 
-> **责任领域**：`AegisRAG/src/api/`（📋 待创建）与 `AegisAgent/src/tools/builtin/rag_search.py`（✅ 已实现）
+> **责任领域**：`AegisRAG/src/api/`（ 待创建）与 `AegisAgent/src/tools/builtin/rag_search.py`（[x] 已实现）
 > **核心原则**：HTTP REST 契约化通信、响应字段与既有客户端严格对齐、解耦红线（禁止反向依赖 `agent_runtime`）。
 
 ---
 
-## 1. 服务接口定义（FastAPI 端点，📋 待实现）
+## 1. 服务接口定义（FastAPI 端点， 待实现）
 
 AegisRAG 作为独立微服务（默认运行于 `127.0.0.1:8001`），需要暴露以下接口。**服务端字段命名必须与下方 §1.1 对齐**——这不是自由设计空间，而是要去匹配 `AegisAgent/src/tools/builtin/rag_search.py` 里已经写死、已经在跑的客户端代码。
 
@@ -15,7 +15,7 @@ AegisRAG 作为独立微服务（默认运行于 `127.0.0.1:8001`），需要暴
 
 | 字段 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--: | :--- |
-| `query` | str | ✅ | 检索意图文本 |
+| `query` | str | [x] | 检索意图文本 |
 | `top_k` | int | — | 返回切片数量上限；缺省取 `[retrieval].default_top_k`（服务端配置，见 `04` §3、`README.md` §4），非硬编码值 |
 | `filters` | object | — | 可选 Payload 过滤条件，当前仅约定 `{"language": str}`（见 `04` §2），未来可扩展 `repo_name`/`file_path_prefix` |
 
@@ -61,7 +61,7 @@ AegisRAG 作为独立微服务（默认运行于 `127.0.0.1:8001`），需要暴
 }
 ```
 
-**空结果**（`rag_search.py` 已实现对应分支，✅）：`results` 为空数组时，客户端把它渲染为 `"未检索到相关代码片段。"` 并设 `meta={"hits": 0}`，不视为错误。
+**空结果**（`rag_search.py` 已实现对应分支，[x]）：`results` 为空数组时，客户端把它渲染为 `"未检索到相关代码片段。"` 并设 `meta={"hits": 0}`，不视为错误。
 
 ### 1.2 索引写入端点：`POST /api/v1/documents/ingest`
 
@@ -69,8 +69,8 @@ AegisRAG 作为独立微服务（默认运行于 `127.0.0.1:8001`），需要暴
 
 | 字段 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--: | :--- |
-| `repo_root` | str | ✅ | 目标仓库绝对路径 |
-| `repo_name` | str | ✅ | 仓库标识（Payload 过滤用，见 `03` §2） |
+| `repo_root` | str | [x] | 目标仓库绝对路径 |
+| `repo_name` | str | [x] | 仓库标识（Payload 过滤用，见 `03` §2） |
 | `incremental` | bool | — | `true`（默认）：走 `02` §1 / `03` §3 的哈希增量策略；`false`：忽略现存哈希强制全量重新向量化（用于模型或切分逻辑升级后的重建） |
 
 #### 响应体（`IngestResponse`）
@@ -124,7 +124,7 @@ AegisRAG 作为独立微服务（默认运行于 `127.0.0.1:8001`），需要暴
 }
 ```
 
-## 3. Agent ToolLayer 客户端适配器（`tools/builtin/rag_search.py`，✅ 已实现）
+## 3. Agent ToolLayer 客户端适配器（`tools/builtin/rag_search.py`，[x] 已实现）
 
 已实现代码见 `AegisAgent/src/tools/builtin/rag_search.py`，无需在服务端开发时改动，仅在服务端字段与本节约定不一致时才需要回头核对。三个容易忽略的对接细节：
 

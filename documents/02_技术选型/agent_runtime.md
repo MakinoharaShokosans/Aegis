@@ -1,7 +1,7 @@
 # 架构决策记录：Agent Runtime 核心运行时
 
-> **状态**：已定稿 (Accepted)  
-> **责任领域**：`agent_runtime/` 与 `tools/`  
+> **状态**：已定稿 (Accepted)
+> **责任领域**：`agent_runtime/` 与 `tools/`
 > **核心目标**：构建具备显式状态机、崩溃续跑、预算守卫、因果可追溯与强类型契约的微型操作系统级 Agent 宿主。
 
 ---
@@ -159,11 +159,11 @@ class AgentState(TypedDict):
     task_goal: str
     milestones: list[dict]                               # 里程碑计划列表
     current_milestone_idx: int                           # 当前进行中的里程碑索引
-    
+
     # 2. 对话上下文与金字塔摘要 (遵循 Atomic Pair 裁剪)
     messages: Annotated[list[AnyMessage], add_messages]  # 活跃对话消息列表
     rolling_summary: str                                 # 历史已压缩阶段的全局事实摘要
-    
+
     # 3. 产物与执行度量
     artifacts: dict[str, str]                            # 物料句柄 (artifact_id -> 磁盘绝对路径)
     step_count: int                                      # 当前执行总步数

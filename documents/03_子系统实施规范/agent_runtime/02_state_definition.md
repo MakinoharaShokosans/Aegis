@@ -1,6 +1,6 @@
 # AgentState 定义与状态管理规范
 
-> **责任领域**：`AegisAgent/src/agent_runtime/state.py`  
+> **责任领域**：`AegisAgent/src/agent_runtime/state.py`
 > **核心原则**：强类型契约保障、原子消息对裁剪安全、物理预算确定性度量。
 
 ---
@@ -65,7 +65,7 @@ class AgentState(TypedDict):
     task_goal: str                                       # 终极任务目标 (永久锚定，不被修剪)
     milestones: List[Milestone]                          # 阶段计划列表
     current_milestone_idx: int                           # 当前正在推进的里程碑索引
-    
+
     # --------------------------------------------------------------------------
     # 2. 对话上下文与认知记忆 (Memory & Active Messages)
     # --------------------------------------------------------------------------
@@ -73,12 +73,12 @@ class AgentState(TypedDict):
     rolling_summary: str                                 # 阶段跃迁时沉淀的历史全局摘要
     confirmed_facts: List[str]                           # 已确认的客观技术事实
     failed_attempts: List[FailedAttempt]                 # 踩坑禁区记录
-    
+
     # --------------------------------------------------------------------------
     # 3. 产物指针与离线大日志句柄 (Artifacts)
     # --------------------------------------------------------------------------
     artifacts: Dict[str, str]                            # 句柄映射 (artifact_id -> 磁盘绝对路径)
-    
+
     # --------------------------------------------------------------------------
     # 4. 物理预算与防御度量 (Physical Budgets & Guardrails)
     # --------------------------------------------------------------------------
@@ -86,7 +86,7 @@ class AgentState(TypedDict):
     total_tokens: int                                    # 累计消耗 Token 总数 (确定性指标)
     consecutive_errors: int                              # 连续错误计数器 (达阈值强行回退重规划)
     fingerprint_history: List[str]                       # 最近 N 次工具参数 MD5 哈希历史 (防死循环)
-    
+
     # --------------------------------------------------------------------------
     # 5. 执行控制与权限级别 (Flow Control & Permissions)
     # --------------------------------------------------------------------------
@@ -126,6 +126,6 @@ class AgentState(TypedDict):
 | `planner` / `executor` / `evaluator` | 本节点自身 LLM 调用的 `usage.total_tokens` |
 | `tool_runner` | **仅增量**：本次派发期间子智能体**已结算**的消耗（见 `13` §4.4） |
 
-> ⚠️ `tool_runner` 的写入必须用**增量**而非绝对值，且必须发生在**权限审批闸门之后**。
+> `tool_runner` 的写入必须用**增量**而非绝对值，且必须发生在**权限审批闸门之后**。
 > `interrupt()` 挂起时本节点的返回值会被 LangGraph 整体丢弃——若在闸门之前记账，
 > 那一次记账会永久丢失。此顺序不可调换，改动节点内步骤顺序时需重新论证。

@@ -1,10 +1,10 @@
 # AegisRAG 独立代码检索子系统功能与设计里程碑
 
-> **对应设计规范**：`documents/技术选型/rag_retrieval.md`（ADR）与 `documents/rag_retrieval/`（实施技术规范 01~07）  
-> **物理子工程**：`AegisRAG/`（独立 `uv` 虚拟环境与依赖空间）  
-> **运行端口**：`:8001`（独立微服务进程）  
-> **核心原则**：代码语法感知切分、ONNX 本地 CPU 推理（零 GPU 依赖）、Qdrant 稠密/稀疏单库双模混合检索、零 Chat LLM 依赖。  
-> 
+> **对应设计规范**：`documents/技术选型/rag_retrieval.md`（ADR）与 `documents/rag_retrieval/`（实施技术规范 01~07）
+> **物理子工程**：`AegisRAG/`（独立 `uv` 虚拟环境与依赖空间）
+> **运行端口**：`:8001`（独立微服务进程）
+> **核心原则**：代码语法感知切分、ONNX 本地 CPU 推理（零 GPU 依赖）、Qdrant 稠密/稀疏单库双模混合检索、零 Chat LLM 依赖。
+>
 > **图例规范**：`[代码实现] [测试通过]`——本轮 `[x]` 均已用真实 tree-sitter 解析器 + 真实本地 Qdrant 跑通端到端手工冒烟验证（非 pytest 自动化用例），测试列统一保持 `[ ]`，如实区分"验证过能跑"与"有自动化回归覆盖"两件事。
 
 ---

@@ -1,7 +1,7 @@
 # 语法感知切分与索引触发规范
 
 > **责任领域**：`AegisRAG/src/indexer/`
-> **状态**：📋 规划中，尚未实现
+> **状态**： 规划中，尚未实现
 > **核心原则**：语法边界完整优先于定长切片、证据元数据强制注入、幂等可重复索引。
 
 ---
@@ -22,11 +22,11 @@
 
 | 文件类型 | 切分器 | 依赖 | 状态 |
 | :--- | :--- | :--- | :--: |
-| `.c` `.h` | `ast_splitter.py`（tree-sitter-c） | `tree-sitter-c` | 📋，依赖已在 `pyproject.toml` 锁定 |
-| `.cpp` `.cc` `.hpp` `.cxx` | `ast_splitter.py`（tree-sitter-cpp） | `tree-sitter-cpp` | 📋，依赖已锁定 |
-| `.go` | `ast_splitter.py`（tree-sitter-go） | `tree-sitter-go` | 📋，依赖已锁定 |
-| `.md` `.mdx` | `markdown_splitter.py`（`MarkdownHeaderTextSplitter`） | `langchain-text-splitters` | 📋，依赖已锁定 |
-| `.py` 及其它未匹配 AST 语法包的源码 | `fallback_splitter.py`（见 §3） | `langchain-text-splitters` | 📋，**本规范新增，milestone 未列出** |
+| `.c` `.h` | `ast_splitter.py`（tree-sitter-c） | `tree-sitter-c` | ，依赖已在 `pyproject.toml` 锁定 |
+| `.cpp` `.cc` `.hpp` `.cxx` | `ast_splitter.py`（tree-sitter-cpp） | `tree-sitter-cpp` | ，依赖已锁定 |
+| `.go` | `ast_splitter.py`（tree-sitter-go） | `tree-sitter-go` | ，依赖已锁定 |
+| `.md` `.mdx` | `markdown_splitter.py`（`MarkdownHeaderTextSplitter`） | `langchain-text-splitters` | ，依赖已锁定 |
+| `.py` 及其它未匹配 AST 语法包的源码 | `fallback_splitter.py`（见 §3） | `langchain-text-splitters` | ，**本规范新增，milestone 未列出** |
 
 ## 3. 关于 `python`/`rust` 的纠偏：为什么不是"真 AST"
 

@@ -50,7 +50,7 @@ entrypoints:
                                 │
                                 ▼
                        写入 Qdrant 存储
-  
+
   [查询检索 Retrieve] ──► Qdrant RRF 融合召回 Top-30 候选
                                 │
                                 ▼
@@ -144,7 +144,7 @@ def embed_batch(self, texts: Sequence[str]) -> Tuple[List[List[float]], List[Spa
 # 路径：AegisRAG/src/rerank/reranker.py
 def rerank(self, query: str, candidates: Sequence[CandidateChunk]) -> List[ScoredChunk]:
     documents = [c.content for c in candidates]
-    
+
     # 1. 送入 Cross-Encoder 计算相关性分数
     scores = list(self._local.rerank(query, documents))
 

@@ -1,7 +1,7 @@
 # 01_Agent 运行时单元测试报告
 
-> **测试目标**：验证 `AegisAgent/src/agent_runtime/` 调度内核的确定性护栏、节点闭包、工具调用、服务组件及配置解析。  
-> **执行命令**：`cd AegisAgent && uv run pytest tests/ -m "not real_llm" --tb=short -q`  
+> **测试目标**：验证 `AegisAgent/src/agent_runtime/` 调度内核的确定性护栏、节点闭包、工具调用、服务组件及配置解析。
+> **执行命令**：`cd AegisAgent && uv run pytest tests/ -m "not real_llm" --tb=short -q`
 > **实测数据**：**263 Passed, 12 Deselected | 耗时: 24.88s | 通过率: 100%**
 
 ---

@@ -1,8 +1,8 @@
 # AegisAgent & Sidecars 统一 HTTP/SSE API 契约参考手册 (Complete API Reference)
 
-> **文档定位**：AegisAgent 系统对外暴露的**全量 RESTful 与 SSE 接口契约权威参考手册**。  
-> **服务基准地址**：`http://127.0.0.1:8000`（API 统一前缀 `/api/v1`）  
-> **适配版本**：Aegis Core Runtime v4.0 / AegisRAG v1.0.0 / AegisFrontend v4.0  
+> **文档定位**：AegisAgent 系统对外暴露的**全量 RESTful 与 SSE 接口契约权威参考手册**。
+> **服务基准地址**：`http://127.0.0.1:8000`（API 统一前缀 `/api/v1`）
+> **适配版本**：Aegis Core Runtime v4.0 / AegisRAG v1.0.0 / AegisFrontend v4.0
 
 ---
 

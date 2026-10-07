@@ -159,9 +159,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.runtime = runtime
     app.state.task_registry = TaskRegistry(runtime)
     logger.info("Aegis 服务启动就绪")
-    
+
     yield  # 服务运行中，持续处理请求
-    
+
     # 2. 关闭顺序（逆序释放）：先终止所有后台运行的任务，再释放数据库连接
     await app.state.task_registry.cancel_all()
     await close_runtime(runtime)

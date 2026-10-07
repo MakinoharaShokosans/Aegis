@@ -1,8 +1,8 @@
 # AegisAgent 确定性护栏与防注入体系功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/05_guardrails_implementation.md`  
-> **核心原则**：确定性包围非确定性、双轨死循环防御、物理指标硬熔断、零开销缓存保全、全链路外泄拦截。  
-> 
+> **对应设计规范**：`documents/agent_runtime/05_guardrails_implementation.md`
+> **核心原则**：确定性包围非确定性、双轨死循环防御、物理指标硬熔断、零开销缓存保全、全链路外泄拦截。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

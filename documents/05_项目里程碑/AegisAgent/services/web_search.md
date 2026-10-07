@@ -1,10 +1,10 @@
 # AegisAgent 免 Key 网络检索与清洗服务功能与设计里程碑
 
-> **对应设计规范**：`documents/web_search/01~05`  
-> **责任模块**：`AegisAgent/src/services/web_search/` & `AegisAgent/src/tools/builtin/web_search.py`  
-> **运行端口**：`:8003`（独立微服务进程）  
-> **核心原则**：纯免 Key 检索、异步网页抓取清洗、MD5 内容去重、受限沙箱工具集成。  
-> 
+> **对应设计规范**：`documents/web_search/01~05`
+> **责任模块**：`AegisAgent/src/services/web_search/` & `AegisAgent/src/tools/builtin/web_search.py`
+> **运行端口**：`:8003`（独立微服务进程）
+> **核心原则**：纯免 Key 检索、异步网页抓取清洗、MD5 内容去重、受限沙箱工具集成。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

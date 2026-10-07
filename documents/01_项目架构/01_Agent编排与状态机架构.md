@@ -14,29 +14,29 @@ Aegis 的执行图是由 5 大计算节点与确定性条件边构成的有向�
 
 ```mermaid
 flowchart TD
-    START([🚀 START: 任务提交]) --> planner
+    START([ START: 任务提交]) --> planner
 
     subgraph LangGraphLoop ["LangGraph 确定性循环图"]
-        planner["🧠 Planner 节点\n(目标里程碑规划 / 宏观决策)"] --> budget_guard
-        budget_guard["💰 BudgetGuard 节点\n(Token 消耗统计 / 物理预算硬拦截)"] --> executor
-        executor["⚡ Executor 节点\n(结构化代码生成 / 工具调用决策)"] --> after_executor{after_executor\n条件边路由}
+        planner[" Planner 节点\n(目标里程碑规划 / 宏观决策)"] --> budget_guard
+        budget_guard[" BudgetGuard 节点\n(Token 消耗统计 / 物理预算硬拦截)"] --> executor
+        executor[" Executor 节点\n(结构化代码生成 / 工具调用决策)"] --> after_executor{after_executor\n条件边路由}
 
         after_executor --"含工具调用\nhas tool_calls"--> tool_runner
         after_executor --"无工具调用\n直接交付"--> evaluator
 
-        tool_runner["🛠️ ToolRunner 节点\n(三级权限校验 / 挂起审批 / 沙箱派发)"] --> after_tool_runner{after_tool_runner\n条件边路由}
+        tool_runner[" ToolRunner 节点\n(三级权限校验 / 挂起审批 / 沙箱派发)"] --> after_tool_runner{after_tool_runner\n条件边路由}
 
         after_tool_runner --"正常执行完成"--> planner
         after_tool_runner --"触发硬熔断\nshould_terminate"--> END
 
-        evaluator["⚖️ Evaluator 节点\n(产物复核 / 里程碑验收 / 记忆沉淀)"] --> after_evaluator{after_evaluator\n条件边路由}
+        evaluator[" Evaluator 节点\n(产物复核 / 里程碑验收 / 记忆沉淀)"] --> after_evaluator{after_evaluator\n条件边路由}
 
         after_evaluator --"所有里程碑均完成\nall completed"--> END
         after_evaluator --"未达标 / 需修复\nneeds revision"--> planner
         after_evaluator --"超步数 / 硬熔断"--> END
     end
 
-    END([🏁 END: 任务交付])
+    END([ END: 任务交付])
 ```
 
 ---
@@ -53,7 +53,7 @@ flowchart TD
 | `permission_level` | `PermissionLevel` | 当前任务的权限基线（`read_only` / `workspace_write` / `full_permissions`） |
 | `should_terminate` | `bool` | 全局硬熔断标志位（金丝雀泄露、死循环或预算耗尽时置为 True） |
 | `consecutive_errors` | `int` | 连续工具报错计数器，防死循环重试 |
-| `artifacts` | `Dict[str, str]` | 任务离线落盘产物句柄映射表（`artifact_id ➔ 物理路径`） |
+| `artifacts` | `Dict[str, str]` | 任务离线落盘产物句柄映射表（`artifact_id -> 物理路径`） |
 | `fingerprint_history` | `List[str]` | 工具调用参数指纹滑动窗口，用于死循环检测探针 |
 
 ---

@@ -2,7 +2,7 @@
 
 > **责任领域**：`AegisRAG/` 全工程目录布局
 > **契约基线**：`01`–`06` 规范 + `documents/技术选型/rag_retrieval.md`（ADR）
-> **文档状态**：v1（首版，📋 规划中，代码尚未落地）。本文件是 AegisRAG 目录结构的**唯一权威来源**；`01`~`06` 中出现的模块路径以本文为准，冲突以本文裁决。
+> **文档状态**：v1（首版， 规划中，代码尚未落地）。本文件是 AegisRAG 目录结构的**唯一权威来源**；`01`~`06` 中出现的模块路径以本文为准，冲突以本文裁决。
 > **体例对照**：结构与栏目对齐 `AegisAgent` 侧的 `documents/agent_runtime/10_directory_structure.md`（同一套治理纪律，规模按 AegisRAG 实际复杂度裁剪）。
 
 ---
@@ -35,39 +35,39 @@
 AegisRAG/src/
 ├── __init__.py                             对外能力边界占位
 │
-├── api/                          ✅         交付层：FastAPI 路由 + 编排调用（不含业务逻辑）
+├── api/                          [x]         交付层：FastAPI 路由 + 编排调用（不含业务逻辑）
 │   ├── __init__.py
-│   ├── app.py                    ✅         FastAPI 装配 + lifespan（Qdrant 连接 + 维度自动探测校验 + 远端/本地模型装配）
-│   ├── settings.py               ✅         rag_config.toml 强类型装配（含 embedding/rerank 的 local/remote 嵌套配置）
-│   ├── schemas.py                ✅         RetrieveRequest/Response、IngestRequest/Response DTO（05 §1）
-│   ├── errors.py                 ✅         领域异常 → HTTP 状态码映射（05 §2，含 v2 新增 UpstreamModelError→502）
-│   ├── __main__.py               ✅         uvicorn 入口（127.0.0.1:8001）
+│   ├── app.py                    [x]         FastAPI 装配 + lifespan（Qdrant 连接 + 维度自动探测校验 + 远端/本地模型装配）
+│   ├── settings.py               [x]         rag_config.toml 强类型装配（含 embedding/rerank 的 local/remote 嵌套配置）
+│   ├── schemas.py                [x]         RetrieveRequest/Response、IngestRequest/Response DTO（05 §1）
+│   ├── errors.py                 [x]         领域异常 → HTTP 状态码映射（05 §2，含 v2 新增 UpstreamModelError→502）
+│   ├── __main__.py               [x]         uvicorn 入口（127.0.0.1:8001）
 │   └── routes/
 │       ├── __init__.py
-│       ├── retrieve.py           ✅         POST /api/v1/retrieve（04 §1~§3 编排：召回→融合→过滤→精排）
-│       ├── ingest.py             ✅         POST /api/v1/documents/ingest（02 §1 触发语义 + 03 §3/§4 幂等写入与清理）
-│       └── health.py             ✅         GET /api/v1/health（01 §5 故障隔离契约）
+│       ├── retrieve.py           [x]         POST /api/v1/retrieve（04 §1~§3 编排：召回→融合→过滤→精排）
+│       ├── ingest.py             [x]         POST /api/v1/documents/ingest（02 §1 触发语义 + 03 §3/§4 幂等写入与清理）
+│       └── health.py             [x]         GET /api/v1/health（01 §5 故障隔离契约）
 │
-├── indexer/                      ✅         Ingest 侧：语言分发 + 语法感知切分（02）
+├── indexer/                      [x]         Ingest 侧：语言分发 + 语法感知切分（02）
 │   ├── __init__.py
-│   ├── dispatch.py               ✅         按扩展名路由到具体切分器 + 文件级降级（02 §2/§4）
-│   ├── ast_splitter.py           ✅         tree-sitter C/C++/Go 语法树切分（02 §4）
-│   ├── markdown_splitter.py      ✅         MarkdownHeaderTextSplitter 标题层级切分（02 §5）
-│   ├── fallback_splitter.py      ✅         Python 及未匹配语言的降级切分（02 §3，纠偏后新增）
-│   └── metadata.py               ✅         统一组装证据元数据 Schema（02 §6：file_path/content_hash/chunk_index 等）
+│   ├── dispatch.py               [x]         按扩展名路由到具体切分器 + 文件级降级（02 §2/§4）
+│   ├── ast_splitter.py           [x]         tree-sitter C/C++/Go 语法树切分（02 §4）
+│   ├── markdown_splitter.py      [x]         MarkdownHeaderTextSplitter 标题层级切分（02 §5）
+│   ├── fallback_splitter.py      [x]         Python 及未匹配语言的降级切分（02 §3，纠偏后新增）
+│   └── metadata.py               [x]         统一组装证据元数据 Schema（02 §6：file_path/content_hash/chunk_index 等）
 │
-├── embeddings/                   ✅         Dense/Sparse 双路向量化，Ingest 与 Retrieve 共用（03 §1）
+├── embeddings/                   [x]         Dense/Sparse 双路向量化，Ingest 与 Retrieve 共用（03 §1）
 │   ├── __init__.py
-│   └── pipeline.py               ✅         Dense 双模式（远端 OpenAI 兼容 /embeddings 默认 / 本地 FastEmbed 兜底）+ Sparse 恒本地
+│   └── pipeline.py               [x]         Dense 双模式（远端 OpenAI 兼容 /embeddings 默认 / 本地 FastEmbed 兜底）+ Sparse 恒本地
 │
-├── rerank/                       ✅         Cross-Encoder 精排，Retrieve 专属（04 §3；不属于 indexer/，见裁决①）
+├── rerank/                       [x]         Cross-Encoder 精排，Retrieve 专属（04 §3；不属于 indexer/，见裁决①）
 │   ├── __init__.py
-│   └── reranker.py               ✅         双模式：远端 OpenAI 兼容风格 /rerank 默认 / 本地 TextCrossEncoder 兜底
+│   └── reranker.py               [x]         双模式：远端 OpenAI 兼容风格 /rerank 默认 / 本地 TextCrossEncoder 兜底
 │
-└── storage/                      ✅         Qdrant 客户端适配，Ingest 与 Retrieve 共用（03 §2~§4）
+└── storage/                      [x]         Qdrant 客户端适配，Ingest 与 Retrieve 共用（03 §2~§4）
     ├── __init__.py
-    ├── qdrant_store.py           ✅         Collection 初始化 + 维度校验 + 命名向量/Payload 读写 + RRF 混合检索
-    └── ids.py                    ✅         确定性 Point ID 计算（03 §3：uuid5(repo_name:file_path:start_line:content_hash)）
+    ├── qdrant_store.py           [x]         Collection 初始化 + 维度校验 + 命名向量/Payload 读写 + RRF 混合检索
+    └── ids.py                    [x]         确定性 Point ID 计算（03 §3：uuid5(repo_name:file_path:start_line:content_hash)）
 ```
 
 **RSE/MMR（04 §6）未实现**：`[retrieval].rse_max_gap`/`mmr_lambda` 两项配置能被正确读取但不接线生效，符合"非本轮核心范围"的既定裁决。评测脚本 `AegisAgent/src/evaluation/rag_bench/rag_service_client.py`（06 §4，裁决②）本轮同样未写——它属于 `AegisAgent` 一侧，不在本次 `AegisRAG/` 编码范围内。
@@ -79,23 +79,23 @@ AegisRAG/src/
 ```text
 AegisRAG/
 ├── config/
-│   └── rag_config.toml           ✅         已存在。[server]/[qdrant]/[embedding]/[indexer]/[retrieval]/[rerank] 六段
-├── pyproject.toml  uv.lock  .env  .env.example  .python-version   ✅         已存在（wheel packages 已同步 `src/rerank`）
+│   └── rag_config.toml           [x]         已存在。[server]/[qdrant]/[embedding]/[indexer]/[retrieval]/[rerank] 六段
+├── pyproject.toml  uv.lock  .env  .env.example  .python-version   [x]         已存在（wheel packages 已同步 `src/rerank`）
 ├── README.md                     ⬜         仍为空文件，待补（见 §4 裁决⑤）
 │
 ├── src/                                      ← 见 §2（本轮代码已落地，详见落地状态台账 §9）
 │
-├── tests/                        📋         与 src 镜像的测试树（当前**完全不存在**，连空目录骨架都没有）
-│   ├── conftest.py               📋         共享 fixtures（mock Qdrant client、临时 ONNX 缓存目录等）
-│   ├── indexer/                  📋
-│   ├── embeddings/                📋
-│   ├── rerank/                    📋
-│   ├── storage/                   📋
-│   └── api/                       📋
+├── tests/                                 与 src 镜像的测试树（当前**完全不存在**，连空目录骨架都没有）
+│   ├── conftest.py                        共享 fixtures（mock Qdrant client、临时 ONNX 缓存目录等）
+│   ├── indexer/
+│   ├── embeddings/
+│   ├── rerank/
+│   ├── storage/
+│   └── api/
 │
 └── storage/                                  运行时数据（已 gitignore，目录本身已存在）
-    ├── cache/                    ✅         FastEmbed ONNX 模型缓存（`[embedding].cache_dir`/`[rerank].cache_dir`）
-    └── qdrant_data/               ✅         `[qdrant].mode="local"` 时的嵌入式持久化目录
+    ├── cache/                    [x]         FastEmbed ONNX 模型缓存（`[embedding].cache_dir`/`[rerank].cache_dir`）
+    └── qdrant_data/               [x]         `[qdrant].mode="local"` 时的嵌入式持久化目录
 ```
 
 **`tests/` 现状说明**：不同于 `AegisAgent/tests/`（已有 conftest 与各子系统空目录骨架），AegisRAG 目前连测试目录骨架都未建立。这与 `documents/里程碑/AegisRAG/rag_retrieval.md` 标注的 `[ ] [ ]`（代码未实现）一致——测试路线本身应在核心代码落地后另行规划（参照 `AegisAgent` 侧 `documents/测试路线.md` 的做法），不在本文档展开。
@@ -120,15 +120,15 @@ AegisRAG/
 
 ## 5. 依赖方向矩阵
 
-行 = 调用方，列 = 被依赖方。`✔` 允许，`✘` 禁止。
+行 = 调用方，列 = 被依赖方。`` 允许，`` 禁止。
 
 | ↓ 调用 / → 被调用 | indexer | embeddings | rerank | storage | api |
 | :--- | :--: | :--: | :--: | :--: | :--: |
-| **indexer** | — | ✔ | ✘ | ✘ | ✘ |
-| **embeddings** | ✘ | — | ✘ | ✘ | ✘ |
-| **rerank** | ✘ | ✘ | — | ✘ | ✘ |
-| **storage** | ✘ | ✘ | ✘ | — | ✘ |
-| **api** | ✔ | ✔ | ✔ | ✔ | — |
+| **indexer** | — | | | | |
+| **embeddings** | | — | | | |
+| **rerank** | | | — | | |
+| **storage** | | | | — | |
+| **api** | | | | | — |
 
 **关键约束**：
 
@@ -157,7 +157,7 @@ packages = ["src/api", "src/indexer", "src/embeddings", "src/rerank", "src/stora
 ## 7. 命名与占位约定
 
 * **切片标识**：一律 `chunk_id`（`storage/ids.py` 产出的确定性 UUID5 字符串），不使用自增整数或随机 UUID4——幂等写入与评测金标集复用都依赖这一点（`03` §3、`06` §2）。
-* **实现状态标记**：`✅` = 已实现（目前仅 `rag_config.toml` 本体、`storage/` 下两个运行时数据目录、四个原有空包骨架）；`📋` = 规划中。本文档 §2/§3 中的具体文件**尚无一个已落地**，全部待创建。
+* **实现状态标记**：`[x]` = 已实现（目前仅 `rag_config.toml` 本体、`storage/` 下两个运行时数据目录、四个原有空包骨架）；`` = 规划中。本文档 §2/§3 中的具体文件**尚无一个已落地**，全部待创建。
 * **空目录占位**：需要入库但暂无内容的目录一律放 `.gitkeep`；Python 包目录必须有 `__init__.py`（`src/rerank/__init__.py` 已随本轮创建，其余 `indexer/embeddings/storage/api` 下的具体模块文件尚未创建）。
 * **仓库标识**：多仓库场景下统一用 `repo_name`（人类可读标识，如 `aegis-agent`），不与 `repo_root`（绝对路径，仅索引时使用）混用（`05` §1.2）。
 
@@ -184,10 +184,10 @@ packages = ["src/api", "src/indexer", "src/embeddings", "src/rerank", "src/stora
 
 | 项 | 状态 |
 | :--- | :--- |
-| `pyproject.toml` 依赖声明与 `uv.lock` | ✅ 已完成（`packages` 列表已同步 `src/rerank`） |
-| `rag_config.toml` 六段配置 | ✅ 已完成 |
-| `src/{api,indexer,embeddings,rerank,storage}` 包骨架 | ✅ 已完成 |
-| `src/` 下具体模块文件（§2 列出的全部 `.py`） | ✅ 已完成（18 个模块文件；已用真实本地 Qdrant + 真实 tree-sitter 解析跑通端到端 ingest→retrieve 冒烟验证，含幂等重复索引、dense_only 调试模式、维度不匹配 fail-fast、`workers>1`+`local` fail-fast） |
+| `pyproject.toml` 依赖声明与 `uv.lock` | [x] 已完成（`packages` 列表已同步 `src/rerank`） |
+| `rag_config.toml` 六段配置 | [x] 已完成 |
+| `src/{api,indexer,embeddings,rerank,storage}` 包骨架 | [x] 已完成 |
+| `src/` 下具体模块文件（§2 列出的全部 `.py`） | [x] 已完成（18 个模块文件；已用真实本地 Qdrant + 真实 tree-sitter 解析跑通端到端 ingest→retrieve 冒烟验证，含幂等重复索引、dense_only 调试模式、维度不匹配 fail-fast、`workers>1`+`local` fail-fast） |
 | RSE/MMR 算法本体（04 §6） | ⬜ 未实现（配置项可读取但不接线，符合非核心范围的既定裁决） |
 | `tests/` 目录骨架与 pytest 用例 | ⬜ 未开始（本轮按要求不产出测试） |
 | `AegisAgent/src/evaluation/rag_bench/rag_service_client.py` | ⬜ 未开始（归属 `AegisAgent` 一侧，不在本次编码范围内） |

@@ -1,7 +1,7 @@
 # 02_RAG 语法切分与向量存储测试报告
 
-> **测试目标**：验证 `AegisRAG/` 独立微服务的 Tree-sitter AST 代码切分、Markdown 面包屑、Qdrant 向量存储幂等性及 Dense/Sparse 向量生成。  
-> **执行环境**：单线程无冲突受控运行 (`OMP_NUM_THREADS=1`)  
+> **测试目标**：验证 `AegisRAG/` 独立微服务的 Tree-sitter AST 代码切分、Markdown 面包屑、Qdrant 向量存储幂等性及 Dense/Sparse 向量生成。
+> **执行环境**：单线程无冲突受控运行 (`OMP_NUM_THREADS=1`)
 > **实测数据**：**61 Passed, 0 Failed | 耗时: 73.18s | 通过率: 100%**
 
 ---

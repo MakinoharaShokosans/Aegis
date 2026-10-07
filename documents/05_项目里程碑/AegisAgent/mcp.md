@@ -1,8 +1,8 @@
 # AegisAgent MCP（模型上下文协议）系统功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/09_mcp_integration_and_governance.md`  
-> **核心原则**：数据面与控制面分离、静态接入审查、逐名显式授权、stdio 进程物理配额限制。  
-> 
+> **对应设计规范**：`documents/agent_runtime/09_mcp_integration_and_governance.md`
+> **核心原则**：数据面与控制面分离、静态接入审查、逐名显式授权、stdio 进程物理配额限制。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

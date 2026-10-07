@@ -1,9 +1,9 @@
 # AegisAgent 全局多层上下文装配功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/06_memory_and_context_management.md` §4  
-> **责任模块**：`AegisAgent/src/agent_runtime/context.py`  
-> **核心原则**：集中装配口径一致、纯函数式无副作用只读、XML 沙箱协议隔离、分层快照可检视。  
-> 
+> **对应设计规范**：`documents/agent_runtime/06_memory_and_context_management.md` §4
+> **责任模块**：`AegisAgent/src/agent_runtime/context.py`
+> **核心原则**：集中装配口径一致、纯函数式无副作用只读、XML 沙箱协议隔离、分层快照可检视。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

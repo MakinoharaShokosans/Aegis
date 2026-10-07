@@ -1,9 +1,9 @@
 # AegisRAG 检索质量全景消融基准评测报告 (Evaluation Baseline Report)
 
-> **评测版本**：v1.0-baseline  
-> **评测时间**：2026-09-17  
-> **责任子工程**：`AegisRAG` (服务提供端 `:8001`) ↔ `AegisAgent/src/evaluation/rag_bench/` (评测执行端)  
-> **执行规范**：[评测执行规范.md](documents/测试路线/AegisRAG/评测执行规范.md)  
+> **评测版本**：v1.0-baseline
+> **评测时间**：2026-09-17
+> **责任子工程**：`AegisRAG` (服务提供端 `:8001`) ↔ `AegisAgent/src/evaluation/rag_bench/` (评测执行端)
+> **执行规范**：[评测执行规范.md](documents/测试路线/AegisRAG/评测执行规范.md)
 > **核心原则**：不量化就是瞎优化；零 LLM-judge 消耗、纯数学统计、100% 确定性可复现。
 
 ---
@@ -73,12 +73,12 @@
 
 | 考核维度 | 验收标准 / 红线 | 生产基准实测值 (`hybrid_rerank`) | 判定结论 |
 | :--- | :---: | :---: | :---: |
-| **精排正向增益** | $\text{MRR}(\text{rerank}) > \text{MRR}(\text{rrf})$ 且提升 $\ge +15\%$ | **+46.4%** ($0.3500 \to 0.5125$) | **[✔ PASS] 显著超标达标** |
-| **Top-3 命中率** | HitRate@3 $\ge 0.60$ | **0.7000** (70%) | **[✔ PASS] 达标** |
-| **Top-5 命中率** | HitRate@5 $\ge 0.70$ (硬基准) | **0.7500** (75%) | **[✔ PASS] 达标** |
-| **MRR@5 排序质量** | MRR@5 $\ge 0.50$ | **0.5125** | **[✔ PASS] 达标** |
-| **NDCG@5 排序质量** | NDCG@5 $\ge 0.50$ | **0.5432** | **[✔ PASS] 达标** |
-| **LLM Token 消耗** | 评测过程零 Token 消耗 | 0 Token (纯 numpy 离线计算) | **[✔ PASS] 零成本达成** |
+| **精排正向增益** | $\text{MRR}(\text{rerank}) > \text{MRR}(\text{rrf})$ 且提升 $\ge +15\%$ | **+46.4%** ($0.3500 \to 0.5125$) | **[ PASS] 显著超标达标** |
+| **Top-3 命中率** | HitRate@3 $\ge 0.60$ | **0.7000** (70%) | **[ PASS] 达标** |
+| **Top-5 命中率** | HitRate@5 $\ge 0.70$ (硬基准) | **0.7500** (75%) | **[ PASS] 达标** |
+| **MRR@5 排序质量** | MRR@5 $\ge 0.50$ | **0.5125** | **[ PASS] 达标** |
+| **NDCG@5 排序质量** | NDCG@5 $\ge 0.50$ | **0.5432** | **[ PASS] 达标** |
+| **LLM Token 消耗** | 评测过程零 Token 消耗 | 0 Token (纯 numpy 离线计算) | **[ PASS] 零成本达成** |
 
 ---
 

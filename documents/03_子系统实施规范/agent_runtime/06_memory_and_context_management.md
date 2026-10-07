@@ -1,6 +1,6 @@
 # 工作区、多会话与上下文治理规范 (Workspace, Multi-Session & Context Management)
 
-> **责任领域**：`AegisAgent/src/agent_runtime/memory/` & `AegisAgent/src/agent_runtime/context.py`  
+> **责任领域**：`AegisAgent/src/agent_runtime/memory/` & `AegisAgent/src/agent_runtime/context.py`
 > **核心原则**：工作区一等公民（多工作区支持）、一个工作区多会话（1:N 级联从属）、物理工程路径强绑定、跨会话长期记忆共享、单会话高低水位动态压缩（80% 触发 / 40% 对话对齐）、确定性物理 Token 计量。
 
 ---
@@ -132,7 +132,7 @@ $$\text{Final Context} = \underbrace{\text{[系统提示词]}}_{\text{自带} + 
 最古老 ──► [第 1 轮: User 问 + Agent 答]  (2,000 Token)  ──┐
            [第 2 轮: User 问 + Agent 答]  (6,500 Token)    ├── 累计 11,500 Token
            [第 3 轮: User 问 + Agent 答]  (3,000 Token)  ──┘   (最贴近 40% 的完整对话边界!)
-────────── ✂️ 严格在第 3 轮 Assistant 响应之后对齐切断 (Clean Cut) ────────────────────
+──────────  严格在第 3 轮 Assistant 响应之后对齐切断 (Clean Cut) ────────────────────
 保留活跃 ──► [第 4 轮: User 问 + Agent 答]  (4,000 Token)
            [第 5 轮: User 问 + Agent 答]  (11,000 Token)
            ...

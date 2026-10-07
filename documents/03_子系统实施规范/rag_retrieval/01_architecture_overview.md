@@ -1,7 +1,7 @@
 # AegisRAG 总体架构与数据流规范
 
 > **责任领域**：`AegisRAG/` 整体拓扑、数据流与模块边界（**物理目录结构与依赖矩阵见 `07_directory_structure.md`，本文档不重复**）
-> **状态**：📋 规划中，尚未实现
+> **状态**： 规划中，尚未实现
 > **核心原则**：Ingest（索引写入）与 Retrieve（在线检索）双流水线物理解耦、独立子工程零反向依赖、双部署形态可切换、不持有 Chat LLM 客户端。
 
 ---
@@ -70,7 +70,7 @@ AegisRAG 对外只有两类职责，对应两条独立触发、独立扩缩容�
 
 ## 5. 故障隔离契约（与 Agent 侧的关系）
 
-AegisRAG 不可达时，Agent 侧 `tools/builtin/rag_search.py` 通过 `ServiceClient` 捕获 `DependencyUnavailableError` 并转为 `ToolResult.failure(...)`（已实现，✅）——与 `bash`/`web_search` 工具的降级策略完全一致：**RAG 服务挂了不应该让整个 Agent 任务崩溃**，而是作为一次可反思的工具失败反馈给模型（触发 `consecutive_errors` 计数与重规划路径，而非硬熔断）。
+AegisRAG 不可达时，Agent 侧 `tools/builtin/rag_search.py` 通过 `ServiceClient` 捕获 `DependencyUnavailableError` 并转为 `ToolResult.failure(...)`（已实现，[x]）——与 `bash`/`web_search` 工具的降级策略完全一致：**RAG 服务挂了不应该让整个 Agent 任务崩溃**，而是作为一次可反思的工具失败反馈给模型（触发 `consecutive_errors` 计数与重规划路径，而非硬熔断）。
 
 服务端实现时需保证：
 

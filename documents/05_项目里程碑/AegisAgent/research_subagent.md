@@ -1,8 +1,8 @@
 # AegisAgent 研究子智能体（Research Subagent）系统功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/12_research_subagent.md`  
-> **核心原则**：特权隔离、强类型契约、有界循环预算、代码模板渲染、数据流零污染。  
-> 
+> **对应设计规范**：`documents/agent_runtime/12_research_subagent.md`
+> **核心原则**：特权隔离、强类型契约、有界循环预算、代码模板渲染、数据流零污染。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

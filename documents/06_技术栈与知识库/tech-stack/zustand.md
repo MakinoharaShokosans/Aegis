@@ -126,7 +126,7 @@ import { useWorkspaceStore } from '@/stores/useWorkspaceStore';
 export const CanvasPane: React.FC = () => {
   // 只解构自己需要的属性与动作函数，其他无关属性变化不触发本组件重绘
   const { tabs, activeTabId, closeTab, setActiveTab } = useWorkspaceStore();
-  
+
   const activeTab = tabs.find((t) => t.id === activeTabId);
   return (
     <div>

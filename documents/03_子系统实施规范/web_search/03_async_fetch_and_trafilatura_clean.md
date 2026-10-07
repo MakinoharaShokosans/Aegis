@@ -1,6 +1,6 @@
 # Web Search - 异步抓取与正文清洗规范
 
-> **责任领域**：`AegisAgent/src/services/web_search/extractor.py`  
+> **责任领域**：`AegisAgent/src/services/web_search/extractor.py`
 > **核心原则**：`httpx` 全异步连接池并发、UA 伪装轮换、WAF 阻断 Fail-Fast 快速降级、`trafilatura` 启发式提炼精炼 Markdown。
 
 ---
@@ -63,7 +63,7 @@ def extract_markdown_content(html: str) -> str:
     """
     if not html:
         return ""
-    
+
     extracted = trafilatura.extract(
         html,
         output_format="markdown",

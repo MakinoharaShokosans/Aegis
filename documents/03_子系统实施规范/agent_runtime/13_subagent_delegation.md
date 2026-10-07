@@ -118,7 +118,7 @@ class SubagentPrivilegeGuard:
     ) -> GrantedSubagentEnv:
         # 1. 动态计算当前合法的最大可用工具池（父级快照 - 递归派发工具）
         allowed_pool = set(parent_ctx.active_tools.keys()) - {"spawn_subagent"}
-        
+
         # 2. 校验提议工具是否越界（必须是动态池的子集）
         requested = set(proposed_tools)
         if not requested.issubset(allowed_pool):
@@ -126,11 +126,11 @@ class SubagentPrivilegeGuard:
             raise PrivilegeEscalationError(
                 f"越权拦截：提议工具 {illegal} 超出父级当前动态授权池 {allowed_pool}！"
             )
-            
+
         # 3. 预算与步数物理 Clamp（确保不可被提示词放大）
         final_budget = min(proposed_budget, parent_ctx.remaining_token_budget, CONFIG.max_subagent_budget)
         final_steps = min(proposed_steps, CONFIG.max_subagent_steps)
-        
+
         return GrantedSubagentEnv(
             tools=[tool_registry.get(t) for t in requested],
             token_budget=final_budget,
@@ -229,7 +229,7 @@ URL 必须真实存在"）。于是强类型退化成"包装成 JSON 的自由�
 
 | 方案 | 规则 | 优 | 劣 |
 |:---|:---|:---|:---|
-| **A. 一律不可信（✅ 已采用）** | 所有子智能体回流一律 `trust="untrusted"` | 单条规则、无边界情形、与"默认保守"一致 | 纯本地子智能体的总结也被标注，略有过度谨慎 |
+| **A. 一律不可信（[x] 已采用）** | 所有子智能体回流一律 `trust="untrusted"` | 单条规则、无边界情形、与"默认保守"一致 | 纯本地子智能体的总结也被标注，略有过度谨慎 |
 | B. 按工具集最低信任级 | 子智能体工具集含不可信工具 ⇒ 回流不可信 | 更精准 | 引入"最低信任级"的推理链，且**摘要洗白**（把可信文件里的可疑文本洗成自信结论）在此方案下不受控 |
 
 **采用 A。** 理由：过度谨慎的成本是"多一次核验"，漏判的成本是不可逆的；
@@ -395,7 +395,7 @@ URL 必须真实存在"）。于是强类型退化成"包装成 JSON 的自由�
 | 引用必须可核对（引用白名单） | **不保证**主 Agent 会正确对待该总结（依赖提示词纪律） |
 | 能力在边界上一次衰减定死 | **不保证**子智能体的**结论**不影响主 Agent——隔离的是原始内容，不是结论影响；结论本来就是要影响主 Agent 的 |
 
-> ⚠️ **禁语**：不得称此为"沙箱"。它是**能力衰减 + 上下文隔离**。
+> **禁语**：不得称此为"沙箱"。它是**能力衰减 + 上下文隔离**。
 > 真正的沙箱是 `bash_shell` 那个进程级的东西（`setrlimit` / `setsid` / 内存池）。
 > 混用这个词会让人以为"子智能体里跑什么都安全"——**它不改变子智能体能做的事，
 > 只改变它被允许做的事。** 同理，禁止宣称"彻底杜绝注入"，
@@ -455,12 +455,12 @@ URL 必须真实存在"）。于是强类型退化成"包装成 JSON 的自由�
 
 | 阶段 | 内容 | 状态 |
 |:---|:---|:---|
-| **0** | 修复预算对账缺口：子智能体用量回流父任务计量；并发派发前串行预留 | ✅ 已完成（`guardrails/budget_ledger.py`；`research` 的私有计数器一并统一复用 `ChildBudget`） |
-| **1** | 工具层支持**调用期信任级降级** | ✅ 已完成（`ToolResult.trust` 覆盖 + `DispatchedResult.trust` 统一解析） |
-| **2** | `spawn_subagent` 本体：三道收窄、深度双保险、预留结算、次数上限、引用白名单、不可信信封 | ✅ 已完成（`agent_runtime/subagent/`） |
-| 2b | XML 定界信封抽出为**唯一实现侧**（主循环与子智能体共用） | ✅ 已完成（`envelope.py`；此前内联在 `tool_runner` 中，两份实现迟早分叉） |
-| 3 | 可观测性：子智能体中间步骤接入 SSE 事件流 | ✅ 已完成（`observability/event_bus.py` + `subagent.*` / `research.*` 事件，见 §11.1） |
-| 3b | 子智能体轨迹单独成篇（不与主任务轨迹混杂） | 📋 未做（当前记录在工具结果 `meta`、账本快照与事件流中） |
+| **0** | 修复预算对账缺口：子智能体用量回流父任务计量；并发派发前串行预留 | [x] 已完成（`guardrails/budget_ledger.py`；`research` 的私有计数器一并统一复用 `ChildBudget`） |
+| **1** | 工具层支持**调用期信任级降级** | [x] 已完成（`ToolResult.trust` 覆盖 + `DispatchedResult.trust` 统一解析） |
+| **2** | `spawn_subagent` 本体：三道收窄、深度双保险、预留结算、次数上限、引用白名单、不可信信封 | [x] 已完成（`agent_runtime/subagent/`） |
+| 2b | XML 定界信封抽出为**唯一实现侧**（主循环与子智能体共用） | [x] 已完成（`envelope.py`；此前内联在 `tool_runner` 中，两份实现迟早分叉） |
+| 3 | 可观测性：子智能体中间步骤接入 SSE 事件流 | [x] 已完成（`observability/event_bus.py` + `subagent.*` / `research.*` 事件，见 §11.1） |
+| 3b | 子智能体轨迹单独成篇（不与主任务轨迹混杂） | 未做（当前记录在工具结果 `meta`、账本快照与事件流中） |
 
 ### 11.1 事件可见性为什么不能靠"放宽隔离"来实现
 
@@ -492,14 +492,14 @@ TaskRegistry.emit → 环形缓冲 + 广播 → SSE
 
 ## 12. 与既有文档的同步项
 
-* ✅ `10_directory_structure.md` 裁决项⑯ → 已升级为通则；新增裁决㉒–㉕；
-* ✅ `10` 依赖矩阵 → 已新增 `subagent/` 包的行与列（并顺带补齐了原本缺行的 `research`）；
-* ✅ `10` §9 文件↔文档对照表、§10 落地状态台账 → 已补条目；
-* ✅ `12_research_subagent.md` §1.3 → 已补"该决策已泛化，此处为其特例"的交叉引用；
-* ✅ `12` §4.1 → 已标注约束①（URL 白名单）泛化为引用白名单（`13` §3.3）；
-* ✅ `12` §8 → 已标注预算计数器复用 `ChildBudget`；
-* ✅ `05_guardrails_implementation.md` → 已补"子智能体消耗计入物理预算"；
-* ✅ `02_state_definition.md` → 已补 `permission_level` 字段（原先缺失声明）；
-* ✅ `documents/README.md` 与 `agent_runtime/README.md` → 已补文档索引；
-* ✅ `11_http_api.md` → 已新增 `subagent.*` / `research.*` 事件契约（§6）与接入层鉴权（§1.1）；
-* 📋 `11_http_api.md` → 任务 DTO 是否暴露"子智能体占用预算"（暂不做）。
+* [x] `10_directory_structure.md` 裁决项⑯ → 已升级为通则；新增裁决㉒–㉕；
+* [x] `10` 依赖矩阵 → 已新增 `subagent/` 包的行与列（并顺带补齐了原本缺行的 `research`）；
+* [x] `10` §9 文件↔文档对照表、§10 落地状态台账 → 已补条目；
+* [x] `12_research_subagent.md` §1.3 → 已补"该决策已泛化，此处为其特例"的交叉引用；
+* [x] `12` §4.1 → 已标注约束①（URL 白名单）泛化为引用白名单（`13` §3.3）；
+* [x] `12` §8 → 已标注预算计数器复用 `ChildBudget`；
+* [x] `05_guardrails_implementation.md` → 已补"子智能体消耗计入物理预算"；
+* [x] `02_state_definition.md` → 已补 `permission_level` 字段（原先缺失声明）；
+* [x] `documents/README.md` 与 `agent_runtime/README.md` → 已补文档索引；
+* [x] `11_http_api.md` → 已新增 `subagent.*` / `research.*` 事件契约（§6）与接入层鉴权（§1.1）；
+* `11_http_api.md` → 任务 DTO 是否暴露"子智能体占用预算"（暂不做）。

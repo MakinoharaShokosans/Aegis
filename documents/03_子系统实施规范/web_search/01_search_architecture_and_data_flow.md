@@ -1,6 +1,6 @@
 # Web Search - 全景架构与数据流规范
 
-> **责任领域**：`AegisAgent/src/services/web_search/` 全系统  
+> **责任领域**：`AegisAgent/src/services/web_search/` 全系统
 > **核心原则**：单一职责微服务、管道化数据流转、轻量零成本。
 
 ---

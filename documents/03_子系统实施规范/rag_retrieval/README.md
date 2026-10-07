@@ -7,10 +7,10 @@
 >
 > | 标记 | 含义 |
 > | :--- | :--- |
-> | ✅ | **已实现**，且与本节描述一致（可在对应源码文件核对） |
-> | 📋 | **规划中，尚未实现**。仅记录设计意图，**不得**据此认为系统具备该能力 |
+> | [x] | **已实现**，且与本节描述一致（可在对应源码文件核对） |
+> | | **规划中，尚未实现**。仅记录设计意图，**不得**据此认为系统具备该能力 |
 >
-> **当前全局状态**：`AegisRAG/src/` 下 `api/`、`embeddings/`、`indexer/`、`rerank/`、`storage/` 五个包的核心模块已按本套规范落地（详见 `07_directory_structure.md` §9 落地状态台账），已用真实本地 Qdrant + 真实 tree-sitter 解析跑通端到端冒烟验证；**尚未补齐测试**（`tests/` 仍是空白），RSE/MMR 等 §6 未来增强也仍未实现。本规范套件（01~07）的正文仍按 📋 标注"设计意图"，不逐条改写成实现细节说明书——具体"哪些文件已经真的存在"以 `07` §9 的台账为准，请勿混淆"规范记录的设计意图"与"当前代码真实状态"这两件事。
+> **当前全局状态**：`AegisRAG/src/` 下 `api/`、`embeddings/`、`indexer/`、`rerank/`、`storage/` 五个包的核心模块已按本套规范落地（详见 `07_directory_structure.md` §9 落地状态台账），已用真实本地 Qdrant + 真实 tree-sitter 解析跑通端到端冒烟验证；**尚未补齐测试**（`tests/` 仍是空白），RSE/MMR 等 §6 未来增强也仍未实现。本规范套件（01~07）的正文仍按  标注"设计意图"，不逐条改写成实现细节说明书——具体"哪些文件已经真的存在"以 `07` §9 的台账为准，请勿混淆"规范记录的设计意图"与"当前代码真实状态"这两件事。
 >
 > 本批规范的原则：**配置值一律不在文档中硬编码**，均以 `AegisRAG/config/rag_config.toml` 为唯一真源；文档只说明语义与默认值。
 
@@ -20,13 +20,13 @@
 
 | 文档序号 | 技术领域 | 状态 | 核心规范与设计重点 |
 | :--- | :--- | :--: | :--- |
-| [01_architecture_overview.md](./01_architecture_overview.md) | **总体架构与数据流** | 📋 | Ingest（索引写入）与 Retrieve（在线检索）双流水线拓扑、模块划分（`indexer/` `embeddings/` `storage/` `api/`）、独立子工程物理隔离纪律、双部署形态（本地嵌入 / Docker） |
-| [02_chunking_and_parsing.md](./02_chunking_and_parsing.md) | **语法感知切分与索引触发** | 📋 | Tree-sitter AST 切分（C/C++/Go）、非 AST 语言的降级切分策略、Markdown 标题分块、证据元数据 Schema、索引触发时机与增量再索引 |
-| [03_embedding_and_storage.md](./03_embedding_and_storage.md) | **向量化与 Qdrant 存储** | 📋 | FastEmbed Dense/Sparse 双路生成、Qdrant Collection Schema（命名向量 + Payload）、维度一致性校验、幂等写入（确定性 Point ID）、失效数据清理 |
-| [04_hybrid_retrieval_and_rerank.md](./04_hybrid_retrieval_and_rerank.md) | **混合检索与精排** | 📋 | Dense/Sparse 双路召回、Qdrant 原生 RRF 融合、Payload 预过滤、Cross-Encoder 精排（**核心范围，非可选项**）、低置信度与空结果治理、职责边界（查询改写类增强不属于 RAG） |
-| [05_http_api_and_client_contract.md](./05_http_api_and_client_contract.md) | **服务契约与客户端适配** | 📋 / ✅ | 📋 `POST /api/v1/retrieve`、`POST /api/v1/documents/ingest`、`GET /api/v1/health` 服务端契约；✅ Agent 侧 `tools/builtin/rag_search.py` 客户端适配器**已实现**，本规范是其对端契约的补全 |
-| [06_evaluation_and_benchmarking.md](./06_evaluation_and_benchmarking.md) | **检索质量评测与基准** | 📋 | 接入**已实现**的零 LLM 评测 harness（`src/evaluation/rag_bench/`）、金标数据集构建方法、Dense/Sparse/Hybrid/Rerank 四组消融矩阵——`02`/`03`/`04` 各处"未来增强"项能否落地的量化依据 |
-| [07_directory_structure.md](./07_directory_structure.md) | **目录结构与工程分层** | 📋 | `src/` 权威目录树（含 `rerank/` 独立成包等裁决记录）、依赖方向矩阵、打包约定——**本规范其余各篇的物理路径唯一真源** |
+| [01_architecture_overview.md](./01_architecture_overview.md) | **总体架构与数据流** | | Ingest（索引写入）与 Retrieve（在线检索）双流水线拓扑、模块划分（`indexer/` `embeddings/` `storage/` `api/`）、独立子工程物理隔离纪律、双部署形态（本地嵌入 / Docker） |
+| [02_chunking_and_parsing.md](./02_chunking_and_parsing.md) | **语法感知切分与索引触发** | | Tree-sitter AST 切分（C/C++/Go）、非 AST 语言的降级切分策略、Markdown 标题分块、证据元数据 Schema、索引触发时机与增量再索引 |
+| [03_embedding_and_storage.md](./03_embedding_and_storage.md) | **向量化与 Qdrant 存储** | | FastEmbed Dense/Sparse 双路生成、Qdrant Collection Schema（命名向量 + Payload）、维度一致性校验、幂等写入（确定性 Point ID）、失效数据清理 |
+| [04_hybrid_retrieval_and_rerank.md](./04_hybrid_retrieval_and_rerank.md) | **混合检索与精排** | | Dense/Sparse 双路召回、Qdrant 原生 RRF 融合、Payload 预过滤、Cross-Encoder 精排（**核心范围，非可选项**）、低置信度与空结果治理、职责边界（查询改写类增强不属于 RAG） |
+| [05_http_api_and_client_contract.md](./05_http_api_and_client_contract.md) | **服务契约与客户端适配** | / [x] | `POST /api/v1/retrieve`、`POST /api/v1/documents/ingest`、`GET /api/v1/health` 服务端契约；[x] Agent 侧 `tools/builtin/rag_search.py` 客户端适配器**已实现**，本规范是其对端契约的补全 |
+| [06_evaluation_and_benchmarking.md](./06_evaluation_and_benchmarking.md) | **检索质量评测与基准** | | 接入**已实现**的零 LLM 评测 harness（`src/evaluation/rag_bench/`）、金标数据集构建方法、Dense/Sparse/Hybrid/Rerank 四组消融矩阵——`02`/`03`/`04` 各处"未来增强"项能否落地的量化依据 |
+| [07_directory_structure.md](./07_directory_structure.md) | **目录结构与工程分层** | | `src/` 权威目录树（含 `rerank/` 独立成包等裁决记录）、依赖方向矩阵、打包约定——**本规范其余各篇的物理路径唯一真源** |
 
 ---
 
@@ -37,7 +37,7 @@
                         │      AegisRAG 独立子工程 (:8001)           │
                         │      独立 uv 虚拟环境，物理隔离于 Agent     │
                         └──────────────────────────────────────────┘
-   [ Ingest 流水线 ]  📋                          [ Retrieve 流水线 ]  📋
+   [ Ingest 流水线 ]                            [ Retrieve 流水线 ]
    仓库文件 → 语言分发                              Query
       │                                              │
       ▼                                      ┌───────┴───────┐
@@ -58,22 +58,22 @@
                                           结构化 JSON（含 file_path/行号/git_commit）
 ```
 
-候选数量（`dense_top_k`/`sparse_top_k`/`fusion_top_k`/`default_top_k`）均为 `[retrieval]` 配置项，具体数值见 §4，图中不重复标注字面数字。Agent 侧只经由 `tools/builtin/rag_search.py`（`AegisTool` 契约，✅ 已实现）通过 `httpx` 调用 Retrieve 流水线；Ingest 流水线的触发时机与调用方见 `02` §1。
+候选数量（`dense_top_k`/`sparse_top_k`/`fusion_top_k`/`default_top_k`）均为 `[retrieval]` 配置项，具体数值见 §4，图中不重复标注字面数字。Agent 侧只经由 `tools/builtin/rag_search.py`（`AegisTool` 契约，[x] 已实现）通过 `httpx` 调用 Retrieve 流水线；Ingest 流水线的触发时机与调用方见 `02` §1。
 
 ---
 
-## 3. 代码映射一览（规划路径，📋 待创建）
+## 3. 代码映射一览（规划路径， 待创建）
 
 * **服务配置**：[`AegisRAG/config/rag_config.toml`](file:///home/Skualeilu/Projects/Aegis/AegisRAG/config/rag_config.toml)（已存在，`[server]` `[qdrant]` `[embedding]` `[indexer]` 四段）
-* **AST 语法切分器**：`AegisRAG/src/indexer/ast_splitter.py` 📋
-* **Markdown 标题切分器**：`AegisRAG/src/indexer/markdown_splitter.py` 📋
-* **通用降级切分器**：`AegisRAG/src/indexer/fallback_splitter.py` 📋（见 `02` §3，本规范新引入，milestone 尚未列出）
-* **向量化管道**：`AegisRAG/src/embeddings/pipeline.py` 📋
-* **Qdrant 存储适配器**：`AegisRAG/src/storage/qdrant_store.py` 📋
-* **Cross-Encoder 精排器**：`AegisRAG/src/rerank/reranker.py` 📋（核心范围，非可选项，见 `04` §3；独立成包而非挂在 `indexer/` 下，裁决见 `07`）
-* **FastAPI 接入层**：`AegisRAG/src/api/` 📋
-* **Agent 侧客户端**：[`AegisAgent/src/tools/builtin/rag_search.py`](file:///home/Skualeilu/Projects/Aegis/AegisAgent/src/tools/builtin/rag_search.py) ✅ **已实现**（服务端契约需与其字段对齐，见 `05`）
-* **评测基线脚本**：`AegisAgent/src/evaluation/rag_bench/rag_service_client.py` 📋（**放在 AegisAgent 侧**，见 `06` §4 / `01` §6 的跨虚拟环境边界说明；通过 HTTP 调用 AegisRAG，接入**已实现**的 [`AegisAgent/src/evaluation/rag_bench/`](file:///home/Skualeilu/Projects/Aegis/AegisAgent/src/evaluation/rag_bench)）
+* **AST 语法切分器**：`AegisRAG/src/indexer/ast_splitter.py`
+* **Markdown 标题切分器**：`AegisRAG/src/indexer/markdown_splitter.py`
+* **通用降级切分器**：`AegisRAG/src/indexer/fallback_splitter.py` （见 `02` §3，本规范新引入，milestone 尚未列出）
+* **向量化管道**：`AegisRAG/src/embeddings/pipeline.py`
+* **Qdrant 存储适配器**：`AegisRAG/src/storage/qdrant_store.py`
+* **Cross-Encoder 精排器**：`AegisRAG/src/rerank/reranker.py` （核心范围，非可选项，见 `04` §3；独立成包而非挂在 `indexer/` 下，裁决见 `07`）
+* **FastAPI 接入层**：`AegisRAG/src/api/`
+* **Agent 侧客户端**：[`AegisAgent/src/tools/builtin/rag_search.py`](file:///home/Skualeilu/Projects/Aegis/AegisAgent/src/tools/builtin/rag_search.py) [x] **已实现**（服务端契约需与其字段对齐，见 `05`）
+* **评测基线脚本**：`AegisAgent/src/evaluation/rag_bench/rag_service_client.py` （**放在 AegisAgent 侧**，见 `06` §4 / `01` §6 的跨虚拟环境边界说明；通过 HTTP 调用 AegisRAG，接入**已实现**的 [`AegisAgent/src/evaluation/rag_bench/`](file:///home/Skualeilu/Projects/Aegis/AegisAgent/src/evaluation/rag_bench)）
 
 ---
 

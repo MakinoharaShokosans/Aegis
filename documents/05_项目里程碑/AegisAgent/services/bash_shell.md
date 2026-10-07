@@ -1,10 +1,10 @@
 # AegisAgent 受控 Bash Shell 沙箱服务功能与设计里程碑
 
-> **对应设计规范**：`documents/bash_shell/01~05`  
-> **责任模块**：`AegisAgent/src/services/bash_shell/` & `AegisAgent/src/tools/builtin/bash.py`  
-> **运行端口**：`:8002`（独立微服务进程）  
-> **核心原则**：PGID 进程组隔离、setrlimit 物理边界、高危指令正则审计、工作区根目录硬约束。  
-> 
+> **对应设计规范**：`documents/bash_shell/01~05`
+> **责任模块**：`AegisAgent/src/services/bash_shell/` & `AegisAgent/src/tools/builtin/bash.py`
+> **运行端口**：`:8002`（独立微服务进程）
+> **核心原则**：PGID 进程组隔离、setrlimit 物理边界、高危指令正则审计、工作区根目录硬约束。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

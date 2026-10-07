@@ -9,8 +9,8 @@
 ```text
 06_技术栈与知识库/
 ├── README.md                  # [当前文档] 技术栈与知识库导航
-├── 技术栈.md                  # 📋 全景技术栈清单 (Tech Stack BOM: 库/模型/版本/环境要求)
-└── tech-stack/                # 💡 单库深度剖析与要点指南 (单库单文档)
+├── 技术栈.md                  # 全景技术栈清单 (Tech Stack BOM: 库/模型/版本/环境要求)
+└── tech-stack/                # 单库深度剖析与要点指南 (单库单文档)
     ├── aiosqlite.md           # 异步 SQLite 驱动与 WAL 并发写入考量
     ├── fastapi.md             # 异步 Web 框架与依赖注入 / 生命周期管理
     ├── fastembed.md           # 本地轻量 ONNX 向量化引擎与线程调优

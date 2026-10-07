@@ -1,6 +1,6 @@
 # Bash 执行沙箱 - 命令审计与工作区沙箱规范
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/audit.py` 与 `sandbox.py`  
+> **责任领域**：`AegisAgent/src/services/bash_shell/audit.py` 与 `sandbox.py`
 > **核心原则**：高危破坏性指令前置正则拦截、三级权限分级管控、越级人工审核（HITL）、工作目录绑定工作区根路径 (CWD)、路径越界逃逸防护、工作区修改与内部产物落盘严格物理解耦。
 
 ---
@@ -75,7 +75,7 @@ class CommandAudit:
 
 ## 2. 三级权限模型与越级人工审核（Human-in-the-Loop, HITL）
 
-> ### 📋 本节为**规划中设计，尚未实现**
+> ### 本节为**规划中设计，尚未实现**
 >
 > 代码中**不存在** `permission_level` 字段、权限分级判定、`interrupt()` 挂起或审核端点。
 > 当前唯一的前置防线是 §1 的 `CommandAudit` 与 §4 的路径越界校验。
@@ -100,12 +100,12 @@ class CommandAudit:
 flowchart TD
     CMD["模型生成待执行指令"] --> Classify["指令权限判定引擎 (Action Classification)"]
     Classify --> Check{"当前命令所需级别 <= 当前已授权级别?"}
-    
+
     Check -- "是 (权限内)" --> Run["受控沙箱直接自动执行"]
-    
-    Check -- "否 (越级)" --> Suspend["🚨 触发 LangGraph interrupt()<br/>任务挂起为 waiting_for_approval"]
+
+    Check -- "否 (越级)" --> Suspend[" 触发 LangGraph interrupt()<br/>任务挂起为 waiting_for_approval"]
     Suspend --> UI["向用户弹出审核交互卡片<br/>(展示待执行命令、变更差异与越级原因)"]
-    
+
     UI --> Decision{"用户决策"}
     Decision -- "单次批准 (Approve Once)" --> Run
     Decision -- "永久放行 (Always Allow)" --> Whitelist["加入会话白名单"] --> Run

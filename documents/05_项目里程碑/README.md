@@ -1,7 +1,7 @@
 # Aegis 实施里程碑全景总索引 (Milestone Master Index)
 
-> **定位**：Aegis 各系统与子模块功能就绪度、架构设计特性与实施进度全景跟踪入口。  
-> 
+> **定位**：Aegis 各系统与子模块功能就绪度、架构设计特性与实施进度全景跟踪入口。
+>
 > **双勾状态图例规范**：
 > - `[代码完成] [测试通过]`
 > - `[x] [x]`：**代码开发已完成** 且 **自动化测试已验证通过**
@@ -10,20 +10,20 @@
 
 ---
 
-## 📁 里程碑文档拓扑
+## 里程碑文档拓扑
 
 ```text
 documents/里程碑/
 ├── README.md                                    # [当前文档] 里程碑全景主索引与双勾图例
 │
-├── AegisAgent/                                  # 👑 Agent 宿主主系统实施里程碑
+├── AegisAgent/                                  # Agent 宿主主系统实施里程碑
 │   ├── skills.md                                # 1. 专家领域技能 (Skills) 渐进式披露与安全隔离
 │   ├── mcp.md                                   # 2. MCP 协议接入、静态审查与 stdio 配额治理
 │   ├── research_subagent.md                     # 3. 外部不可信检索隔离与研究子智能体
 │   ├── guardrails.md                            # 4. 确定性护栏、会话级金丝雀 Token 与防注入体系
 │   ├── real_llm_deep_testing.md                 # 5. 真实前沿模型深度测试 (Phase 9~15) 与红队基线
 │   │
-│   ├── agent_runtime/                           # 🧠 Agent Runtime 核心引擎解耦子模块
+│   ├── agent_runtime/                           # Agent Runtime 核心引擎解耦子模块
 │   │   ├── state_and_domain.md                  # • 状态契约、物理度量与共享领域模型
 │   │   ├── global_context.md                    # • 全局多层上下文装配与 XML 沙箱协议
 │   │   ├── execution_context.md                 # • 微观执行上下文、SQLite 记忆与水位线压缩
@@ -31,17 +31,17 @@ documents/里程碑/
 │   │   ├── http_api.md                          # • FastAPI 网关、任务流式推送与系统自省端点
 │   │   └── permissions_and_hitl.md              # • 三级权限偏序分级与人机协同审批 (HITL)
 │   │
-│   └── services/                                # 🛡️ Sidecar 微服务沙箱
+│   └── services/                                # Sidecar 微服务沙箱
 │       ├── bash_shell.md                        # • 受控 Bash Shell 沙箱微服务 (:8002)
 │       └── web_search.md                        # • 免 Key 网络检索与清洗微服务 (:8003)
 │
-└── AegisRAG/                                    # 📚 独立代码检索子系统 (:8001)
+└── AegisRAG/                                    # 独立代码检索子系统 (:8001)
     └── rag_retrieval.md                         # • AST 语法切分、FastEmbed 向量化与 Qdrant 检索
 ```
 
 ---
 
-## 📊 模块完成度与测试验收一览
+## 模块完成度与测试验收一览
 
 | 模块名称 | 物理路径 | 代码状态 | 测试状态 | 对应里程碑文档 |
 | :--- | :--- | :---: | :---: | :--- |

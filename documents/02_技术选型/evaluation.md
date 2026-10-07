@@ -1,7 +1,7 @@
 # 架构决策记录：自动化双轨评测工具链 (Evaluation Harness)
 
-> **状态**：已定稿 (Accepted)  
-> **责任领域**：`AegisAgent/src/evaluation/`（harness），pytest 用例位于 `AegisAgent/tests/evaluation/`  
+> **状态**：已定稿 (Accepted)
+> **责任领域**：`AegisAgent/src/evaluation/`（harness），pytest 用例位于 `AegisAgent/tests/evaluation/`
 > **核心目标**：为 RAG 检索算法与 Agent 整体自主执行提供量化基准、消融实验与防止负优化的端到端回归保障。
 
 ---

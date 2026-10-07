@@ -1,9 +1,9 @@
 # AegisAgent 状态契约与共享领域模型功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/02_state_definition.md`  
-> **责任模块**：`AegisAgent/src/agent_runtime/state.py`  
-> **核心原则**：唯一真源契约、物理指标替代外部计费、原子消息对保全、纯模型层零业务依赖。  
-> 
+> **对应设计规范**：`documents/agent_runtime/02_state_definition.md`
+> **责任模块**：`AegisAgent/src/agent_runtime/state.py`
+> **核心原则**：唯一真源契约、物理指标替代外部计费、原子消息对保全、纯模型层零业务依赖。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---
@@ -30,7 +30,7 @@
 
 - [x] [x] **阶段里程碑模型（`Milestone`）**
   - [x] [x] `id`（自增序号）、`title`、`description`（验收标准）
-  - [x] [x] `MilestoneStatus` 状态机（`pending` ➔ `in_progress` ➔ `completed` / `failed`）
+  - [x] [x] `MilestoneStatus` 状态机（`pending` -> `in_progress` -> `completed` / `failed`）
 - [x] [x] **已证伪错误尝试（`FailedAttempt` - 负向记忆）**
   - [x] [x] `action`（曾尝试的操作与参数）
   - [x] [x] `failure_reason`（失败核心根因）

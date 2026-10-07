@@ -9,7 +9,7 @@
 ```text
 03_子系统实施规范/
 ├── README.md                  # [当前文档] 子系统实施规范导航
-├── agent_runtime/             # 🧠 调度内核与运行时实施规范 (AegisAgent/src/agent_runtime/)
+├── agent_runtime/             # 调度内核与运行时实施规范 (AegisAgent/src/agent_runtime/)
 │   ├── README.md              # • Agent 运行时规范总览
 │   ├── 01_architecture_overview.md          # 架构概览与分层设计
 │   ├── 02_state_definition.md               # 状态模型与强类型契约
@@ -26,7 +26,7 @@
 │   ├── 13_subagent_delegation.md            # 动态子智能体委派与权限收窄
 │   └── 14_code_search_subagent.md           # 代码检索子智能体实施规范
 │
-├── bash_shell/                # 💻 受控代码沙箱实施规范 (AegisAgent/src/services/bash_shell/)
+├── bash_shell/                # 受控代码沙箱实施规范 (AegisAgent/src/services/bash_shell/)
 │   ├── README.md              # • 沙箱执行子系统总览
 │   ├── 01_process_lifecycle_and_isolation.md   # PGID 进程组隔离与两段式硬超时熔断 (SIGTERM->SIGKILL)
 │   ├── 02_resource_quotas_and_memory_pool.md   # setrlimit 内核物理资源硬约束 (2GB/50MB) 与并发排队
@@ -34,7 +34,7 @@
 │   ├── 04_output_governance_and_artifacts.md   # 流式日志截断治理与超长输出落盘卸载
 │   └── 05_http_api_and_client_contract.md      # 沙箱独立进程 HTTP 服务契约与客户端适配
 │
-├── rag_retrieval/             # 🔍 代码语义检索子系统实施规范 (AegisRAG/)
+├── rag_retrieval/             # 代码语义检索子系统实施规范 (AegisRAG/)
 │   ├── README.md              # • RAG 检索子系统总览与双流水线
 │   ├── 01_architecture_overview.md            # Ingest / Retrieve 双流水线隔离
 │   ├── 02_chunking_and_parsing.md             # 基于 Tree-sitter 的 AST 代码语法切分
@@ -44,7 +44,7 @@
 │   ├── 06_evaluation_and_benchmarking.md      # RAGBench 评测框架与召回率量化
 │   └── 07_directory_structure.md              # AegisRAG 独立工程目录规范
 │
-├── web_search/                # 🌐 外部网络检索子系统实施规范 (AegisAgent/src/services/web_search/)
+├── web_search/                # 外部网络检索子系统实施规范 (AegisAgent/src/services/web_search/)
 │   ├── README.md              # • 网络检索子系统总览
 │   ├── 01_search_architecture_and_data_flow.md # 检索、抓取、清洗、去重与卸载全链路
 │   ├── 02_duckduckgo_provider_and_resilience.md# DuckDuckGo 免 Key 驱动与容错设计
@@ -52,10 +52,10 @@
 │   ├── 04_content_dedup_and_artifacts_offloading.md # MD5 页面去重与 Artifacts 离线落盘
 │   └── 05_http_api_and_client_contract.md      # 检索服务独立进程 HTTP 契约
 │
-├── frontend/                  # 🖥️ Web 前端架构与交互实施规范 (AegisWeb/)
+├── frontend/                  # Web 前端架构与交互实施规范 (AegisWeb/)
 │   ├── frontend_design.md     # 前端视觉层次、组件体系、Monaco Diff 与 HITL 审批卡片设计规范
 │   └── frontend_workflow.md   # 前端生命周期、会话流转、快捷键映射与 SSE 实时渲染时序图
 │
-└── api/                       # 📡 服务间通信与外部网关契约
+└── api/                       # 服务间通信与外部网关契约
     └── api_documentation.md   # 全系统统一 HTTP RESTful API、SSE 事件规范与请求响应 Schema
 ```

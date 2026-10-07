@@ -1,6 +1,6 @@
 # Web Search - 内容去重与离线卸载规范
 
-> **责任领域**：`AegisAgent/src/services/web_search/dedup.py` 与 `extractor.py`  
+> **责任领域**：`AegisAgent/src/services/web_search/dedup.py` 与 `extractor.py`
 > **核心原则**：MD5 内容指纹去重、超长正文物理落盘卸载 (Artifacts Offloading)、精准证据链闭环。
 
 ---

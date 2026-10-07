@@ -1,7 +1,7 @@
 # 向量化管道与 Qdrant 存储规范
 
 > **责任领域**：`AegisRAG/src/embeddings/`、`AegisRAG/src/storage/`
-> **状态**：✅ 已实现（`embeddings/pipeline.py`、`storage/qdrant_store.py`、`storage/ids.py`）
+> **状态**：[x] 已实现（`embeddings/pipeline.py`、`storage/qdrant_store.py`、`storage/ids.py`）
 > **核心原则**：Dense 向量来源可切换（远端 OpenAI 兼容接口默认 / 本地 ONNX 兜底）、Sparse 向量恒本地、维度一致性启动期强校验（含运行期真实探测）、幂等写入、失效数据主动清理。
 
 ---

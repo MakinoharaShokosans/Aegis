@@ -3,7 +3,7 @@
 > **定位**：`AegisRAG` 独立微服务（默认监听端口 `:8001`）的代码与文档混合语义检索基础设施架构设计规范。
 > **核心原则**：
 > - **语法边界零破坏**：以 AST（抽象语法树）解析为基准，按函数/类/结构体完整语义单元切分，杜绝字符定长机械截断；
-> - **双路召回与重排保障**：Dense 语义泛化 + Sparse 词法精确匹配 ➔ Qdrant 原生 RRF 融合 ➔ Cross-Encoder 深度重排；
+> - **双路召回与重排保障**：Dense 语义泛化 + Sparse 词法精确匹配 -> Qdrant 原生 RRF 融合 -> Cross-Encoder 深度重排；
 > - **纯 CPU/ONNX 离线优先**：零 GPU 与零外网强依赖，启动期维度探测强自检与 UUIDv5 确定性幂等。
 
 ---
@@ -13,27 +13,27 @@
 ```mermaid
 flowchart TD
     subgraph IngestionPipeline ["数据索引流水线 (Ingestion Pipeline)"]
-        RawCode["📂 原始工程代码 / Markdown 文档"] --> Dispatcher{"切分调度器\nDispatch"}
-        
-        Dispatcher --"C/C++/Go/Python"--> AST["🌳 Tree-sitter AST 切分器\n(保留完整函数/结构体/吸收尾随分号)"]
-        Dispatcher --"Markdown"--> MD["📑 Markdown 结构切分器\n(H1~H3 标题切片 + 面包屑注入)"]
-        Dispatcher --"纯文本/配置"--> Fallback["✂️ 通用定长滑动窗口降级"]
+        RawCode[" 原始工程代码 / Markdown 文档"] --> Dispatcher{"切分调度器\nDispatch"}
 
-        AST & MD & Fallback --> Meta["🏷️ ChunkMetadata 强类型元数据\n(UUIDv5 确定性哈希 + 文件坐标)"]
+        Dispatcher --"C/C++/Go/Python"--> AST[" Tree-sitter AST 切分器\n(保留完整函数/结构体/吸收尾随分号)"]
+        Dispatcher --"Markdown"--> MD[" Markdown 结构切分器\n(H1~H3 标题切片 + 面包屑注入)"]
+        Dispatcher --"纯文本/配置"--> Fallback[" 通用定长滑动窗口降级"]
 
-        Meta --> EmbeddingPipe["⚡ 双路向量化管道 (Embedding Pipeline)"]
+        AST & MD & Fallback --> Meta[" ChunkMetadata 强类型元数据\n(UUIDv5 确定性哈希 + 文件坐标)"]
+
+        Meta --> EmbeddingPipe[" 双路向量化管道 (Embedding Pipeline)"]
         EmbeddingPipe --> DenseModel["Dense 稠密语义向量 (1024维)\n(jina-embeddings-v3 / ONNX CPU)"]
         EmbeddingPipe --> SparseModel["Sparse 稀疏词法向量 (BM25)\n(FastEmbed Qdrant/bm25)"]
 
-        DenseModel & SparseModel --> QdrantUpsert[("💾 Qdrant 向量引擎 (:8001)\n分批 Upsert + 幂等去重 + 失效清理")]
+        DenseModel & SparseModel --> QdrantUpsert[(" Qdrant 向量引擎 (:8001)\n分批 Upsert + 幂等去重 + 失效清理")]
     end
 
     subgraph RetrievalPipeline ["在线检索流水线 (Retrieval Pipeline)"]
-        QueryIn(["🔍 Agent Query 输入\n(如 '找 Qdrant 启动强校验逻辑')"]) --> DualEmbed["双路向量化 Query"]
+        QueryIn([" Agent Query 输入\n(如 '找 Qdrant 启动强校验逻辑')"]) --> DualEmbed["双路向量化 Query"]
         DualEmbed --> QdrantHybrid["Qdrant 内核级混合多路召回\n(Dense 语义路 + Sparse 词法路)"]
-        QdrantHybrid --> RRF["🔀 RRF (Reciprocal Rank Fusion)\n倒排融合排序 (初筛 Top-30)"]
-        RRF --> Reranker["🎯 Cross-Encoder 交叉注意力精排\n(bge-reranker-base / ONNX CPU)"]
-        Reranker --> TopK["📦 Top-5 高置信度代码切片\n(含精准文件路径与行号坐标)"]
+        QdrantHybrid --> RRF[" RRF (Reciprocal Rank Fusion)\n倒排融合排序 (初筛 Top-30)"]
+        RRF --> Reranker[" Cross-Encoder 交叉注意力精排\n(bge-reranker-base / ONNX CPU)"]
+        Reranker --> TopK[" Top-5 高置信度代码切片\n(含精准文件路径与行号坐标)"]
     end
 ```
 

@@ -1,6 +1,6 @@
 # Web Search - 搜索引擎源与容灾规范
 
-> **责任领域**：`AegisAgent/src/services/web_search/providers.py`  
+> **责任领域**：`AegisAgent/src/services/web_search/providers.py`
 > **核心原则**：适配器模式 (Adapter Pattern)、零 Key 开箱即用、同步库安全异步化、统一领域异常转译。
 
 ---

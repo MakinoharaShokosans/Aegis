@@ -1,6 +1,6 @@
 # Bash 执行沙箱 - 物理资源配额与内存池规范
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/memory_pool.py` 与 `sandbox.py`  
+> **责任领域**：`AegisAgent/src/services/bash_shell/memory_pool.py` 与 `sandbox.py`
 > **核心原则**：Linux 内核级资源硬配额（虚拟内存/文件大小/CPU时间）、全局内存池协调、并发闸门与自适应排队。
 
 ---
@@ -30,25 +30,25 @@ def _apply_rlimits(max_virtual_memory_bytes: int, max_file_size_bytes: int, max_
     """在子进程 fork 后、exec 前注入内核配额限制"""
     # 1. 提升为独立进程组
     os.setsid()
-    
+
     # 2. 限制最大虚拟内存
     if max_virtual_memory_bytes > 0:
         resource.setrlimit(
-            resource.RLIMIT_AS, 
+            resource.RLIMIT_AS,
             (max_virtual_memory_bytes, max_virtual_memory_bytes)
         )
-        
+
     # 3. 限制最大输出文件尺寸
     if max_file_size_bytes > 0:
         resource.setrlimit(
-            resource.RLIMIT_FSIZE, 
+            resource.RLIMIT_FSIZE,
             (max_file_size_bytes, max_file_size_bytes)
         )
-        
+
     # 4. 限制纯 CPU 秒数
     if max_cpu_sec > 0:
         resource.setrlimit(
-            resource.RLIMIT_CPU, 
+            resource.RLIMIT_CPU,
             (max_cpu_sec, max_cpu_sec)
         )
 ```

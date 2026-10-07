@@ -1,6 +1,6 @@
 # Bash 执行沙箱 - 进程生命周期与隔离规范
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/sandbox.py`  
+> **责任领域**：`AegisAgent/src/services/bash_shell/sandbox.py`
 > **核心原则**：进程组隔离 (PGID)、两段式硬超时升级熔断、孤儿与僵尸进程全面治理。
 
 ---

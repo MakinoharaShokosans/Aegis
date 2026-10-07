@@ -4,7 +4,7 @@
 > **核心原则**：
 > 1. **确定性包裹非确定性**：以严格的状态机（LangGraph）、强类型 Pydantic Schema、AST 语法树切片与离线数学评测，约束大模型生成的不确定性；
 > 2. **单一职责微服务化**：调度宿主（`:8000`）、代码检索（`:8001`）、受控沙箱（`:8002`）、前端控制台（`:5173`）物理隔离，独立生命周期；
-> 3. **物理配额硬约束**：Linux 进程组隔离（PGID）、内核级资源配额（`setrlimit`）、两段式硬超时熔断（SIGTERM ➔ SIGKILL）；
+> 3. **物理配额硬约束**：Linux 进程组隔离（PGID）、内核级资源配额（`setrlimit`）、两段式硬超时熔断（SIGTERM -> SIGKILL）；
 > 4. **双轨可观测与证据闭环**：SSE 实时事件流与全量因果 NDJSON 轨迹落盘，所有工具调用与代码生成必须具备可追溯证据链。
 
 ---
@@ -15,23 +15,23 @@ Aegis 由四大高内聚、低耦合的物理子系统协同构成，各子系�
 
 ```mermaid
 flowchart TD
-    User([👤 研发工程师 / 真实用户]) <-->|浏览器交互| FE["🌐 AegisFrontend (:5173)\nReact 19 / TypeScript / Zustand / Monaco Editor"]
-    
-    FE -->|HTTP REST / SSE 流式连接\nAuthorization: Bearer + X-API-Token| GW["👑 AegisAgent 接入层 (:8000)\nFastAPI Gateway + 接入层三道安全闸门"]
+    User([ 研发工程师 / 真实用户]) <-->|浏览器交互| FE[" AegisFrontend (:5173)\nReact 19 / TypeScript / Zustand / Monaco Editor"]
+
+    FE -->|HTTP REST / SSE 流式连接\nAuthorization: Bearer + X-API-Token| GW[" AegisAgent 接入层 (:8000)\nFastAPI Gateway + 接入层三道安全闸门"]
     GW -->|SSE 实时流式推送\nEventSource + 心跳保活| FE
-    
+
     subgraph AgentHost ["AegisAgent 调度宿主进程 (:8000)"]
         GW <--> CoreEngine["LangGraph StateGraph 编排内核\n(Planner → BudgetGuard → Executor → ToolRunner → Evaluator)"]
-        CoreEngine <--> Ckpt[("💾 SQLite Checkpointer\nWAL 模式 / 状态持久化 / 故障自愈")]
-        CoreEngine <--> MemMgr["🧠 认知记忆中枢\n(工作区长期记忆 + 会话滑窗 + 四层上下文水位)"]
-        CoreEngine <--> Guards["🛡️ 安全与治理守卫矩阵\n(Canary 金丝雀 / 死循环探针 / 观察值裁剪)"]
+        CoreEngine <--> Ckpt[(" SQLite Checkpointer\nWAL 模式 / 状态持久化 / 故障自愈")]
+        CoreEngine <--> MemMgr[" 认知记忆中枢\n(工作区长期记忆 + 会话滑窗 + 四层上下文水位)"]
+        CoreEngine <--> Guards[" 安全与治理守卫矩阵\n(Canary 金丝雀 / 死循环探针 / 观察值裁剪)"]
     end
-    
-    CoreEngine -->|HTTP POST /api/v1/retrieve\nHTTP POST /api/v1/documents/ingest| RAG["📚 AegisRAG 独立检索微服务 (:8001)\nTree-sitter AST切分 + FastEmbed双路 + Qdrant向量引擎 + Cross-Encoder精排"]
-    
-    CoreEngine -->|HTTP POST /api/v1/shell/execute\nIPC / 进程组隔离调用| Sandbox["🐚 Bash Shell 受控沙箱 (:8002)\nOS ProcessPool + setsid(PGID) + setrlimit + 两段式硬杀"]
 
-    CoreEngine -.->|外部信息摄取| Web["🌐 Web Search 隔离服务\nDuckDuckGo + Trafilatura 正文提取"]
+    CoreEngine -->|HTTP POST /api/v1/retrieve\nHTTP POST /api/v1/documents/ingest| RAG[" AegisRAG 独立检索微服务 (:8001)\nTree-sitter AST切分 + FastEmbed双路 + Qdrant向量引擎 + Cross-Encoder精排"]
+
+    CoreEngine -->|HTTP POST /api/v1/shell/execute\nIPC / 进程组隔离调用| Sandbox[" Bash Shell 受控沙箱 (:8002)\nOS ProcessPool + setsid(PGID) + setrlimit + 两段式硬杀"]
+
+    CoreEngine -.->|外部信息摄取| Web[" Web Search 隔离服务\nDuckDuckGo + Trafilatura 正文提取"]
 ```
 
 ---
@@ -70,7 +70,7 @@ flowchart TD
 2. **[`02_代码语义检索RAG架构.md`](./02_代码语义检索RAG架构.md)**
    - Tree-sitter 语法感知 AST 切片算法、Markdown 标题面包屑注入、FastEmbed Dense (1024维) + Sparse (BM25) 双路向量化管道、Qdrant 内核级 RRF 多路召回融合与 Cross-Encoder 深度重排。
 3. **[`03_受控Linux沙箱与隔离架构.md`](./03_受控Linux沙箱与隔离架构.md)**
-   - Linux 进程会话隔离（`os.setsid` 防孤儿进程）、内核级物理配额（`RLIMIT_AS`、`RLIMIT_FSIZE`、`RLIMIT_CPU`）、两段式硬超时熔断（`SIGTERM ➔ SIGKILL`）、标准输入防挂死（`DEVNULL`）与全量日志离线卸载。
+   - Linux 进程会话隔离（`os.setsid` 防孤儿进程）、内核级物理配额（`RLIMIT_AS`、`RLIMIT_FSIZE`、`RLIMIT_CPU`）、两段式硬超时熔断（`SIGTERM -> SIGKILL`）、标准输入防挂死（`DEVNULL`）与全量日志离线卸载。
 4. **[`04_Web前端与人机协同交互架构.md`](./04_Web前端与人机协同交互架构.md)**
    - React 19 响应式状态流、Zustand 多轮会话栈治理、Monaco Editor 差异比对、人机协同越级审批卡片（HITL）交互流转与 Token 水位三级预警。
 5. **[`05_服务通信与网关契约架构.md`](./05_服务通信与网关契约架构.md)**

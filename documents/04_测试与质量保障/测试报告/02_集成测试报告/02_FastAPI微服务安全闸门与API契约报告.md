@@ -1,7 +1,7 @@
 # 02_FastAPI 微服务安全闸门与 API 契约报告
 
-> **测试目标**：验证 API 接入层的三道安全闸门（Host 回环白名单、Origin 跨域防伪造、API Token 鉴权）以及微服务间通信降级。  
-> **测试文件**：`AegisAgent/tests/api/test_security_gates.py` & `AegisAgent/tests/integration/test_sidecar_clients.py`  
+> **测试目标**：验证 API 接入层的三道安全闸门（Host 回环白名单、Origin 跨域防伪造、API Token 鉴权）以及微服务间通信降级。
+> **测试文件**：`AegisAgent/tests/api/test_security_gates.py` & `AegisAgent/tests/integration/test_sidecar_clients.py`
 > **实测数据**：**9 Passed, 0 Failed | 耗时: 4.40s | 通过率: 100%**
 
 ---

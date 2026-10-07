@@ -1,14 +1,14 @@
 # Aegis Bash Shell 执行沙箱 - 实施技术规范索引
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/`（同工程独立微服务，默认监听 `127.0.0.1:8002`）  
+> **责任领域**：`AegisAgent/src/services/bash_shell/`（同工程独立微服务，默认监听 `127.0.0.1:8002`）
 > **核心原则**：进程组级物理隔离 (PGID)、两段式硬超时熔断 (SIGTERM->SIGKILL)、Linux 内核物理配额、工作区根路径强绑定 (CWD)、海量输出流式落盘与结构化提炼。
 >
 > ### 实现状态图例（**阅读前必看**）
 >
 > | 标记 | 含义 |
 > | :--- | :--- |
-> | ✅ | **已实现**，且与本节描述一致（可在对应源码文件核对） |
-> | 📋 | **规划中，尚未实现**。仅记录设计意图，**不得**据此认为系统具备该能力 |
+> | [x] | **已实现**，且与本节描述一致（可在对应源码文件核对） |
+> | | **规划中，尚未实现**。仅记录设计意图，**不得**据此认为系统具备该能力 |
 >
 > 本批规范的原则：**配置值一律不在文档中硬编码**，均以 `config.toml` 的
 > `[bash_shell]` 段为唯一真源；文档只说明语义与默认值。
@@ -19,11 +19,11 @@
 
 | 文档序号 | 技术领域 | 状态 | 核心规范与实现重点 |
 | :--- | :--- | :--: | :--- |
-| [01_process_lifecycle_and_isolation.md](./01_process_lifecycle_and_isolation.md) | **进程生命周期与隔离** | ✅ | `asyncio.create_subprocess_shell`、`os.setsid` 独立进程组 (PGID)、`stdin=DEVNULL` 非交互隔离、两段式硬超时熔断 (SIGTERM->SIGKILL)、孤儿进程防御 |
-| [02_resource_quotas_and_memory_pool.md](./02_resource_quotas_and_memory_pool.md) | **物理资源配额与内存池** | ✅ | Linux `resource.setrlimit` 内核级约束（`rlimit_as_mb` / `rlimit_fsize_mb` / `rlimit_cpu_sec`）、`GlobalMemoryBudget` 内存池、并发闸门与等待队列 |
-| [03_command_audit_and_path_sandbox.md](./03_command_audit_and_path_sandbox.md) | **高危审计与工作区沙箱** | ✅ / 📋 | ✅ `CommandAudit` 七条规则前置拦截（403）、工作区 `root_path` 绑定 (CWD)、路径越界校验、执行目录与落盘目录解耦<br>📋 **三级权限分级管控**与**越级人工审核（HITL）**——设计已记录，**尚未实现** |
-| [04_output_governance_and_artifacts.md](./04_output_governance_and_artifacts.md) | **输出流式治理与离线卸载** | ✅ | `StreamReader` 异步流式分块读取、全量输出落盘 `storage/artifacts/{task_id}/`、成功态 Head/Tail 提取、失败态报错关键字检索与自愈引导 |
-| [05_http_api_and_client_contract.md](./05_http_api_and_client_contract.md) | **服务契约与客户端适配** | ✅ | FastAPI 路由契约 (`POST /api/v1/shell/execute`)、`ShellExecuteRequest/Result` 强类型 DTO、`GET /api/v1/health` 自省、Agent (`tools/builtin/bash.py`) 适配 |
+| [01_process_lifecycle_and_isolation.md](./01_process_lifecycle_and_isolation.md) | **进程生命周期与隔离** | [x] | `asyncio.create_subprocess_shell`、`os.setsid` 独立进程组 (PGID)、`stdin=DEVNULL` 非交互隔离、两段式硬超时熔断 (SIGTERM->SIGKILL)、孤儿进程防御 |
+| [02_resource_quotas_and_memory_pool.md](./02_resource_quotas_and_memory_pool.md) | **物理资源配额与内存池** | [x] | Linux `resource.setrlimit` 内核级约束（`rlimit_as_mb` / `rlimit_fsize_mb` / `rlimit_cpu_sec`）、`GlobalMemoryBudget` 内存池、并发闸门与等待队列 |
+| [03_command_audit_and_path_sandbox.md](./03_command_audit_and_path_sandbox.md) | **高危审计与工作区沙箱** | [x] /  | [x] `CommandAudit` 七条规则前置拦截（403）、工作区 `root_path` 绑定 (CWD)、路径越界校验、执行目录与落盘目录解耦<br> **三级权限分级管控**与**越级人工审核（HITL）**——设计已记录，**尚未实现** |
+| [04_output_governance_and_artifacts.md](./04_output_governance_and_artifacts.md) | **输出流式治理与离线卸载** | [x] | `StreamReader` 异步流式分块读取、全量输出落盘 `storage/artifacts/{task_id}/`、成功态 Head/Tail 提取、失败态报错关键字检索与自愈引导 |
+| [05_http_api_and_client_contract.md](./05_http_api_and_client_contract.md) | **服务契约与客户端适配** | [x] | FastAPI 路由契约 (`POST /api/v1/shell/execute`)、`ShellExecuteRequest/Result` 强类型 DTO、`GET /api/v1/health` 自省、Agent (`tools/builtin/bash.py`) 适配 |
 
 ---
 
@@ -33,11 +33,11 @@
  Agent Runtime (通过 tools/builtin/bash.py 经 HTTP 调用)
                           │  入参携带 workspace_id + workspace_root + task_id + command
                           ▼
-             [ 1. CommandAudit 前置审计 ]  ✅ 已实现
+             [ 1. CommandAudit 前置审计 ]  [x] 已实现
                ├── 命中七条高危规则 (rm -rf /, mkfs, dd 裸写, 关机重启, fork 炸弹,
                │    敏感系统路径写入, 递归改根权限) ──► 抛 AuditRejected，HTTP 403
                └── 审计通过 ──► 进入资源调度
-             📋 规划中：三级权限分级 + 越级 HITL 人工审核（尚未实现，见 03 §2）
+              规划中：三级权限分级 + 越级 HITL 人工审核（尚未实现，见 03 §2）
                           │
                           ▼
         [ 2. GlobalMemoryBudget 并发与内存协调池 ]

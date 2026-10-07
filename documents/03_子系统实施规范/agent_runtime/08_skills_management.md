@@ -1,6 +1,6 @@
 # 技能系统与渐进式披露规范 (Skills Management)
 
-> **责任领域**：`AegisAgent/src/skills/` & `AegisAgent/src/agent_runtime/skills/`  
+> **责任领域**：`AegisAgent/src/skills/` & `AegisAgent/src/agent_runtime/skills/`
 > **核心原则**：渐进式披露（Progressive Disclosure）、即时按需挂载（JIT Loading）、SOP 确定性指导、任务终结零污染卸载。
 
 ---
@@ -83,7 +83,7 @@ python {skill_dir}/scripts/parse_asan.py /tmp/asan.log
 │  - 无论有 10 个还是 100 个 Skills，总开销稳定在 1000 Token 以内        │
 │                                                                        │
 │  [阶段二：识别并按需即时挂载] (JIT Activation)                         │
-│  - 用户提问命中技能场景 ➔ Agent 主动调用 load_skill(skill_name)        │
+│  - 用户提问命中技能场景 -> Agent 主动调用 load_skill(skill_name)        │
 │  - 完整 SOP 动态载入当前任务微观 ExecutionContext (草稿纸)             │
 │                                                                        │
 │  [阶段三：辅助脚本安全执行] (Execution Sandbox)                        │
@@ -152,7 +152,7 @@ high_privilege_tools = ["bash", "write_file"]   # 高风险工具名单
    防止超长文本挤占系统提示词预算；
 3. **高权限信号**：`required_tools` 与 `high_privilege_tools` 求交集非空时置
    `high_privilege=True`。一个**工作区技能声明需要 `bash` / `write_file`** 是明确的危险信号，
-   会在技能清单与 `/api/v1/skills` 中显式标注 `⚠ 需要高权限工具`。
+   会在技能清单与 `/api/v1/skills` 中显式标注 ` 需要高权限工具`。
 
 ### 4.3 披露信封与权限边界
 
@@ -215,7 +215,7 @@ async def load_skill(input_data: LoadSkillInput, registry: "SkillsRegistry") -> 
     skill = registry.get_skill(input_data.skill_name)
     if not skill:
         return f"错误：未找到名为 '{input_data.skill_name}' 的专家技能。"
-        
+
     return f"""
 ## 已成功挂载专家技能: [{skill.metadata.name}]
 SOP 指引规范如下：

@@ -1,8 +1,8 @@
 # AegisRAG 检索质量标准化评测执行规范 (Evaluation SOP)
 
-> **版本**：v1.0  
-> **责任子工程**：`AegisRAG` (服务提供端 `:8001`) ↔ `AegisAgent/src/evaluation/rag_bench/` (评测执行端)  
-> **核心原则**：不量化就是瞎优化；零 LLM-judge 消耗、纯数学统计、100% 确定性可复现。  
+> **版本**：v1.0
+> **责任子工程**：`AegisRAG` (服务提供端 `:8001`) ↔ `AegisAgent/src/evaluation/rag_bench/` (评测执行端)
+> **核心原则**：不量化就是瞎优化；零 LLM-judge 消耗、纯数学统计、100% 确定性可复现。
 > **适用场景**：日常回归评测、模型换代/切分策略调整 A/B 对比、RSE/MMR 等未来增强收益验证。
 
 ---
@@ -179,4 +179,4 @@ cd /home/Skualeilu/Projects/Aegis/AegisAgent
 | **精排正向增益** | $\text{MRR}(\text{rerank}) > \text{MRR}(\text{rrf})$ | MRR 提升 $\ge +15\%$ |
 | **端到端平均时延** | $\le 150\text{ ms}$ (CPU) | $\le 80\text{ ms}$ (CPU) |
 
-> ⚠️ **退化熔断机制**：任何一次代码重构或模型升级，若导致 `HitRate@5` 下降超过 $3\%$ 或 `MRR@5` 下降超过 $0.05$，禁止合入发布。
+> **退化熔断机制**：任何一次代码重构或模型升级，若导致 `HitRate@5` 下降超过 $3\%$ 或 `MRR@5` 下降超过 $0.05$，禁止合入发布。

@@ -1,8 +1,8 @@
 # AegisAgent Skills（专家领域技能）系统功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/08_skills_management.md`  
-> **核心原则**：渐进式披露、多源覆盖与安全隔离、SOP 结构化指导、零污染卸载。  
-> 
+> **对应设计规范**：`documents/agent_runtime/08_skills_management.md`
+> **核心原则**：渐进式披露、多源覆盖与安全隔离、SOP 结构化指导、零污染卸载。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

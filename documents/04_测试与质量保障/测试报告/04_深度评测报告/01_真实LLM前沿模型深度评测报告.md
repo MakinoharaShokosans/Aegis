@@ -1,6 +1,6 @@
 # 01_真实 LLM 前沿模型深度评测报告
 
-> **评测目标**：评估在真实前沿大模型驱动下，Aegis 规划准确性、Tool Calling 遵循率及复杂长程任务交付能力。  
+> **评测目标**：评估在真实前沿大模型驱动下，Aegis 规划准确性、Tool Calling 遵循率及复杂长程任务交付能力。
 > **覆盖测试集**：`AegisAgent/tests/real_llm/` (Phase 9 至 Phase 15)
 
 ---

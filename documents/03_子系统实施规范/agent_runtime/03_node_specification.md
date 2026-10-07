@@ -181,7 +181,7 @@ async def budget_guard(state: AgentState) -> Dict[str, Any]:
     # 2. 软告警：90% 阈值，仅提醒不终止
     alerts = guard.warnings(state)
     if alerts:
-        alert_text = "\n".join(alerts) + "\n\n⚠️ 请收敛方案并尽快交付结论"
+        alert_text = "\n".join(alerts) + "\n\n 请收敛方案并尽快交付结论"
         logger.warning(f"[Guard] {alert_text}")
         return {"messages": [SystemMessage(content=alert_text)]}
 
@@ -239,7 +239,7 @@ async def executor(state: AgentState) -> Dict[str, Any]:
         tool = tools_registry.get(tc.name)
         if tool is None:
             return tc.id, f"未知工具: {tc.name}"
-        
+
         # 权限边界与越级判定（HITL 挂起）——现位于 nodes/tool_runner.py
         if not check_permission(state["permission_level"], tc.name, tc.args, permissions_config):
             decision = interrupt({
@@ -391,7 +391,7 @@ graph LR
 try:
     result = await asyncio.wait_for(tool.ainvoke(args), timeout=tool.timeout_sec)
 except Exception as exc:
-    result = f"工具执行失败: {exc}"    # ✓ 包装为观察值，绝不 raise
+    result = f"工具执行失败: {exc}"    # 包装为观察值，绝不 raise
 ```
 
 ### 6.2 LLM 调用失败

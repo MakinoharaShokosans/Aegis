@@ -1,9 +1,9 @@
 # AegisAgent 微观执行上下文与记忆生命周期功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/07_execution_context_management.md` & `06_memory_and_context_management.md`  
-> **责任模块**：`AegisAgent/src/agent_runtime/execution_context.py` & `memory/`  
-> **核心原则**：四阶段生命周期管理、会话流水低高水位压缩、全量链路轨迹留痕、交付主动脱敏。  
-> 
+> **对应设计规范**：`documents/agent_runtime/07_execution_context_management.md` & `06_memory_and_context_management.md`
+> **责任模块**：`AegisAgent/src/agent_runtime/execution_context.py` & `memory/`
+> **核心原则**：四阶段生命周期管理、会话流水低高水位压缩、全量链路轨迹留痕、交付主动脱敏。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

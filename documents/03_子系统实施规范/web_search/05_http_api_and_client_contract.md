@@ -1,6 +1,6 @@
 # Web Search - 服务契约与客户端适配规范
 
-> **责任领域**：`AegisAgent/src/services/web_search/app.py` 与 `AegisAgent/src/tools/builtin/web_search.py`  
+> **责任领域**：`AegisAgent/src/services/web_search/app.py` 与 `AegisAgent/src/tools/builtin/web_search.py`
 > **核心原则**：HTTP REST 契约化通信、强类型 DTO 约束、解耦红线（禁止反向依赖 Agent 内部模块）。
 
 ---
@@ -92,7 +92,7 @@ class WebSearchTool(AegisTool):
         }
         resp = await self.client.post("/api/v1/search", json=payload)
         data = resp.json()
-        
+
         articles = data.get("articles") or []
         if not articles:
             return ToolResult(

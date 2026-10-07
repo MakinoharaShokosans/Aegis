@@ -1,7 +1,7 @@
 # AegisAgent + Workspace 前端架构与交互系统设计规范 (Agent + Workspace Frontend Architecture & System Specification)
 
-> **文档版本**：v4.0 权威定稿  
-> **文档定位**：专为 **`AegisAgent`（智能体运行时）与工作区（Workspace）协同体系**量身定制的工程级前端设计与实现规范。  
+> **文档版本**：v4.0 权威定稿
+> **文档定位**：专为 **`AegisAgent`（智能体运行时）与工作区（Workspace）协同体系**量身定制的工程级前端设计与实现规范。
 > **核心设计哲学**：
 > 1. **工作区是一等公民（First-Class Citizen）**：工作区不仅是物理文件目录，更是 Agent 的物理真源（Ground Truth）、规范文档库（Knowledge Base）、执行沙箱（Sandbox）与长期共享记忆（Shared Memory）承载体。
 > 2. **双屏并行联动（Chat + Canvas）**：左屏对话编排与因果轨迹，右屏文档规范阅读、代码审查与 Diff 对比，并列为第一公民。
@@ -17,32 +17,32 @@
 
 ```
 +---------------------------------------------------------------------------------------------------------------------------------------------------------------------+
-| [🛡 AegisAgent] [Toggle] | 📁 Aegis Core [/home/user/projects/aegis] | [📚 RAG知识库] [⚙ 设置] | 令牌: [●●●●●●] 有效 | Sidecars: [RAG:8001 ● Shell:8002 ● Web:8003 ●]  |
+| [ AegisAgent] [Toggle] | Aegis Core [/home/user/projects/aegis] | [ RAG知识库] [ 设置] | 令牌: [●●●●●●] 有效 | Sidecars: [RAG:8001 ● Shell:8002 ● Web:8003 ●]  |
 +--------------------------+---------------------------------------------------------------------------------------------------+--------------------------------------+
-| [+ 新建会话 (⌘N)]        | [💬 对话协商]  [⚡ 执行轨迹 (Trace)]  [🧠 上下文装配检视]                                             | ⚠️ 磁盘文档已更新 [ 重新载入 ]       |
+| [+ 新建会话 (N)]        | [ 对话协商]  [ 执行轨迹 (Trace)]  [ 上下文装配检视]                                             | 磁盘文档已更新 [ 重新载入 ]       |
 |                          |---------------------------------------------------------------------------------------------------+--------------------------------------|
-| 📁 工作区: Aegis Core    |  ### Planner 阶段目标与里程碑推进 (LangGraph State Machine)                                          | /home/user/projects/aegis/docs/...   |
-|  ├─ 💬 接入层安全闸门 [完]|  - [x] **里程碑 1**：调用 delegate_doc_search 检索 11_http_api.md 鉴权规范                            | [Markdown 规范] [源码] [Diff] [🔄]   |
-|  ├─ 💬 RAG 混合检索改造   |  - [x] **里程碑 2**：在 auth.py 落地 Host -> Origin -> Token 三道闸门                                 |                                      |
-|  └─ 💬 记忆引擎水位压缩   |  - [ ] **里程碑 3**：运行 pytest 验证 27 个端点安全覆盖率与断线重连                                    | ## 1.1 三道闸门机制                  |
+| 工作区: Aegis Core    |  ### Planner 阶段目标与里程碑推进 (LangGraph State Machine)                                          | /home/user/projects/aegis/docs/...   |
+|  ├─  接入层安全闸门 [完]|  - [x] **里程碑 1**：调用 delegate_doc_search 检索 11_http_api.md 鉴权规范                            | [Markdown 规范] [源码] [Diff] []   |
+|  ├─  RAG 混合检索改造   |  - [x] **里程碑 2**：在 auth.py 落地 Host -> Origin -> Token 三道闸门                                 |                                      |
+|  └─  记忆引擎水位压缩   |  - [ ] **里程碑 3**：运行 pytest 验证 27 个端点安全覆盖率与断线重连                                    | ## 1.1 三道闸门机制                  |
 |                          |                                                                                                   |                                      |
-| 📁 工作区: Linux Kernel  |  本次文档与代码改动 </> 11_http_api.md </> auth.py + 产物 obs_step_7_bash                             | 1. **Host** 闸门：防 DNS 重绑定...   |
-|  └─ 💬 eBPF 规范阅读     |  +---------------------------------------+  +---------------------------------------+             | 2. **Origin** 闸门：防跨站提交...    |
-|                          |  | 📄 11_http_api.md              [打开v]|  | 🐍 auth.py                     [打开v]|             | 3. **令牌** 闸门：恒定时间比较...    |
-| 🧠 工作区记忆 [3条定论]  |  | API 契约：三道闸门与令牌规范规范...   |  | 接入层安全中间件落地实现...           |             |                                      |
-| ➕ 新建工作区...         |  +---------------------------------------+  +---------------------------------------+             | ```http                              |
+| 工作区: Linux Kernel  |  本次文档与代码改动 </> 11_http_api.md </> auth.py + 产物 obs_step_7_bash                             | 1. **Host** 闸门：防 DNS 重绑定...   |
+|  └─  eBPF 规范阅读     |  +---------------------------------------+  +---------------------------------------+             | 2. **Origin** 闸门：防跨站提交...    |
+|                          |  | 11_http_api.md              [打开v]|  | auth.py                     [打开v]|             | 3. **令牌** 闸门：恒定时间比较...    |
+| 工作区记忆 [3条定论]  |  | API 契约：三道闸门与令牌规范规范...   |  | 接入层安全中间件落地实现...           |             |                                      |
+| 新建工作区...         |  +---------------------------------------+  +---------------------------------------+             | ```http                              |
 |                          |                                                                                                   | Authorization: Bearer <token>        |
-|                          |  [🛡 人机协同权限越级审批卡片 (HITL Approval Required)]                                           | ```                                  |
+|                          |  [ 人机协同权限越级审批卡片 (HITL Approval Required)]                                           | ```                                  |
 |                          |  检测到网络外联命令: git push origin main (超出当前工作区写入权限)                               |                                      |
 |                          |  [ 批准本次 (Once) ]  [ 当前会话免审 (Always) ]  [ 拒绝并指示改道 (Reject) ]                      |                                      |
 |                          |                                                                                                   |                                      |
-|                          |  [👍] [👎] [📋] [🔄 重跑]  ⏱ 用时 35.8s  18:45  (Reasoning: 1.2s / Fast: 0.8s)                     |                                      |
+|                          |  [] [] [] [ 重跑]   用时 35.8s  18:45  (Reasoning: 1.2s / Fast: 0.8s)                     |                                      |
 |                          |---------------------------------------------------------------------------------------------------+--------------------------------------|
 |                          | +-----------------------------------------------------------------------------------------------+ |                                      |
 |                          | | 输入任务目标，/ 调用 Slash 指令，@ 引用工作区文档、规范或记忆                                 | |                                      |
-|                          | | [+] [📎] [🛡 工作区修改 v]                                   [Reasoning: DeepSeek-R1 / Fast v] [↑]| |                                      |
+|                          | | [+] [] [ 工作区修改 v]                                   [Reasoning: DeepSeek-R1 / Fast v] [↑]| |                                      |
 |                          | +-----------------------------------------------------------------------------------------------+ |                                      |
-|                          | 🔄 5 轮 14 步 | ⚡ 271 tok/s | 📊 28.5k tok | 🎯 缓存命中 99.8% | 💧 水位 32% / 80%               |                                      |
+|                          | 5 轮 14 步 | 271 tok/s | 28.5k tok | 缓存命中 99.8% | 水位 32% / 80%               |                                      |
 +--------------------------+---------------------------------------------------------------------------------------------------+--------------------------------------+
 ```
 
@@ -84,7 +84,7 @@
 ```
 
 ### 2.1 工作区创建 (Create Workspace Flow)
-- **触发路径**：左侧侧边栏点击 `[➕ 新建工作区]` 或快捷键 `Ctrl+Shift+N`；
+- **触发路径**：左侧侧边栏点击 `[ 新建工作区]` 或快捷键 `Ctrl+Shift+N`；
 - **输入与校验字段**：
   - `name`：工作区友好名称（如 `Aegis Agent Core`）；
   - `root_path`：本地物理路径（如 `/home/user/projects/aegis`）——前端提供路径有效性即时校验与目录浏览选择器；
@@ -108,7 +108,7 @@
 - **级联清理机制**：调用 `DELETE /api/v1/workspaces/{id}`，依托 SQLite `ON DELETE CASCADE` 级联物理清理其名下的所有会话（`sessions`）、记忆体（`session_memories`）、流水记录（`session_turns`）及工作区记忆（`workspace_memories`）。
 
 ### 2.5 工作区长期共享记忆治理中心 (Workspace Shared Memory Governance)
-点击左侧 `[🧠 工作区记忆]` 呼出共享记忆管理抽屉，提供分类维护：
+点击左侧 `[ 工作区记忆]` 呼出共享记忆管理抽屉，提供分类维护：
 1. **项目架构定论 (`confirmed_architecture`)**：维护核心模块分层、服务端口分配与依赖拓扑；支持手动新增、事实置顶与上浮；
 2. **项目编码与工程规范 (`project_conventions`)**：维护严格代码风格、单测覆盖要求、纯函数设计纪律；
 3. **全局避坑黑名单 (`global_failed_attempts`)**：维护历史尝试失败的方案与已知不可行指令，防止所有会话重蹈覆辙。
@@ -130,9 +130,9 @@
   - 输入 `/` 弹出 Slash Commands（`/resume` 续跑断点、`/cancel` 终止任务、`/skills` 技能清单、`/mcp` 服务器、`/memory` 记忆检视）；
   - 输入 `@` 弹出工作区文档树、代码符号与共享记忆联想列表。
 - **权限基线选择器 (Permission Baseline Selector)**：
-  - `🔒 只读免审批 (readonly)`：严格限制为只读工具，适合纯分析与代码审查；
-  - `🛡 工作区修改 (workspace_write - 默认推荐)`：允许在 `root_path` 内部创建、修改文件与执行安全构建命令；
-  - `⚡ 全权限模式 (full_access - 需 HITL 授权)`：允许网络外联、特权命令与外部系统交互。
+  - ` 只读免审批 (readonly)`：严格限制为只读工具，适合纯分析与代码审查；
+  - ` 工作区修改 (workspace_write - 默认推荐)`：允许在 `root_path` 内部创建、修改文件与执行安全构建命令；
+  - ` 全权限模式 (full_access - 需 HITL 授权)`：允许网络外联、特权命令与外部系统交互。
 - **双模型分层网关选择器 (Dual-Tier LLM Gateway)**：
   - 思考模型层（Reasoning Tier: DeepSeek-R1 / OpenAI o1，`temp=0.0`，负责宏观任务拆解、反思规划与最终报告）；
   - 快速动作层（Fast Tier: DeepSeek-V3 / GPT-4o-mini，`temp=0.2`，负责工具参数填充、切片事实提炼与低延迟响应）。
@@ -146,13 +146,13 @@
   - 呈现真实命中的文档切片与行号白名单范围（如 `11_http_api.md:25-60`）；
   - 确定性拒答状态透明回显（3 轮无果如实承认没有，杜绝幻觉推测）。
 - **外部隔离研究子智能体汇报卡片 (Research Subagent Envelope)**：
-  - 标记 `🛡 外部不可信数据隔离` 警示徽标；
+  - 标记 ` 外部不可信数据隔离` 警示徽标；
   - 内容经过严格防 XSS 净化转义后渲染。
 - **文档与文件改动专区 (Mutation Cards)**：
   - 双列网格卡片，展示多彩文件类型图标、相对路径与简要修改说明；
   - 点击 `[打开 v]` 按钮直接联动右侧 Canvas 视窗加载并定位。
 - **离线长日志产物卡片 (`ObservationPruner` Handles)**：
-  - 工具输出过长时自动落盘并以 `📄 obs_step_7_bash (51.2 KB, 1,820 tok)` 卡片呈现；
+  - 工具输出过长时自动落盘并以 ` obs_step_7_bash (51.2 KB, 1,820 tok)` 卡片呈现；
   - 点击卡片在右侧视窗中以只读日志模式快速阅览全文。
 
 ### 3.4 人机协同 (HITL) 权限越级审批卡片
@@ -175,33 +175,33 @@
   - 90% 物理预算（步数/Token/时间）熔断预警。
 
 ### 3.6 四层装配上下文检视器 (Context Inspector)
-点击 `[🧠 上下文装配检视]` 标签页，调用 `GET /api/v1/sessions/{id}/context` 实时透视组装送入大模型的完整视界：
+点击 `[ 上下文装配检视]` 标签页，调用 `GET /api/v1/sessions/{id}/context` 实时透视组装送入大模型的完整视界：
 $$\text{Final Context} = \underbrace{\text{[系统提示词]}}_{\text{内置纪律} + \text{项目规则}} + \underbrace{\text{[工作区全局共享记忆]}}_{\text{架构定论} + \text{工程规范} + \text{避坑黑名单}} + \underbrace{\text{[会话已压缩记忆]}}_{\text{阶段摘要} + \text{事实清单}} + \underbrace{\text{[活跃对话滑窗]}}_{\text{低水位线以上完整轮次}} + \text{[当前输入]}$$
 
 ---
 
 ## 4. RAG 知识库与文档索引管理中心 (RAG Knowledge Base & Indexing Center)
 
-点击顶栏 `[📚 RAG 知识库]` 呼出全屏管理控制台，提供专业级知识库运维与调试能力：
+点击顶栏 `[ RAG 知识库]` 呼出全屏管理控制台，提供专业级知识库运维与调试能力：
 
 ```
 +-----------------------------------------------------------------------------------------------------------------------------------------+
-| [📚 AegisRAG 知识库与文档索引控制台]                                                                                     [🔄 刷新] [✕ 关闭] |
+| [ AegisRAG 知识库与文档索引控制台]                                                                                     [ 刷新] [ 关闭] |
 +-----------------------------------------------------------------------------------------------------------------------------------------+
-| [概览与服务拓扑]  [📂 文档切片检视器]  [⚡ 增量/全量重索引]  [🎯 在线检索三阶段调试器]                                                   |
+| [概览与服务拓扑]  [ 文档切片检视器]  [ 增量/全量重索引]  [ 在线检索三阶段调试器]                                                   |
 +-----------------------------------------------------------------------------------------------------------------------------------------+
-| 🟢 AegisRAG 独立子工程: 127.0.0.1:8001 (v1.0.0, FastAPI)   |  Qdrant 向量库: aegis_docs_collection (Points: 1,420, Memory: 48.2MB)       |
+| AegisRAG 独立子工程: 127.0.0.1:8001 (v1.0.0, FastAPI)   |  Qdrant 向量库: aegis_docs_collection (Points: 1,420, Memory: 48.2MB)       |
 | 密集向量: BAAI/bge-small-en-v1.5 (384维, fastembed ONNX)    |  稀疏向量: BM25 / SPLADE 双路召回 (Top 20 + Top 20 -> RRF -> Cross-Encoder) |
 +-----------------------------------------------------------------------------------------------------------------------------------------+
 | 索引文件分布:                                                                                                                           |
-| - 📄 Markdown 规范 (documents/*.md): 42 个文件 (780 个切片) -> 语法感知层级切分 (Markdown Heading Aware)                                |
-| - 🐍 Python 源码 (AegisAgent/src/*.py): 85 个文件 (520 个切片) -> Tree-sitter AST 函数/类切分                                           |
-| - 🇨 C/C++ 核心 (services/bash/*.c): 12 个文件 (120 个切片) -> Tree-sitter C AST 语法切分                                                 |
+| -  Markdown 规范 (documents/*.md): 42 个文件 (780 个切片) -> 语法感知层级切分 (Markdown Heading Aware)                                |
+| -  Python 源码 (AegisAgent/src/*.py): 85 个文件 (520 个切片) -> Tree-sitter AST 函数/类切分                                           |
+| -  C/C++ 核心 (services/bash/*.c): 12 个文件 (120 个切片) -> Tree-sitter C AST 语法切分                                                 |
 +-----------------------------------------------------------------------------------------------------------------------------------------+
-| [ ⚡ 执行增量再索引 (Incremental Re-index) ]    [ ⚠️ 清空并全量重建索引 (Full Rebuild) ]                                                |
+| [  执行增量再索引 (Incremental Re-index) ]    [  清空并全量重建索引 (Full Rebuild) ]                                                |
 +-----------------------------------------------------------------------------------------------------------------------------------------+
-| 🎯 检索调试器 (Retrieval Playground):                                                                                                   |
-| [ 输入查询语句: "接入层三道安全闸门与令牌鉴权规范"                                                                  ] [ 🔍 模拟检索 ]   |
+| 检索调试器 (Retrieval Playground):                                                                                                   |
+| [ 输入查询语句: "接入层三道安全闸门与令牌鉴权规范"                                                                  ] [  模拟检索 ]   |
 | --------------------------------------------------------------------------------------------------------------------------------------- |
 | 召回结果 (Cross-Encoder 精排 Top 3):                                                                                                    |
 | 1. [0.942] documents/agent_runtime/11_http_api.md#L25-60 (Dense: #1, Sparse: #2) -> 命中: 1.1 三道闸门：Host -> Origin -> 令牌          |
@@ -222,8 +222,8 @@ $$\text{Final Context} = \underbrace{\text{[系统提示词]}}_{\text{内置纪�
 - **切片检视器 (Chunk Explorer)**：支持按文件路径筛选切片列表，查看单切片正文、Token 计数、所属 AST Scope 与元数据。
 
 ### 4.3 知识库维护动作 (Knowledge Base Actions)
-- **`[ ⚡ 执行增量再索引 (Incremental Re-index) ]`**：自动扫描工作区内修改时间变动的文档与代码，计算内容哈希并幂等 Upsert 对应 Point；
-- **`[ ⚠️ 清空并全量重建索引 (Full Rebuild) ]`**：带有高危确认，清空 Qdrant Collection 并全量重新切分与向量化入库。
+- **`[  执行增量再索引 (Incremental Re-index) ]`**：自动扫描工作区内修改时间变动的文档与代码，计算内容哈希并幂等 Upsert 对应 Point；
+- **`[  清空并全量重建索引 (Full Rebuild) ]`**：带有高危确认，清空 Qdrant Collection 并全量重新切分与向量化入库。
 
 ### 4.4 在线检索三阶段调试器 (Retrieval Playground)
 提供面向开发者的实时检索调试工具，直观还原 AegisRAG 内部流水线：
@@ -239,7 +239,7 @@ $$\text{Final Context} = \underbrace{\text{[系统提示词]}}_{\text{内置纪�
 ## 5. 右侧工作区深度画布视窗 (Doc, Spec & Code Canvas Stage)
 
 ### 5.1 多标签页管理器 (Multi-Tab Manager)
-- 标签项：文件类型多彩图标 + 文档/文件名（如 `📄 11_http_api.md`）+ 脏标记 `●` + 关闭按钮 `x`；
+- 标签项：文件类型多彩图标 + 文档/文件名（如 ` 11_http_api.md`）+ 脏标记 `●` + 关闭按钮 `x`；
 - 工具操作栏：
   - **模式切换**：`[Markdown 规范预览]` / `[文档源码编辑]` / `[Git Diff 对比]` / `[只读产物]`；
   - `+` 快速打开工作区内任意规范文档或代码；
@@ -256,14 +256,14 @@ $$\text{Final Context} = \underbrace{\text{[系统提示词]}}_{\text{内置纪�
 
 ### 5.4 实时热同步与变更感知横幅 (Live Sync Alert Banner)
 - 当底层 Agent 或外部工具修改了本地磁盘文档或代码时，右侧视窗顶部自动滑出温和黄色提醒条：
-  > `⚠️ 文档/代码已在磁盘更新，当前显示为旧内容。 [ 重新载入 ]`
+  > ` 文档/代码已在磁盘更新，当前显示为旧内容。 [ 重新载入 ]`
 - 点击 `[重新载入]` 即刻拉取最新磁盘内容并刷新视窗，不丢失当前阅读与滚动位置。
 
 ---
 
 ## 6. 系统设置与安全管理中心 (Settings & Security Center)
 
-点击顶栏 `[⚙ 设置]` 呼出系统全局配置面板：
+点击顶栏 `[ 设置]` 呼出系统全局配置面板：
 
 ### 6.1 接入层三道安全闸门管理 (Security Gates Config)
 - **Host 闸门**：主机名严格限制为 `{127.0.0.1, localhost, ::1}` ∪ `allowed_hosts`，彻底防御 DNS 重绑定；
@@ -313,30 +313,30 @@ sequenceDiagram
     UI->>API: POST /api/v1/sessions/{id}/tasks (携带 X-API-Token)
     API-->>UI: 202 Accepted (返回 task_id 与 stream_url)
     UI->>API: GET /api/v1/tasks/{id}/stream?token=... (建立 SSE 长连接)
-    
+
     API->>Engine: 驱动异步任务执行
     Engine->>Bus: emit("node.started", node="planner")
     Bus-->>UI: SSE: node.started
-    
+
     Engine->>Bus: emit("plan", summary="分派文档知识检索子智能体查阅 API 契约...")
     Bus-->>UI: SSE: plan (前端渲染里程碑 1)
-    
+
     Engine->>Sub: delegate_doc_search(target="接入层三道闸门规范", file_hints=["11_http_api.md"])
     Sub->>Bus: emit("subagent.started", role="doc_search")
     Bus-->>UI: SSE: subagent.started (Header 渲染 "1 个子代理")
-    
+
     Sub->>RAG: POST /retrieve (双路召回 + Rerank)
     RAG-->>Sub: 返回 11_http_api.md 规范切片
     Sub->>Bus: emit("doc_search.round", round=1, queries=["三道闸门 HTTP API 规范"])
     Bus-->>UI: SSE: doc_search.round (轨迹流水实时刷新)
-    
+
     Sub-->>Engine: 返回提炼结论与真实文档切片引用 (11_http_api.md:25-60)
     Sub->>Bus: emit("subagent.finished", status="success")
     Bus-->>UI: SSE: subagent.finished
-    
+
     Engine->>Bus: emit("node.finished", file_mutations=[...])
     Bus-->>UI: SSE: node.finished (渲染 11_http_api.md 与 auth.py 卡片)
-    
+
     User->>UI: 点击卡片中的 [打开 v]
     UI->>UI: 右侧 Canvas 视窗自动加载并渲染 11_http_api.md 规范文档
 ```
@@ -357,9 +357,9 @@ sequenceDiagram
     Guard->>Engine: 状态机挂起为 waiting_for_approval
     Engine->>API: 触发 task.waiting_for_approval 事件
     API-->>UI: SSE: task.waiting_for_approval (携带 approval_id, command, reason)
-    
+
     UI->>UI: 聊天视窗正文插入交互式审批卡片，输入框锁定为等待审批态
-    
+
     alt 用户选择 [ 批准本次 (Once) ]
         User->>UI: 点击 [ 批准本次 ]
         UI->>API: POST /api/v1/tasks/{id}/approve { approval_id, decision: "once" }

@@ -1,7 +1,7 @@
 # AegisAgent 前端工作流与全场景交互设计规范 (Frontend Workflow & System Interaction Specification)
 
-> **文档版本**：v2.0 权威全景定稿  
-> **适用范围**：AegisAgent 智能体控制台、AegisRAG 知识库、工作区协同与系统治理全流程  
+> **文档版本**：v2.0 权威全景定稿
+> **适用范围**：AegisAgent 智能体控制台、AegisRAG 知识库、工作区协同与系统治理全流程
 > **核心目标**：全面对齐前端 UI/UX 与后端契约，规范模型网关、安全闸门、四层上下文、HITL 审批、长期记忆、RAG 检索、Canvas 双模态与因果轨迹等 8 大核心工作流。
 
 ---
@@ -44,7 +44,7 @@
 ```mermaid
 graph TD
     subgraph "工作区与会话基座"
-        WF1["1. 进入网页与新建会话流<br/>(冷/热启动 + ⌘N + Turns还原)"]
+        WF1["1. 进入网页与新建会话流<br/>(冷/热启动 + N + Turns还原)"]
         WF2["2. 多工作区管理与切换流<br/>(顶栏下拉 + 卡片管理 + 级联删除)"]
     end
 
@@ -101,7 +101,7 @@ sequenceDiagram
     UI->>UI: 还原历史对话流，输入框自动获得焦点
 
     Note over User,DB: 3. 触发新建会话
-    User->>UI: 按 ⌘N / Ctrl+N 或点击「+ 新建任务会话」
+    User->>UI: 按 N / Ctrl+N 或点击「+ 新建任务会话」
     UI->>UI: 清空上一轮执行轨迹，舞台呈现 Agent 就绪面板
     User->>UI: 输入任务目标按 Enter 发送
     opt 若未绑定会话
@@ -148,10 +148,10 @@ Aegis 严格遵循 **双模型分层协作架构**：
    - 读取后端实际配置的 `reasoning.endpoints` 与 `fast.endpoints`（包含 OpenLux / 本地 Ollama 等配置）；
 2. **控制台动态组合选择**：
    - `InputConsole.tsx` 提供直观的模型选择器：
-     - `🧠 Dual-Tier: gpt-5.6-terra + gpt-5.4-mini (默认)`
-     - `🧠 Dual-Tier: gpt-5.6-terra + gpt-5.6-luna (高性能)`
-     - `⚡ Fast Only: gpt-5.4-mini`
-     - `⚡ Fast Only: gpt-5.6-luna`
+     - ` Dual-Tier: gpt-5.6-terra + gpt-5.4-mini (默认)`
+     - ` Dual-Tier: gpt-5.6-terra + gpt-5.6-luna (高性能)`
+     - ` Fast Only: gpt-5.4-mini`
+     - ` Fast Only: gpt-5.6-luna`
 3. **设置面板参数检视与保存 (`SettingsModal: gateway 模式`)**：
    - 直观查阅思考层与快速层的当前生效 Base URL、模型别名与温度参数；
    - 支持调整并保存至运行时环境。
@@ -217,9 +217,9 @@ sequenceDiagram
     Guard->>Engine: 挂起状态机为 waiting_for_approval
     Engine->>Bus: emit("task.waiting_for_approval", approval_id="appr-123", command="...", reason="...")
     Bus-->>UI: SSE 事件推送
-    
+
     UI->>UI: 聊天面板正文插入交互式 HitlApprovalCard 卡片，输入框锁定为等待审批态
-    
+
     alt 用户选择 [ 批准本次 (Once) ]
         User->>UI: 点击 [ 批准本次 (Once) ]
         UI->>Engine: POST /api/v1/tasks/{id}/approve { approval_id: "appr-123", decision: "once" }
@@ -264,12 +264,12 @@ sequenceDiagram
     participant Qdrant as Qdrant 向量数据库
     participant Canvas as 右侧 Canvas 视窗
 
-    User->>UI: 点击顶栏「📚 RAG 知识库」
+    User->>UI: 点击顶栏「 RAG 知识库」
     UI->>RAG: GET /api/v1/rag/health
     RAG-->>UI: 返回 Qdrant 连通状态与向量点总数 (Points)
-    
+
     alt 执行知识库重索引
-        User->>UI: 点击「⚡ 执行增量再索引」
+        User->>UI: 点击「 执行增量再索引」
         UI->>RAG: POST /api/v1/rag/ingest { incremental: true, workspace_id }
         RAG->>RAG: AST 语法感知切分 (Tree-sitter) + FastEmbed 双路向量化
         RAG->>Qdrant: 幂等 Upsert 向量点
@@ -298,7 +298,7 @@ sequenceDiagram
    - **Side-by-side Git Diff 模式**：直观对比 Agent 修改前后的代码/文档差异；
    - **实时热重载感知横幅 (`LiveSyncBanner.tsx`)**：当后端 Agent 或外部工具写入磁盘文件时，右侧视窗自动滑出提示横幅，支持一键无缝重新载入。
 2. **工作区长期共享记忆治理 (`MemoryDrawer.tsx`)**：
-   - 点击侧边栏 `[🧠 工作区记忆]` 呼出长期共享记忆抽屉；
+   - 点击侧边栏 `[ 工作区记忆]` 呼出长期共享记忆抽屉；
    - 结构化管理三大分类：
      - **架构定论 (`confirmed_architecture`)**：核心分层、端口契约；
      - **约定规范 (`project_conventions`)**：代码风格、测试覆盖纪律；
@@ -311,10 +311,10 @@ sequenceDiagram
 
 | 快捷键 (Mac / Linux&Win) | 触发动作 | 交互效果 |
 | :--- | :--- | :--- |
-| **`⌘N` / `Ctrl+N`** | **新建任务会话** | 瞬间清空当前舞台，重置为 Agent Ready 状态，输入框自动获得光标焦点 |
-| **`⌘K` / `Ctrl+K`** | **唤起 RAG 检索中心** | 弹出全屏知识库管理模态窗，光标定位到检索调试输入框 |
-| **`⌘B` / `Ctrl+B`** | **切换侧边栏折叠** | 展开或折叠左侧 240px 资产导航栏，扩大中间编辑视窗 |
-| **`⌘S` / `Ctrl+S`** | **保存当前 Canvas 文件** | 将 Monaco 编辑器中的修改即时写回本地物理磁盘 |
+| **`N` / `Ctrl+N`** | **新建任务会话** | 瞬间清空当前舞台，重置为 Agent Ready 状态，输入框自动获得光标焦点 |
+| **`K` / `Ctrl+K`** | **唤起 RAG 检索中心** | 弹出全屏知识库管理模态窗，光标定位到检索调试输入框 |
+| **`B` / `Ctrl+B`** | **切换侧边栏折叠** | 展开或折叠左侧 240px 资产导航栏，扩大中间编辑视窗 |
+| **`S` / `Ctrl+S`** | **保存当前 Canvas 文件** | 将 Monaco 编辑器中的修改即时写回本地物理磁盘 |
 | **`Enter`** (输入框内) | **提交当前任务** | 发送 Prompt 并启动异步状态机执行与 SSE 监听 |
 | **`Shift+Enter`** | **输入框换行** | 多行输入任务背景与大段代码片段 |
 | **`/`** (输入框首字符) | **快捷指令菜单** | 弹出 `/rag`、`/test`、`/plan` 等指令联想卡片 |

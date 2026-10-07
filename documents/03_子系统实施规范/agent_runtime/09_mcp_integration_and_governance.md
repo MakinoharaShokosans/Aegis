@@ -1,6 +1,6 @@
 # MCP (Model Context Protocol) 集成与运行时治理规范
 
-> **责任领域**：`AegisAgent/src/mcps/` & `AegisAgent/src/mcps/adapter.py`  
+> **责任领域**：`AegisAgent/src/mcps/` & `AegisAgent/src/mcps/adapter.py`
 > **核心原则**：标准协议转译、命名空间物理隔离、子进程安全治理、懒加载按需连接、观察值截断受控。
 
 ---
@@ -37,14 +37,14 @@
 │  │    - stdio 进程池、PID 托管、心跳检测 (Ping)、防僵尸进程 (Zombie) │  │
 │  ├──────────────────────────────────────────────────────────────────┤  │
 │  │ 2. 协议转译与命名空间 (Schema Adapter & Namespacing)              │  │
-│  │    - inputSchema ➔ OpenAI Function Calling Schema 毫秒转译       │  │
+│  │    - inputSchema -> OpenAI Function Calling Schema 毫秒转译       │  │
 │  │    - 强制防重名命名空间: mcp__{server_name}__{tool_name}         │  │
 │  ├──────────────────────────────────────────────────────────────────┤  │
 │  │ 3. 懒加载连接池 (Lazy Connector)                                │  │
 │  │    - 启动零开销；首调时才真正拉起子进程握手并缓存 ClientSession   │  │
 │  ├──────────────────────────────────────────────────────────────────┤  │
 │  │ 4. 观察值截断与安全守卫 (Pruner & Security Guard)                 │  │
-│  │    - 拦截超限返回 (Token > 1500) ➔ 物理下沉至 storage/artifacts/  │  │
+│  │    - 拦截超限返回 (Token > 1500) -> 物理下沉至 storage/artifacts/  │  │
 │  │    - 执行超时熔断 (单次调用上限 60s)                              │  │
 │  └───────────────────────┬──────────────────────────────────────────┘  │
 │                          │                                             │
@@ -67,7 +67,7 @@
 * **命名冲突痛点**：若同时挂载了 `filesystem` 和 `github` 两个 Server，两者均提供了名为 `read_file` 的工具，将导致模型调用歧义。
 * **强制命名空间转译**：
   - 注册到大模型时，工具名称强制加前缀：`mcp__{server_name}__{tool_name}`；
-  - 转换示例：`github` 的 `create_issue` ➔ `mcp__github__create_issue`；
+  - 转换示例：`github` 的 `create_issue` -> `mcp__github__create_issue`；
   - 大模型下发调用时，`MCPToolAdapter` 截获并剥离前缀，精准派发给目标 Server 的对应函数。
 
 ### 3.3 启动零等待：懒加载连接池（Lazy Initialization）
@@ -93,7 +93,7 @@ MCP 的风险必须拆成两类，对策完全不同——把它们混为一谈�
 | **数据面** | `tools/list` 的 `description` / `inputSchema`；`tools/call` 的返回内容 | **工具描述投毒**（描述会进工具 Schema，位置高于普通观察值）；返回内容注入 | **注册前消毒 + 返回后标注** |
 | **控制面** | stdio 模式下的 MCP Server **进程本体** | **任意代码执行**——它是用户主动运行的第三方程序 | **默认关闭 + 显式 opt-in + 资源上限 + 审计**；架构无法代偿 |
 
-> ⚠️ **必须说清的边界**：stdio MCP Server 不是"数据源"，而是**一段你选择运行的代码**。
+> **必须说清的边界**：stdio MCP Server 不是"数据源"，而是**一段你选择运行的代码**。
 > 任何提示词层或契约层防御都无法让它变安全。能做的只有：默认关闭、限制其资源消耗、
 > 留下可审计证据。
 
@@ -216,7 +216,7 @@ def to_namespaced_tool(server_name: str, raw_tool: dict) -> dict:
     """
     orig_name = raw_tool["name"]
     namespaced_name = f"mcp__{server_name}__{orig_name}"
-    
+
     return {
         "type": "function",
         "function": {
@@ -244,7 +244,7 @@ def parse_namespaced_tool(namespaced_name: str) -> tuple[str, str]:
 ```python
 class MCPManager:
     """MCP 客户端与子进程生命周期管理器"""
-    
+
     async def initialize(self, configs: Dict[str, MCPServerConfig]) -> None:
         """初始化配置，注册 atexit 清理钩子"""
         ...

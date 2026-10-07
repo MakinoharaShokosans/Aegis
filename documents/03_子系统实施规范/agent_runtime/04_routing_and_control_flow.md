@@ -272,7 +272,7 @@ async def resume_agent(task_id: str) -> AgentState:
 
 ### 4.5 人机协同审核挂起与恢复（Human-in-the-Loop & `interrupt`）
 
-> **实现状态：✅ 已落地**。判定在 `guardrails/permission.py`（纯函数），
+> **实现状态：[x] 已落地**。判定在 `guardrails/permission.py`（纯函数），
 > 挂起点在 `nodes/tool_runner.py`，恢复入口为 `POST /tasks/{id}/approve|reject`
 > （见 `11_http_api.md` §4.4）。会话级"永久放行"由 `TaskRegistry` 持有的
 > 指纹集合实现，跨 `resume` 存活。

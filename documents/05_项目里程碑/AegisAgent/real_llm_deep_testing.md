@@ -1,9 +1,9 @@
 # AegisAgent 真实 LLM 深度测试、AgentBench 基线与前沿模型红队实施里程碑
 
-> **对应设计规范**：`documents/深度测试路线.md`、`documents/技术选型/evaluation.md`  
-> **责任模块**：`AegisAgent/tests/real_llm/` (Phase 9 ~ 15)、`agent_runtime/llm/`、`evaluation/agent_bench/`  
-> **核心原则**：真实前沿模型闭环（`gpt-5.6-terra` / `gpt-5.4-mini`）、结构化契约容错、HITL 权限纪律实测、对抗性 Prompt 注入与 Canary 防御、数据面隔离、长任务记忆滚动压缩。  
-> 
+> **对应设计规范**：`documents/深度测试路线.md`、`documents/技术选型/evaluation.md`
+> **责任模块**：`AegisAgent/tests/real_llm/` (Phase 9 ~ 15)、`agent_runtime/llm/`、`evaluation/agent_bench/`
+> **核心原则**：真实前沿模型闭环（`gpt-5.6-terra` / `gpt-5.4-mini`）、结构化契约容错、HITL 权限纪律实测、对抗性 Prompt 注入与 Canary 防御、数据面隔离、长任务记忆滚动压缩。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

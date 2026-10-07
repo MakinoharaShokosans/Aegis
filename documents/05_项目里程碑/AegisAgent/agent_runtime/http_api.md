@@ -1,9 +1,9 @@
 # AegisAgent HTTP API 网关与自省端点功能与设计里程碑
 
-> **对应设计规范**：`documents/agent_runtime/11_http_api.md`  
-> **责任模块**：`AegisAgent/src/agent_runtime/api/`  
-> **核心原则**：RESTful 契约、SSE 流式实时交互、全生命周期管理、多维自省可观测。  
-> 
+> **对应设计规范**：`documents/agent_runtime/11_http_api.md`
+> **责任模块**：`AegisAgent/src/agent_runtime/api/`
+> **核心原则**：RESTful 契约、SSE 流式实时交互、全生命周期管理、多维自省可观测。
+>
 > **图例规范**：`[代码实现] [测试通过]`
 
 ---

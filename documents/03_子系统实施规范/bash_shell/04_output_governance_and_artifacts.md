@@ -1,6 +1,6 @@
 # Bash 执行沙箱 - 输出流式治理与离线卸载规范
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/sandbox.py` 与 `AegisAgent/src/agent_runtime/guardrails/observation_pruner.py`  
+> **责任领域**：`AegisAgent/src/services/bash_shell/sandbox.py` 与 `AegisAgent/src/agent_runtime/guardrails/observation_pruner.py`
 > **核心原则**：异步流式分块读取、全量长输出离线物理落盘、结构化感知提炼、错误自愈信息高密度保留。
 
 ---

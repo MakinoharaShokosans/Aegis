@@ -51,21 +51,21 @@
 ```text
 AegisAgent/src/agent_runtime/
 ├── __init__.py                            对外能力边界（仅导出稳定入口）
-├── config.py                   ✅         强类型配置（TOML + .env 分层装配 + 回环护栏）
-├── errors.py                   ✅         领域异常体系（code + context，与 HTTP 解耦）
-├── tokenizer.py                ✅         统一分词计量（tiktoken + 字符粗算降级）
-├── state.py                    ✅         契约唯一真源：AgentState / ExecutionContext / Milestone /
+├── config.py                   [x]         强类型配置（TOML + .env 分层装配 + 回环护栏）
+├── errors.py                   [x]         领域异常体系（code + context，与 HTTP 解耦）
+├── tokenizer.py                [x]         统一分词计量（tiktoken + 字符粗算降级）
+├── state.py                    [x]         契约唯一真源：AgentState / ExecutionContext / Milestone /
 │                                          FailedAttempt / StepRecord / TaskStatus
-├── execution_context.py        ✅         Spawn 构造 + Teardown 因果下沉与会话记忆回写（07）
-├── context.py                  ✅         ContextManager：四层 Prompt 装配 + 上下文检视（06 §4）
-├── prompt_loader.py            ✅         提示词加载（包内路径优先 + 项目根回退 + 缓存）
-├── structured_output.py        ✅         结构化输出抽取（节点与研究子智能体共用）
-├── envelope.py                 ✅         ★ XML 定界信封的**唯一实现侧**（主循环与子智能体共用）
-├── checkpoint.py               ✅         AsyncSqliteSaver 生命周期（WAL / 建表 / 关闭）（04 §4）
-├── routing.py                  ✅         路由契约**聚合导出**（实现分散在 edges/）
-├── workflow.py                 ✅         进程级装配 + 任务级装配 + 图构建 + run/resume（04 §3–4）
+├── execution_context.py        [x]         Spawn 构造 + Teardown 因果下沉与会话记忆回写（07）
+├── context.py                  [x]         ContextManager：四层 Prompt 装配 + 上下文检视（06 §4）
+├── prompt_loader.py            [x]         提示词加载（包内路径优先 + 项目根回退 + 缓存）
+├── structured_output.py        [x]         结构化输出抽取（节点与研究子智能体共用）
+├── envelope.py                 [x]         * XML 定界信封的**唯一实现侧**（主循环与子智能体共用）
+├── checkpoint.py               [x]         AsyncSqliteSaver 生命周期（WAL / 建表 / 关闭）（04 §4）
+├── routing.py                  [x]         路由契约**聚合导出**（实现分散在 edges/）
+├── workflow.py                 [x]         进程级装配 + 任务级装配 + 图构建 + run/resume（04 §3–4）
 │
-├── edges/                      ✅         条件边：与 nodes/ 一一对称，每条迁移一个模块
+├── edges/                      [x]         条件边：与 nodes/ 一一对称，每条迁移一个模块
 │   ├── __init__.py
 │   ├── base.py                            RouterFn 契约 + 终点/里程碑判定原语
 │   ├── after_planner.py                   熔断→END / 里程碑全完成→evaluator / 否则→budget_guard
@@ -73,69 +73,69 @@ AegisAgent/src/agent_runtime/
 │   ├── after_executor.py                  熔断→END / 否则→planner
 │   └── after_evaluator.py                 达成→END / 否则→planner
 │
-├── nodes/                      ✅         图节点：工厂函数闭包注入依赖
+├── nodes/                      [x]         图节点：工厂函数闭包注入依赖
 │   ├── __init__.py
 │   ├── base.py                            NodeFn 契约 + 结构化解析/合并等纯辅助
 │   ├── planner.py                         reasoning 层：宏观规划 + 里程碑计划 + 反思重规划
 │   ├── budget_guard.py                    薄节点：包装 PhysicalBudgetGuard
 │   ├── executor.py                        fast 层：生成 tool_calls（不执行）+ 金丝雀熔断
-│   ├── tool_runner.py                     ★ 权限闸门（HITL 挂起点）+ 并发派发 + 观察值治理
+│   ├── tool_runner.py                     * 权限闸门（HITL 挂起点）+ 并发派发 + 观察值治理
 │   └── evaluator.py                       reasoning 层：里程碑独立验收 + 事实沉淀
 │
-├── guardrails/                 ✅         纯确定性策略（零 LLM、零 I/O）
+├── guardrails/                 [x]         纯确定性策略（零 LLM、零 I/O）
 │   ├── __init__.py
 │   ├── loop_detector.py                   MD5 指纹队列 + 连续错误计数 + 重规划通知文本
 │   ├── physical_budget.py                 PhysicalBudgetGuard：步数 / Token / 挂钟时间三重熔断
 │   ├── observation_pruner.py              Observation Pruner：JSON 轮廓 / Head+关键字+Tail / 离线落盘
-│   ├── injection_guard.py                 ★ 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
-│   ├── permission.py                      ★ 三级权限分级与越级判定（HITL 判定核心，纯函数）
-│   ├── budget_ledger.py                   ★ 子智能体预算账本（父级唯一记账方）+ ChildBudget（子级计数器）
-│   └── authority.py                       ★ 任务授权窗口（父级权限级别的权威推送点，叶子工具只读视图）
+│   ├── injection_guard.py                 * 注入样态扫描（标注与审计，非安全边界；技能与 MCP 共用）
+│   ├── permission.py                      * 三级权限分级与越级判定（HITL 判定核心，纯函数）
+│   ├── budget_ledger.py                   * 子智能体预算账本（父级唯一记账方）+ ChildBudget（子级计数器）
+│   └── authority.py                       * 任务授权窗口（父级权限级别的权威推送点，叶子工具只读视图）
 │
-├── research/                   ✅         研究子智能体：不可信外部数据的隔离区（12）
+├── research/                   [x]         研究子智能体：不可信外部数据的隔离区（12）
 │   ├── __init__.py
 │   ├── contracts.py                       ResearchRequest / ResearchReport 强类型契约 + render_for_model
 │   ├── runner.py                          有界异步循环：检索规划 → 并发抓取 → 强类型提炼
 │   └── tool.py                            DelegateResearchTool + build_research_tool 装配
 │
-├── subagent/                   ✅         动态子智能体委派：能力衰减 + 预算切片 + 上下文隔离（13）
+├── subagent/                   [x]         动态子智能体委派：能力衰减 + 预算切片 + 上下文隔离（13）
 │   ├── __init__.py
 │   ├── contracts.py                       Proposal（模型提议）/ Request（已收窄授权）分离 +
 │   │                                      SubagentReport + 引用白名单（URL 白名单的泛化）
 │   ├── runner.py                          有界异步循环：子级权限二次判定（**不 interrupt**）→ 派发 → 收尾
-│   └── tool.py                            ★ SpawnSubagentTool：三道收窄在派发前一次完成
+│   └── tool.py                            * SpawnSubagentTool：三道收窄在派发前一次完成
 │
-├── llm/                        ✅         双模型分层网关
+├── llm/                        [x]         双模型分层网关
 │   ├── __init__.py
 │   ├── endpoints.py                       端点解析 + 凭据注入（本地端点 EMPTY / 云端缺钥跳过）
 │   ├── fallback.py                        tenacity 端点内退避 → 跨端点降级链
 │   └── client.py                          统一门面 LLMGateway + LangChain↔OpenAI 消息转换
 │
-├── memory/                     ✅         记忆子系统（06）
+├── memory/                     [x]         记忆子系统（06）
 │   ├── __init__.py
 │   ├── models.py                          Workspace / WorkspaceMemory / CompressedMemory / TurnRecord
 │   ├── sqlite_store.py                    SQLite(WAL) 五表存储 + 只读查询（get_session / list_turns）
 │   ├── manager.py                         双层记忆门面 + 水位压缩调度 + 只读/更新接口
 │   └── compactor.py                       对话对齐切片 + LLM 提炼 + 优雅降级
 │
-├── skills/                     ✅         技能注册表（代码侧；内容在 src/skills/）
+├── skills/                     [x]         技能注册表（代码侧；内容在 src/skills/）
 │   ├── __init__.py
 │   └── registry.py                        三档扫描 + frontmatter 解析 + 清单装配 + 按需加载
 │
-├── observability/              ✅         双轨可观测
+├── observability/              [x]         双轨可观测
 │   ├── __init__.py
 │   ├── logging.py                         Loguru 控制台 + 结构化 JSONL 双 sink
 │   ├── trajectory.py                      Trajectory Store → storage/traces/{task_id}.jsonl
-│   ├── event_bus.py                       ★ 任务事件总线：叶子工具内部事件 → SSE 事件流
+│   ├── event_bus.py                       * 任务事件总线：叶子工具内部事件 → SSE 事件流
 │   └── langfuse_tracer.py                 Langfuse 回调（可失败旁路，未配置即跳过）
 │
-├── api/                        ✅         交付层：HTTP + SSE（契约见 11_http_api.md）
+├── api/                        [x]         交付层：HTTP + SSE（契约见 11_http_api.md）
 │   ├── __init__.py
 │   ├── app.py                             FastAPI 装配 + lifespan + CORS 白名单
 │   ├── deps.py                            依赖注入（RuntimeDeps / TaskRegistry / MemoryManager）
 │   ├── schemas.py                         对外 DTO（与 AgentState 解耦）
 │   ├── errors.py                          领域异常 → HTTP 状态码映射 + 统一错误体
-│   ├── auth.py                            ★ 接入层安全闸门（纯 ASGI）：Host → Origin → 令牌
+│   ├── auth.py                            * 接入层安全闸门（纯 ASGI）：Host → Origin → 令牌
 │   ├── task_registry.py                   任务句柄 + SSE 环形缓冲 + 订阅广播 + 并发闸门
 │   ├── __main__.py                        uvicorn 入口（127.0.0.1:8000）
 │   └── routes/
@@ -147,7 +147,7 @@ AegisAgent/src/agent_runtime/
 │       ├── artifacts.py                   产物列表与原文下载（路径穿越防护）
 │       └── introspection.py               skills / tools / mcp / models 自省（零密钥外泄）
 │
-└── prompts/                    ✅         提示词即内容（可热改）
+└── prompts/                    [x]         提示词即内容（可热改）
     ├── system.md                          内置行为纪律（含外部信息纪律）
     ├── planner.md / executor.md / evaluator.md
     ├── research.md                        研究子智能体指令（检索规划 + 结论提炼）
@@ -160,13 +160,13 @@ AegisAgent/src/agent_runtime/
 
 ```text
 AegisAgent/
-├── config/config.toml          ✅         全部可调参数（含 [server] / [mcp] / [bash_shell] / [web_search]）
+├── config/config.toml          [x]         全部可调参数（含 [server] / [mcp] / [bash_shell] / [web_search]）
 ├── pyproject.toml  uv.lock  README.md  .env.example  .gitignore  .python-version
 │
 ├── src/
-│   ├── agent_runtime/          ✅         ← 见 §2
+│   ├── agent_runtime/          [x]         ← 见 §2
 │   │
-│   ├── tools/                  ✅         工具能力层（与 agent_runtime 平级）
+│   ├── tools/                  [x]         工具能力层（与 agent_runtime 平级）
 │   │   ├── __init__.py
 │   │   ├── core/                          【框架】不含任何具体工具
 │   │   │   ├── __init__.py
@@ -183,34 +183,34 @@ AegisAgent/
 │   │       ├── file_ops.py                view_file / write_file（root_path 越界防护）
 │   │       └── load_skill.py              渐进式披露第二阶段：按需挂载 SOP
 │   │
-│   ├── mcps/                   ✅         MCP 代码全部集中（不再跨包）
+│   ├── mcps/                   [x]         MCP 代码全部集中（不再跨包）
 │   │   ├── __init__.py
 │   │   ├── models.py                      命名空间规则 + MCPToolDefinition
-│   │   ├── vetting.py                     ★ 工具描述消毒（注入样态硬拒 + 形状约束）
+│   │   ├── vetting.py                     * 工具描述消毒（注入样态硬拒 + 形状约束）
 │   │   ├── adapter.py                     远端工具 → 本地 AegisTool 契约转译（trust=untrusted）
 │   │   └── manager.py                     懒加载握手 / 故障隔离 / stdio 资源上限 / AsyncExitStack
 │   │
-│   ├── services/               ✅         同工程子系统（各自独立进程，禁止反向依赖）
+│   ├── services/               [x]         同工程子系统（各自独立进程，禁止反向依赖）
 │   │   ├── __init__.py
 │   │   ├── settings.py                    独立 TOML 段落读取（不依赖 agent_runtime）
 │   │   ├── bash_shell/                    settings / audit / memory_pool / sandbox / app / __main__  :8002
 │   │   └── web_search/                    settings / providers / extractor / dedup / app / __main__  :8003
 │   │
-│   ├── skills/                 ✅         内置技能内容包（数据）。空目录以 __init__.py 占位
+│   ├── skills/                 [x]         内置技能内容包（数据）。空目录以 __init__.py 占位
 │   │   └── <skill_name>/{SKILL.md, scripts/, references/, resources/}
 │   │
-│   └── evaluation/             ✅         离线评测 harness（零 LLM 消耗）
+│   └── evaluation/             [x]         离线评测 harness（零 LLM 消耗）
 │       ├── rag_bench/                     metrics(HR/MRR/NDCG) / dataset / evaluate_retrieval
 │       │                                  + datasets/ + reports/
 │       └── agent_bench/                   metrics(完成/自愈/效率/溯源) / runner + tasks/
 │
-├── tests/                      ✅         与 src 镜像的测试树（conftest + fixtures + 各子系统目录）
+├── tests/                      [x]         与 src 镜像的测试树（conftest + fixtures + 各子系统目录）
 └── storage/
     ├── aegis_meta.db                      运行时生成（已 gitignore）
-    ├── checkpoints/            ✅         LangGraph 状态快照
-    ├── traces/                 ✅         {task_id}.jsonl 因果轨迹
-    ├── artifacts/              ✅         {task_id}/ 离线卸载
-    └── logs/                   ✅         Loguru JSONL
+    ├── checkpoints/            [x]         LangGraph 状态快照
+    ├── traces/                 [x]         {task_id}.jsonl 因果轨迹
+    ├── artifacts/              [x]         {task_id}/ 离线卸载
+    └── logs/                   [x]         Loguru JSONL
 ```
 
 ---
@@ -251,25 +251,25 @@ AegisAgent/
 
 ## 5. 依赖方向矩阵
 
-行 = 调用方，列 = 被依赖方。`✔` 允许，`✘` 禁止。
+行 = 调用方，列 = 被依赖方。`` 允许，`` 禁止。
 
 | ↓ 调用 / → 被调用 | config | state | errors | guardrails | edges | llm | memory | tools | mcps | research | subagent | nodes | workflow | api | services |
 |:---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
-| **config** | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **state** | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **errors** | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **guardrails** | ✔ | ✔ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **edges** | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **llm** | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **memory** | ✔ | ✔ | ✔ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **tools** | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **mcps** | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✘ | ✔ | — | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **research** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✘ | — | ✘ | ✘ | ✘ | ✘ | ✘ |
-| **subagent** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ | ✘ |
-| **nodes** | ✔ | ✔ | ✔ | ✔ | ✘ | ✔ | ✔ | ✔ | ✔ | ✘ | ✘ | — | ✘ | ✘ | ✘ |
-| **workflow** | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | ✔ | — | ✘ | ✘ |
-| **api** | ✔ | ✔ | ✔ | ✘ | ✔ | ✘ | ✔ | ✔ | ✔ | ✘ | ✘ | ✘ | ✔ | — | ✘ |
-| **services** | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ | ✘ |
+| **config** | — | | | | | | | | | | | | | | |
+| **state** | | — | | | | | | | | | | | | | |
+| **errors** | | | — | | | | | | | | | | | | |
+| **guardrails** | | | | — | | | | | | | | | | | |
+| **edges** | | | | | — | | | | | | | | | | |
+| **llm** | | | | | | — | | | | | | | | | |
+| **memory** | | | | | | | — | | | | | | | | |
+| **tools** | | | | | | | | — | | | | | | | |
+| **mcps** | | | | | | | | | — | | | | | | |
+| **research** | | | | | | | | | | — | | | | | |
+| **subagent** | | | | | | | | | | | — | | | | |
+| **nodes** | | | | | | | | | | | | — | | | |
+| **workflow** | | | | | | | | | | | | | — | | |
+| **api** | | | | | | | | | | | | | | — | |
+| **services** | | | | | | | | | | | | | | | |
 
 **关键约束**：
 
@@ -288,7 +288,7 @@ AegisAgent/
 - **XML 定界信封只允许一处实现**（`envelope.py`）：协议分叉在安全上不可接受——
   一份实现加了不可信警示、另一份忘了加，读者就会把不可信内容当成可信内容。
 
-> 注：`services` 行全为 `✘` 指的是"不依赖 `agent_runtime`"；`services/settings.py` 是服务侧自有模块，不受本矩阵约束。
+> 注：`services` 行全为 `` 指的是"不依赖 `agent_runtime`"；`services/settings.py` 是服务侧自有模块，不受本矩阵约束。
 
 ---
 
@@ -313,9 +313,9 @@ packages = [
 
 | 资源 | wheel 内路径 | 结果 |
 |:---|:---|:---|
-| 提示词 | `agent_runtime/prompts/{system,planner,executor,evaluator,compactor}.md` | ✓ 已打包 |
-| 技能 SOP | `skills/<name>/SKILL.md` | ✓ 已打包 |
-| 技能脚本 | `skills/<name>/scripts/*.sh` | ✓ 已打包 |
+| 提示词 | `agent_runtime/prompts/{system,planner,executor,evaluator,compactor}.md` | 已打包 |
+| 技能 SOP | `skills/<name>/SKILL.md` | 已打包 |
+| 技能脚本 | `skills/<name>/scripts/*.sh` | 已打包 |
 
 **唯一例外**：被 `.gitignore` 排除的文件不会被 hatchling 打包（默认遵循 VCS ignore）。
 
@@ -326,7 +326,7 @@ packages = [
 ## 7. 命名与占位约定
 
 - **任务标识**：一律 `task_id`（UUID）。产物路径 `storage/artifacts/{task_id}/`，轨迹 `storage/traces/{task_id}.jsonl`。
-- **实现状态标记**：`✅` = 已实现。本规范 v2 起，§2/§3 的目录均已落地。
+- **实现状态标记**：`[x]` = 已实现。本规范 v2 起，§2/§3 的目录均已落地。
 - **空目录占位**：需要入库的空目录一律放 `.gitkeep`；Python 包目录必须有 `__init__.py`。
 - **时区与时间**：一律使用 Unix 秒（浮点），不用本地化字符串。
 
@@ -374,23 +374,23 @@ packages = [
 
 | 项 | 状态 |
 |:---|:---|
-| `pyproject.toml` 依赖（fastapi / uvicorn / mcp / langgraph-checkpoint-sqlite）与 `uv.lock` | ✅ 已完成（`uv lock --check` 通过，114 包） |
-| `config.toml` 的 `[server]` / `[mcp]` / `[bash_shell]` / `[web_search]` 段 | ✅ 已完成 |
-| `config.py` 强类型模型与回环 fail-closed 护栏 | ✅ 已完成 |
-| 契约层（`state` / `errors` / `tokenizer`） | ✅ 已完成 |
-| 策略层（`guardrails/` 三件套） | ✅ 已完成 |
-| 能力层（`llm` / `memory` / `skills` / `observability`） | ✅ 已完成（`memory` 为最早期实现） |
-| 工具层（`tools/core` 框架 + `tools/builtin` 五个基础工具） | ✅ 已完成 |
-| MCP 层（`mcps/` 三件套） | ✅ 已完成 |
-| 编排层（`edges/` + `nodes/` + `routing` + `context` + `execution_context` + `workflow`） | ✅ 已完成 |
-| 交付层（`api/` + 6 组路由） | ✅ 已完成（OpenAPI：25 路径 / 30 操作） |
-| 子系统（`services/bash_shell` + `web_search`） | ✅ 已完成 |
-| 评测 harness（`rag_bench` + `agent_bench`） | ✅ 已完成 |
-| 外部检索隔离（`research/` + `Trust` 机制 + 注入标注） | ✅ 已完成（见 `12_research_subagent.md`） |
-| 动态子智能体委派（`subagent/` + 预算账本 + 三道收窄 + 引用白名单 + 调用期信任级） | ✅ 已完成（见 `13_subagent_delegation.md`） |
-| 子智能体预算对账缺口修复（消耗回流 `total_tokens`） | ✅ 已完成（裁决㉒；修复了工具层对预算**只读**导致的委托绕过） |
-| 工作区技能包的不可信边界（信任分级 / 默认拒绝 / 披露信封） | ✅ 已完成（见 `08` §4.1–4.3，裁决⑱） |
-| MCP 工具的不可信边界（描述消毒 / 逐名授权 / 子进程资源上限） | ✅ 已完成（见 `09` §3.5，裁决⑲） |
+| `pyproject.toml` 依赖（fastapi / uvicorn / mcp / langgraph-checkpoint-sqlite）与 `uv.lock` | [x] 已完成（`uv lock --check` 通过，114 包） |
+| `config.toml` 的 `[server]` / `[mcp]` / `[bash_shell]` / `[web_search]` 段 | [x] 已完成 |
+| `config.py` 强类型模型与回环 fail-closed 护栏 | [x] 已完成 |
+| 契约层（`state` / `errors` / `tokenizer`） | [x] 已完成 |
+| 策略层（`guardrails/` 三件套） | [x] 已完成 |
+| 能力层（`llm` / `memory` / `skills` / `observability`） | [x] 已完成（`memory` 为最早期实现） |
+| 工具层（`tools/core` 框架 + `tools/builtin` 五个基础工具） | [x] 已完成 |
+| MCP 层（`mcps/` 三件套） | [x] 已完成 |
+| 编排层（`edges/` + `nodes/` + `routing` + `context` + `execution_context` + `workflow`） | [x] 已完成 |
+| 交付层（`api/` + 6 组路由） | [x] 已完成（OpenAPI：25 路径 / 30 操作） |
+| 子系统（`services/bash_shell` + `web_search`） | [x] 已完成 |
+| 评测 harness（`rag_bench` + `agent_bench`） | [x] 已完成 |
+| 外部检索隔离（`research/` + `Trust` 机制 + 注入标注） | [x] 已完成（见 `12_research_subagent.md`） |
+| 动态子智能体委派（`subagent/` + 预算账本 + 三道收窄 + 引用白名单 + 调用期信任级） | [x] 已完成（见 `13_subagent_delegation.md`） |
+| 子智能体预算对账缺口修复（消耗回流 `total_tokens`） | [x] 已完成（裁决㉒；修复了工具层对预算**只读**导致的委托绕过） |
+| 工作区技能包的不可信边界（信任分级 / 默认拒绝 / 披露信封） | [x] 已完成（见 `08` §4.1–4.3，裁决⑱） |
+| MCP 工具的不可信边界（描述消毒 / 逐名授权 / 子进程资源上限） | [x] 已完成（见 `09` §3.5，裁决⑲） |
 | 本地代码库（RAG 检索结果） | 视为可信（用户自己的工作区）；若将来索引外部仓库需重新评估 |
-| **三级权限分级 + 越级 HITL 人工审核** | ✅ 已完成：`guardrails/permission.py` 纯函数判定 + `nodes/tool_runner.py` 权限闸门（`interrupt`/`Command(resume)`）+ `/approve`、`/reject` 端点 + 会话级永久放行白名单 |
+| **三级权限分级 + 越级 HITL 人工审核** | [x] 已完成：`guardrails/permission.py` 纯函数判定 + `nodes/tool_runner.py` 权限闸门（`interrupt`/`Command(resume)`）+ `/approve`、`/reject` 端点 + 会话级永久放行白名单 |
 | 自动化测试覆盖 | ⬜ 持续补齐中 |

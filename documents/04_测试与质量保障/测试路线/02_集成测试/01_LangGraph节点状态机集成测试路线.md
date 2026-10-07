@@ -11,7 +11,7 @@
 | :--- | :--- | :---: | :--- |
 | `nodes/tool_runner.py` | `tests/nodes/test_tool_runner.py` | `[x] [x]` | 真实 `interrupt()` 触发、`Command(resume=...)` 恢复、`once`/`always`/`reject` 分支 |
 | **原子对铁律回归** | `tests/nodes/test_tool_runner.py` | `[x] [x]` | 无论批准、拒绝、工具抛错还是死循环拦截，`tool_call_id` 与 `ToolMessage` 绝对一对一配对 |
-| `workflow.py` 编排闭环 | `tests/integration/test_graph_workflow.py` | `[x] [x]` | Planner ➔ Executor ➔ ToolRunner ➔ Evaluator 全状态机自主收敛闭环 |
+| `workflow.py` 编排闭环 | `tests/integration/test_graph_workflow.py` | `[x] [x]` | Planner -> Executor -> ToolRunner -> Evaluator 全状态机自主收敛闭环 |
 | 跨步与持久化续跑 | `tests/integration/test_crash_recovery.py` | `[x] [x]` | `SqliteCheckpointStore` 真实落盘、WAL 模式、进程崩溃重启断点续跑 |
 | 并发与状态竞态 | `tests/api/test_task_registry.py` | `[x] [x]` | 真实 `asyncio.gather` 并发提交与审批、互斥锁状态防脏写 |
 | 专用代码检索子智能体 | `tests/workflow/test_code_search_runner.py` | `[x] [x]` | 位置白名单过滤、3 轮自适应改词、早停与确定性拒答 |
@@ -23,13 +23,13 @@
 
 ### 2.1 ToolRunner 节点中断与恢复分支 (`tests/nodes/test_tool_runner.py`)
 - **场景 A（只读放行）**：只读工具调用直接派发，图流转无中断挂起；
-- **场景 B（越级挂起 ➔ 批准本次 `once`）**：
+- **场景 B（越级挂起 -> 批准本次 `once`）**：
   - 触发 `interrupt()` 挂起，返回包含 `approval_id` 的 payload；
   - 传入 `Command(resume={"approved": True, "scope": "once"})`，派发底层工具并回填正常 `ToolMessage`；
-- **场景 C（越级挂起 ➔ 拒绝执行 `reject`）**：
+- **场景 C（越级挂起 -> 拒绝执行 `reject`）**：
   - 传入 `Command(resume={"approved": False, "reason": "禁止该操作"})`；
   - 生成带 `[APPROVAL REJECTED]` 前缀的观察值回填模型，底层工具未派发；
-- **场景 D（越级挂起 ➔ 会话免审 `always`）**：
+- **场景 D（越级挂起 -> 会话免审 `always`）**：
   - 传入 `Command(resume={"approved": True, "scope": "always"})`；
   - 将动作签名录入 `approval_allowlist`，后续同一任务再次触发同签名动作不再挂起；
 - **场景 E（原子对严格对称铁律）**：

@@ -151,7 +151,7 @@ def vet_tool_definition(raw_desc: str, max_chars: int = 1000) -> str:
     for pattern in injection_patterns:
         if pattern in raw_desc.lower():
             raise SecurityVettingError(f"工具描述命中恶意注入样态: {pattern}")
-    
+
     # 2. 长度截断，防止恶意工具用海量无效描述挤爆大模型 Context
     if len(raw_desc) > max_chars:
         return raw_desc[:max_chars] + "...[TRUNCATED]"

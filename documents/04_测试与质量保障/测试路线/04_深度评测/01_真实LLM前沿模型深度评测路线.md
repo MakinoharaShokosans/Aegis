@@ -27,7 +27,7 @@
 - **Tool Calls 参数强校验**：断言模型返回的 `tool_calls[].args` 均为合法可反序列化字典，无参数字符串化假 JSON。
 
 ### 2.2 Phase 10：真实 E2E 闭环与基线评测 (`test_phase10_live_workflow.py`)
-- **自主收敛能力**：在隔离沙箱中下发真实编程任务，验证 Planner ➔ Executor ➔ Evaluator 完整循环，断言最终所有里程碑均标记为 `completed`；
+- **自主收敛能力**：在隔离沙箱中下发真实编程任务，验证 Planner -> Executor -> Evaluator 完整循环，断言最终所有里程碑均标记为 `completed`；
 - **真实 Trace 归档**：将产生的真实执行轨迹写入 `storage/traces/{task_id}.jsonl`，供 `agent_bench` 计算平均步骤效率。
 
 ### 2.3 Phase 11：越级拦截与被拒自适应纪律 (`test_phase11_live_permissions.py`)

@@ -14,28 +14,28 @@
 ```mermaid
 flowchart TD
     subgraph UIComponents ["1. 视图与交互组件层 (React 19 Components)"]
-        Console["⌨️ InputConsole\n(多行 Prompt / Cmd+Enter / 斜杠指令)"]
-        Timeline["⏱️ TraceTimeline\n(节点状态流 / Subagent徽标 / 耗时计算)"]
-        Approval["🛡️ HitlApprovalCard\n(越级风险告警 / 批准本次 / 会话免审 / 拒绝)"]
-        Meter["💧 WaterLevelMeter\n(四层 Token 水位动态变色警戒)"]
-        Editor["📝 Monaco Editor & TabBar\n(代码多标签 / 语法高亮 / Diff 差异比对)"]
-        Tree["🌲 ProjectsTree\n(文件目录树 / 过滤隐藏项 / 快速打开)"]
+        Console[" InputConsole\n(多行 Prompt / Cmd+Enter / 斜杠指令)"]
+        Timeline[" TraceTimeline\n(节点状态流 / Subagent徽标 / 耗时计算)"]
+        Approval[" HitlApprovalCard\n(越级风险告警 / 批准本次 / 会话免审 / 拒绝)"]
+        Meter[" WaterLevelMeter\n(四层 Token 水位动态变色警戒)"]
+        Editor[" Monaco Editor & TabBar\n(代码多标签 / 语法高亮 / Diff 差异比对)"]
+        Tree[" ProjectsTree\n(文件目录树 / 过滤隐藏项 / 快速打开)"]
     end
 
     subgraph StateManagement ["2. 响应式状态机层 (Zustand 5 + Immer)"]
-        TaskStore["📦 useTaskStore\n(任务提交 / 多轮消息栈 / SSE事件流聚合 / 审批状态机)"]
-        WsStore["📁 useWorkspaceStore\n(活动工作区 / 项目文件缓存 / 脏标记追踪)"]
-        RagStore["🔍 useRagStore\n(检索参数响应式绑定 / 语言过滤 / 相似度过滤)"]
+        TaskStore[" useTaskStore\n(任务提交 / 多轮消息栈 / SSE事件流聚合 / 审批状态机)"]
+        WsStore[" useWorkspaceStore\n(活动工作区 / 项目文件缓存 / 脏标记追踪)"]
+        RagStore[" useRagStore\n(检索参数响应式绑定 / 语言过滤 / 相似度过滤)"]
     end
 
     subgraph NetworkLayer ["3. 网络与协议适配层 (Network & Transport)"]
-        HttpClt["🌐 HttpClient\n(内存/LocalStorage Token 同步 / X-API-Token 注入 / 异常转译)"]
-        EventSrc["⚡ EventSource (SSE 客户端)\n(增量分块推流 / 心跳保活 / Last-Event-ID 指数退避重连)"]
+        HttpClt[" HttpClient\n(内存/LocalStorage Token 同步 / X-API-Token 注入 / 异常转译)"]
+        EventSrc[" EventSource (SSE 客户端)\n(增量分块推流 / 心跳保活 / Last-Event-ID 指数退避重连)"]
     end
 
     Console & Timeline & Approval & Meter & Editor & Tree <--> TaskStore & WsStore & RagStore
     TaskStore & WsStore & RagStore <--> HttpClt & EventSrc
-    HttpClt & EventSrc <-->|HTTP REST / SSE :8000| AgentGateway["👑 AegisAgent 网关"]
+    HttpClt & EventSrc <-->|HTTP REST / SSE :8000| AgentGateway[" AegisAgent 网关"]
 ```
 
 ---

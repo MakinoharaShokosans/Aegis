@@ -1,6 +1,6 @@
 # Bash 执行沙箱 - 服务契约与客户端适配规范
 
-> **责任领域**：`AegisAgent/src/services/bash_shell/app.py` 与 `AegisAgent/src/tools/builtin/bash.py`  
+> **责任领域**：`AegisAgent/src/services/bash_shell/app.py` 与 `AegisAgent/src/tools/builtin/bash.py`
 > **核心原则**：HTTP REST 契约化通信、强类型 DTO 约束、解耦红线（禁止反向依赖 Agent 内部模块）。
 
 ---
@@ -17,11 +17,11 @@ Bash Shell 作为独立微服务（默认运行于 `127.0.0.1:8002`），向 Age
 
 | 字段 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--: | :--- |
-| `workspace_id` | str | ✅ | 工作区标识（审计与溯源用；服务端以 `workspace_root` 为执行边界） |
-| `workspace_root` | str | ✅ | 目标工程绝对路径（子进程 `cwd`，同时是路径越界边界） |
-| `task_id` | str | ✅ | 任务标识，决定产物目录 `{artifacts_dir}/{task_id}/` |
-| `step_id` | int | ✅ | 步骤序号，决定日志名 `step_{step_id}_bash.log` |
-| `command` | str | ✅ | 待执行命令 |
+| `workspace_id` | str | [x] | 工作区标识（审计与溯源用；服务端以 `workspace_root` 为执行边界） |
+| `workspace_root` | str | [x] | 目标工程绝对路径（子进程 `cwd`，同时是路径越界边界） |
+| `task_id` | str | [x] | 任务标识，决定产物目录 `{artifacts_dir}/{task_id}/` |
+| `step_id` | int | [x] | 步骤序号，决定日志名 `step_{step_id}_bash.log` |
+| `command` | str | [x] | 待执行命令 |
 | `timeout_sec` | float | — | 本次硬超时；缺省取 `[bash_shell].timeout_sec` |
 | `queue_wait_sec` | float | — | 允许等待内存池配额的秒数；`0` 表示池满立即返回 `QUEUED` |
 | `estimated_mb` | int | — | 预估内存占用（MB）；缺省按 `rlimit_as_mb` 计（即最坏情况） |
@@ -40,7 +40,7 @@ Bash Shell 作为独立微服务（默认运行于 `127.0.0.1:8002`），向 Age
 }
 ```
 
-> 📋 规划中（尚未实现）：`permission_level` 字段与越级 HITL 审核，
+> 规划中（尚未实现）：`permission_level` 字段与越级 HITL 审核，
 > 见 [`03_command_audit_and_path_sandbox.md`](./03_command_audit_and_path_sandbox.md) §2。
 
 #### 响应体（`ShellExecutionResult`）
@@ -131,7 +131,7 @@ Bash Shell 作为独立微服务（默认运行于 `127.0.0.1:8002`），向 Age
 }
 ```
 
-> 📋 规划中（尚未实现）：`403 APPROVAL_REQUIRED` + `approval_details`（越级 HITL 审核），见 `03` §2。
+> 规划中（尚未实现）：`403 APPROVAL_REQUIRED` + `approval_details`（越级 HITL 审核），见 `03` §2。
 
 ## 3. Agent ToolLayer 客户端适配器 (`tools/builtin/bash.py`)
 

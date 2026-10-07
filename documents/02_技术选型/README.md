@@ -1,6 +1,6 @@
 # Aegis 系统技术选型架构决策总览 (ADR Index)
 
-> **定位**：Aegis (Engineering Research Agent) 模块化架构决策记录索引。  
+> **定位**：Aegis (Engineering Research Agent) 模块化架构决策记录索引。
 > **设计哲学**：单一职责、高内聚低耦合。各子系统只专注本领域的核心权衡，统一向外提供确定性契约。
 
 ---
@@ -28,4 +28,4 @@
 ## 3. 技术栈汇总清单
 
 完整的库、版本、模型与环境依赖速查表请参阅：
-👉 [Aegis 全景技术栈清单 (Tech Stack BOM)](file:///home/Skualeilu/Projects/Aegis/documents/技术栈.md)
+ [Aegis 全景技术栈清单 (Tech Stack BOM)](file:///home/Skualeilu/Projects/Aegis/documents/技术栈.md)

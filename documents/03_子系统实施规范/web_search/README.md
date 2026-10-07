@@ -1,6 +1,6 @@
 # Aegis Web Search 外部网络信息摄取 - 实施技术规范索引
 
-> **责任领域**：`AegisAgent/src/services/web_search/`（同工程独立微服务，默认监听 `127.0.0.1:8003`）  
+> **责任领域**：`AegisAgent/src/services/web_search/`（同工程独立微服务，默认监听 `127.0.0.1:8003`）
 > **核心原则**：开箱即用零成本检索 (DuckDuckGo)、全异步高并发抓取 (`httpx`)、智能正文清洗提炼 (`trafilatura`)、内容指纹精准去重 (MD5)、超长正文离线卸载 (Artifacts Offloading)。
 
 ---

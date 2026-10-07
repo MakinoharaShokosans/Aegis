@@ -18,7 +18,7 @@
 | 认证 | **默认开启**：Bearer / `X-API-Token` / `?token=` 令牌（见 §1.1） |
 | 并发 | 进程内单实例；默认同时只跑 **1 个**任务，超出返回 `429` |
 
-> ⚠️ **安全红线**：本 API 的工具链包含受控 Bash 执行能力，等价于对本机工程目录的读写与命令执行权限。**禁止**绑定 `0.0.0.0`、禁止置于反向代理后对外暴露。当前只支持**单用户**（无 RBAC、无多租户）。
+> **安全红线**：本 API 的工具链包含受控 Bash 执行能力，等价于对本机工程目录的读写与命令执行权限。**禁止**绑定 `0.0.0.0`、禁止置于反向代理后对外暴露。当前只支持**单用户**（无 RBAC、无多租户）。
 
 ### 1.1 三道闸门：Host → Origin → 令牌
 
@@ -181,7 +181,7 @@ GET /api/v1/tasks/{id}/stream?token=<token>
 
 ### 4.4 任务 Tasks 与人机协同审核（HITL）
 
-> **实现状态：✅ 已落地**（`/approve`、`/reject`、`waiting_for_approval` 状态与三个 SSE 事件均已实现）。
+> **实现状态：[x] 已落地**（`/approve`、`/reject`、`waiting_for_approval` 状态与三个 SSE 事件均已实现）。
 
 | 方法 | 路径 | 说明 |
 |:---|:---|:---|
@@ -376,7 +376,7 @@ data: {"task_id":"9b1e...","seq":42,"ts":0.0,"tool_call_id":"c1","tool_name":"ba
 
 **子智能体事件为什么需要单独一类**：LangGraph 的节点级流式只暴露**节点边界**，而子智能体运行在 `tool_runner` 内部的**一个工具**里——没有这类事件时，前端只能看到一个长时间不动的"子任务进行中"。事件的产生路径是：叶子工具 → `observability/event_bus.py`（任务级总线）→ `TaskRegistry.emit` → 环形缓冲/广播，因此**自动获得** `id` 序号与断线重连能力。
 
-> ⚠️ **事件流不是新的信任边界，但也不是模型上下文**。带 `summary` 的事件内容是**已裁剪摘要**（总线强制限长 **300** 字符，`task_id`/`seq`/`ts` 由服务端补齐）；原始正文仍**不进入**主状态、主 Checkpoint 与事件流。若事件的 `untrusted: true`，说明该摘要源自不可信来源（外部网页 / 第三方 MCP），**前端必须转义后再渲染**（防 XSS），且不得把它当成用户指令。
+> **事件流不是新的信任边界，但也不是模型上下文**。带 `summary` 的事件内容是**已裁剪摘要**（总线强制限长 **300** 字符，`task_id`/`seq`/`ts` 由服务端补齐）；原始正文仍**不进入**主状态、主 Checkpoint 与事件流。若事件的 `untrusted: true`，说明该摘要源自不可信来源（外部网页 / 第三方 MCP），**前端必须转义后再渲染**（防 XSS），且不得把它当成用户指令。
 >
 > 事件名走**白名单**（`routes/tasks.py::_KNOWN_EVENTS`）：未登记的事件会被降级为 `message`，避免内部事件无意间进入前端契约。
 
@@ -437,13 +437,13 @@ allowed_hosts = []                                  # 回环名始终允许
 
 | 能力 | 现状 |
 |:---|:---|
-| `list_workspaces` / `get_workspace` / `get_workspace_by_path` / `create_workspace` / `delete_workspace` | ✅ 已有 |
-| `update_workspace(name, description)` | ⚠️ `SqliteMemoryStore` 已有，`MemoryManager` 未暴露 |
-| `create_session` / `list_sessions` / `delete_session` | ✅ 已有 |
-| `get_session(session_id)`（按 ID 单查，且需返回其 `workspace_id`） | ⚠️ 需新增（现仅有 `create_or_get_session` 副作用式获取） |
-| `get_workspace_memory` / `promote_fact_to_workspace` / `record_global_failure` | ✅ 已有 |
-| 分页查询 `turns`（`cursor`/`limit`） | ⚠️ 需新增（现有 `get_recent_turns` 不支持游标） |
-| 上下文装配预览（`/context`） | ⚠️ 需新增，可复用 `load_session_context` + 配置阈值 |
+| `list_workspaces` / `get_workspace` / `get_workspace_by_path` / `create_workspace` / `delete_workspace` | [x] 已有 |
+| `update_workspace(name, description)` | `SqliteMemoryStore` 已有，`MemoryManager` 未暴露 |
+| `create_session` / `list_sessions` / `delete_session` | [x] 已有 |
+| `get_session(session_id)`（按 ID 单查，且需返回其 `workspace_id`） | 需新增（现仅有 `create_or_get_session` 副作用式获取） |
+| `get_workspace_memory` / `promote_fact_to_workspace` / `record_global_failure` | [x] 已有 |
+| 分页查询 `turns`（`cursor`/`limit`） | 需新增（现有 `get_recent_turns` 不支持游标） |
+| 上下文装配预览（`/context`） | 需新增，可复用 `load_session_context` + 配置阈值 |
 
 ---
 
