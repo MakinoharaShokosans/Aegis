@@ -7,73 +7,68 @@
 
 ## 1. 文档全景拓扑与子系统导航
 
-整个系统的文档划分为三大实施规范套件、一套 ADR 技术决策集与一份技术栈物料清单 (BOM)：
+文档库整体划分为清晰的 7 大分层目录，遵循高内聚、低耦合与从宏观到微观的认知流线：
 
 ```text
 documents/
-├── README.md                      # [当前文档] 全景总入口与实施导航
-├── 技术栈.md                      # 全景技术栈清单 (Tech Stack BOM, 库/模型/版本/环境)
-├── tech-stack/                    # 💡 技术栈辅助检索与理解文档集群 (Obsidian Search-First, 单库单文档)
-├── frontend_design.md             # 🎨 前端架构与交互设计规范 (DeepSeek Harness UI/UX 逆向与标准)
-├── frontend_workflow.md           # 🚀 前端工作流与用户旅程设计规范 (冷启动/会话流转/快捷键/时序图)
-├── 测试路线/                      # 【测试路线全景】(分系统独立维护)
-│   ├── README.md                  # 测试路线总索引与双系统全景一览
-│   ├── AegisAgent/                # 👑 Agent 调度宿主系统测试路线 (基础 + 深度测试)
-│   │   ├── 测试路线.md            # • 基础测试路线 (Phase 1~8: 单元/节点/HITL 审批/API 契约)
-│   │   └── 深度测试路线.md        # • 深度测试路线 (Phase 9~15: 真实前沿 LLM / AgentBench / 红队)
-│   └── AegisRAG/                  # 📚 独立代码检索子系统测试路线
-│       └── 测试路线.md            # • RAG 全栈测试路线 (Phase 1~7: AST 切分/向量化/Qdrant/精排/API/评测)
+├── README.md                      # [当前文档] 全景总入口与导航
 │
-├── 里程碑/                        # 【功能就绪与实施全景】(双勾验收跟踪)
-├── 技术选型/                      # 架构决策记录 (ADRs) - 阐述"为什么选该技术"
-│   ├── README.md                  # ADR 导航与设计哲学
-│   ├── agent_runtime.md           # Agent Runtime 架构决策
-│   ├── bash_shell.md              # 受控代码沙箱决策
-│   ├── web_search.md              # 外部网络信息摄取决策
-│   ├── rag_retrieval.md           # 独立 RAG 检索基础设施决策
-│   └── evaluation.md              # 自动化双轨评测体系决策
+├── 01_项目架构/                   # 👑 【架构总览中枢】系统宏观拓扑、分层架构模型与核心子系统设计
+│   ├── README.md                  # • 架构总纲：系统宏观拓扑、五层分层模型、四大物理进程协同矩阵
+│   ├── 01_Agent编排与状态机架构.md # • 调度内核：LangGraph 状态机推演、五大计算节点闭包注入、上下文治理
+│   ├── 02_代码语义检索RAG架构.md   # • 知识检索：Tree-sitter AST切分、Dense+Sparse双路召回、Qdrant与Cross-Encoder
+│   ├── 03_受控Linux沙箱与隔离架构.md # • 安全沙箱：PGID会话防孤儿、setrlimit内核物理配额、两段式硬超时熔断
+│   ├── 04_Web前端与人机协同交互架构.md # • 前端控制台：React 19 + Zustand状态机、Monaco Diff比对、HITL卡片审批流
+│   └── 05_服务通信与网关契约架构.md # • 接入网关：三道安全闸门（Host/Origin/Token）、SSE长连接事件总线
 │
-├── agent_runtime/                 # 【实施技术规范】核心调度宿主 (AegisAgent/src/agent_runtime/)
-│   ├── README.md                  # Agent 运行时实施规范索引与步骤指引
-│   ├── 01_architecture_overview.md
-│   ├── 02_state_definition.md
-│   ├── 03_node_specification.md
-│   ├── 04_routing_and_control_flow.md
-│   ├── 05_guardrails_implementation.md
-│   ├── 06_memory_and_context_management.md
-│   ├── 07_execution_context_management.md
-│   ├── 08_skills_management.md
-│   ├── 09_mcp_integration_and_governance.md
-│   ├── 10_directory_structure.md  # 权威目录结构与工程分层（裁决记录）
-│   ├── 11_http_api.md             # HTTP API 契约与对外交付入口
-│   ├── 12_research_subagent.md    # 外部检索隔离：信任边界、强类型契约、有界研究循环
-│   └── 13_subagent_delegation.md  # 动态子智能体委派：能力衰减、预算账本、引用白名单、禁审批
+├── 02_技术选型/                   # ⚖️ 【架构决策记录 (ADRs)】阐述核心组件技术权衡与"为什么选该技术"
+│   ├── README.md                  # • ADR 导航与设计哲学
+│   ├── agent_runtime.md           # • Agent 编排框架选型 (LangGraph vs 传统自主循环)
+│   ├── bash_shell.md              # • 代码执行沙箱选型 (原生进程受控沙箱 vs Docker / microVM)
+│   ├── web_search.md              # • 外部网络检索选型 (DuckDuckGo 免 Key + Trafilatura)
+│   ├── rag_retrieval.md           # • 代码语义检索基础设施选型 (Qdrant + FastEmbed + BGE-Reranker)
+│   └── evaluation.md              # • 自动化双轨评测体系决策 (单元基准 + 真实 LLM 评测)
 │
-├── bash_shell/                    # 【实施技术规范】受控 Shell 沙箱 (AegisAgent/src/services/bash_shell/)
-│   ├── README.md                  # 沙箱子系统实施规范索引与架构拓扑
-│   ├── 01_process_lifecycle_and_isolation.md   # PGID 进程组隔离与两段式超时熔断 (SIGTERM->SIGKILL)
-│   ├── 02_resource_quotas_and_memory_pool.md   # setrlimit 物理边界 (2GB/50MB) 与内存池并发排队
-│   ├── 03_command_audit_and_path_sandbox.md    # 高危正则审计、工作区根目录绑定 (CWD) 与防逃逸
-│   ├── 04_output_governance_and_artifacts.md   # 流式分块读取、全量离线落盘与 Head/Tail 提炼
-│   └── 05_http_api_and_client_contract.md      # FastAPI 路由契约与 ToolLayer 客户端适配
+├── 03_子系统实施规范/             # 🛠️ 【各子系统详细落地规范】强类型契约、生命周期与边界硬约束
+│   ├── README.md                  # • 子系统实施规范导航
+│   ├── agent_runtime/             # • 核心调度宿主实施规范 (01~14 文档集群，含状态机、节点、子智能体委派)
+│   ├── bash_shell/                # • 受控 Shell 沙箱实施规范 (01~05 文档集群，含进程组隔离、配额与审计)
+│   ├── rag_retrieval/             # • 代码语义检索实施规范 (01~07 文档集群，含 AST 切分、混合检索与重排)
+│   ├── web_search/                # • 外部网络检索实施规范 (01~05 文档集群，含异步抓取、去重与卸载)
+│   ├── frontend/                  # • Web 前端交互规范 (UI/UX 视觉体系与状态机时序工作流)
+│   └── api/                       # • 全系统 HTTP RESTful 与 SSE 流式事件契约
 │
-├── web_search/                    # 【实施技术规范】网络检索与清洗 (AegisAgent/src/services/web_search/)
-│   ├── README.md                  # 检索子系统实施规范索引与数据流拓扑
-│   ├── 01_search_architecture_and_data_flow.md # 检索、抓取、清洗、去重、卸载全链路数据流
-│   ├── 02_duckduckgo_provider_and_resilience.md# DuckDuckGoProvider 零 Key 实现与异步化封装
-│   ├── 03_async_fetch_and_trafilatura_clean.md # httpx 并发池、WAF 快速降级与 trafilatura Markdown 清洗
-│   ├── 04_content_dedup_and_artifacts_offloading.md # MD5 内容指纹去重与超长正文落盘卸载
-│   └── 05_http_api_and_client_contract.md      # FastAPI 路由契约与 ToolLayer 客户端适配
+├── 04_测试与质量保障/             # 🧪 【测试路线与测试报告质量大盘】
+│   ├── README.md                  # • 质量保障体系总览与执行门禁
+│   ├── 测试报告/                  # • 📊 自动化测试执行报告产物集群 (453 项测试通过率 100%)
+│   │   ├── 00_全系统测试执行总纲与质量门禁报告.md
+│   │   ├── 01_单元测试报告/       # Agent(263)、RAG(61)、Frontend(55) 单元测试报告
+│   │   ├── 02_集成测试报告/       # LangGraph 状态机流转、FastAPI 安全闸门、前端流式通信
+│   │   ├── 03_端到端与安全对抗报告/ # 权限越级对抗(24)、Canary 熔断(28)、崩溃断电续跑
+│   │   └── 04_深度评测报告/       # 真实 LLM 评测矩阵、RAGBench 4组消融基准
+│   └── 测试路线/                  # • 🧭 结构化全景测试路线体系
+│       ├── 00_总测试路线.md        # • 质量门禁与金字塔分层总纲
+│       ├── 01_单元测试/            # 🧩 纯函数算法、AST语法切分、Zustand状态机单测
+│       ├── 02_集成测试/            # 🔗 LangGraph节点流转、FastAPI微服务契约、SSE流式通信
+│       ├── 03_端到端测试/          # 🔄 4大物理进程全链路业务闭环、kill -9崩溃断电续跑容灾
+│       ├── 04_深度评测/            # 📈 真实LLM前沿模型驱动评测、RAGBench消融基准与规范报告
+│       └── 05_安全对抗测试/        # 🛡️ 权限正则黑名单绕过对抗、Prompt注入沙箱与Canary硬熔断
 │
-└── rag_retrieval/                 # 【实施技术规范】独立代码检索子系统 (AegisRAG/，📋 规划中，代码未实现)
-    ├── README.md                  # RAG 子系统实施规范索引与双流水线拓扑
-    ├── 01_architecture_overview.md            # Ingest/Retrieve 双流水线、独立子工程隔离纪律、双部署形态
-    ├── 02_chunking_and_parsing.md             # AST 语法切分、语言支持范围纠偏、索引触发时机、证据元数据 Schema
-    ├── 03_embedding_and_storage.md            # FastEmbed 双路向量化、Qdrant Schema、幂等写入与失效清理
-    ├── 04_hybrid_retrieval_and_rerank.md      # 双路召回、原生 RRF 融合、Cross-Encoder 精排、低置信度治理
-    ├── 05_http_api_and_client_contract.md     # FastAPI 路由契约与 rag_search.py 客户端字段对齐
-    ├── 06_evaluation_and_benchmarking.md      # 接入 rag_bench 评测 harness、消融矩阵，未来增强项的量化依据
-    └── 07_directory_structure.md              # 权威目录树、依赖矩阵、打包约定（裁决记录，含 rerank/ 独立成包）
+├── 05_项目里程碑/                 # 🏆 【功能就绪与实施全景】核心特性交付跟踪与双勾验收
+│   ├── README.md                  # • 里程碑总览与进度板
+│   ├── AegisAgent/                # • 调度核心、沙箱、搜索各阶段交付物记录
+│   └── AegisRAG/                  # • 独立检索服务交付物记录
+│
+├── 06_技术栈与知识库/             # 📚 【物料清单与知识库】全景依赖清单与核心三方库底层深度剖析
+│   ├── README.md                  # • 知识库导航
+│   ├── 技术栈.md                  # • 全景技术栈清单 (Tech Stack BOM: 库/模型/版本/环境)
+│   └── tech-stack/                # • 单库深入原理文档集群 (Obsidian Search-First: Tree-sitter, Qdrant 等)
+│
+└── 07_面试与求职复盘/             # 💼 【个人发展与面试备战】(已纳入 .gitignore 物理防泄露)
+    ├── README.md                  # • 面试备战全景导航与题库索引
+    ├── 简历Skills.md              # • 核心技术点与项目亮点精炼
+    ├── 00_面试高频必杀总结与总览.md # • 电梯演讲与核心问答总纲
+    └── 01~12 各专项题库文档       # • Agent、后端、数据库、前端、网络、RAG、源码深水区、八股与大厂真题
 ```
 
 ---
@@ -99,26 +94,24 @@ documents/
    - **`tools/builtin/web_search.py` 标记为 `trust="untrusted"`，不在主 Agent 工具表中**——它只由研究子智能体
      （`agent_runtime/research/`）在受限工具表内调用；主 Agent 的外部信息入口是 `delegate_research`，
      收到的是经强类型校验（URL 白名单 / 版本正则 / 长度上限）净化后的报告。
-     `ToolRegistry(allow_untrusted=False)` 会在**构造期**拒绝把不可信工具注册进特权表（见 `12_research_subagent.md`）；
+     `ToolRegistry(allow_untrusted=False)` 会在**构造期**拒绝把不可信工具注册进特权表（详见 `03_子系统实施规范/agent_runtime/12_research_subagent.md`）；
    - 单轮内多个 `tool_calls` 由 `ToolDispatcher` 通过 `asyncio.gather` 并发派发，端到端耗时大幅缩减。
-3. **提示层与不可信面安全：六道互补机制**（详见 `agent_runtime/05`、`08`、`09`、`12`、`13`）：
+3. **提示层与不可信面安全：六道互补机制**（详见 `03_子系统实施规范/agent_runtime/` 05、08、09、12、13）：
    - **XML 定界协议**：`<project_rules>` / `<user_task>` / `<tool_observation>` / `<external_content>` /
-     `<available_skills>` / `<skill_sop>` 内的文本一律视为数据而非指令（`system.md` §一）；
+     `<available_skills>` / `<skill_sop>` 内的文本一律视为数据而非指令；
    - **Canary Token**：会话级确定性派生的金丝雀注入系统提示词，检测外泄并熔断（`guardrails/canary.py`）；
-   - **权限分离（只读信息源）**：网络检索隔离在研究子智能体内，主 Agent 结构性地拿不到原始网页
-     （`12_research_subagent.md`）；
+   - **权限分离（只读信息源）**：网络检索隔离在研究子智能体内，主 Agent 结构性地拿不到原始网页；
    - **能力衰减委派**：主 Agent 可动态组建受限子劳动力（`spawn_subagent`），
      但子级工具集 / 权限级别 / 递归深度均在**派发前一次性收窄**，且子级
      **不能请求人工审批**（防审批洗白 + 防副作用重复执行）、回流内容一律按不可信处理
-     并由**引用白名单**核对（`13_subagent_delegation.md`）；
+     并由**引用白名单**核对；
    - **技能信任分级**：内置/全局技能可信、**工作区技能默认拒绝**，元数据做注入标注与截断，
-     内容纳入 XML 定界信封（`08_skills_management.md` §4.1–4.3）；
+     内容纳入 XML 定界信封；
    - **MCP 数据面/控制面分离**：工具描述消毒硬拒、结果标注；server 默认关闭、
-     `trust="untrusted"` 且经**逐名授权**进入主工具表，stdio 子进程施加 setrlimit（`09` §3.5）；
+     `trust="untrusted"` 且经**逐名授权**进入主工具表，stdio 子进程施加 setrlimit；
    - **接入层三道闸门**：`Host → Origin → 令牌`（纯 ASGI 中间件，不可被漏挂）。
      回环监听挡不住"用户浏览器里的恶意页面直接向 `127.0.0.1:8000` 提交审批"，
-     因此 `POST /approve|/reject` 这类端点必须有独立于"端口隐私"的保护
-     （`agent_runtime/11_http_api.md` §1.1）。
+     因此 `POST /approve|/reject` 这类端点必须有独立于"端口隐私"的保护。
 4. **可观测性旁路（不牺牲隔离）**：
    - 子智能体运行在 `tool_runner` 内部的**一个工具**里，节点级流式看不见它；
      `observability/event_bus.py` 提供任务级事件总线，把 `subagent.*` / `research.*`
