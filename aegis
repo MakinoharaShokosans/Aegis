@@ -1,0 +1,358 @@
+#!/usr/bin/env python3
+"""Aegis 多进程服务统一管理器 (Aegis System Process Manager)
+
+功能：
+1. 一键启动 AegisAgent (:8000 & Sidecars :8002, :8003)、AegisRAG (:8001) 和 AegisFrontend (:5173)
+2. 实时聚合多源输出，为各进程打上结构化颜色标签：
+   【agent】：***
+   【rag】：***
+   【frontend】：***
+3. Linux PGID 进程组硬隔离与级联退出保护 (SIGTERM -> SIGKILL)，绝不残留孤儿进程。
+4. 提供 status 状态探测与 stop 一键安全关机。
+"""
+
+from __future__ import annotations
+
+import os
+import signal
+import subprocess
+import sys
+import threading
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Dict, List, Optional
+
+# ANSI 颜色定义
+RESET = "\033[0m"
+BOLD = "\033[1m"
+RED = "\033[1;31m"
+GREEN = "\033[1;32m"
+YELLOW = "\033[1;33m"
+CYAN = "\033[1;36m"
+MAGENTA = "\033[1;35m"
+GRAY = "\033[90m"
+
+# 服务标签及颜色映射 (严格对齐用户要求的标签格式)
+TAGS = {
+    "agent": f"{CYAN}【agent】：{RESET}",
+    "rag": f"{GREEN}【rag】：{RESET}",
+    "frontend": f"{MAGENTA}【frontend】：{RESET}",
+    "system": f"{YELLOW}【system】：{RESET}",
+}
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+
+SERVICES = {
+    "agent": {
+        "name": "AegisAgent (核心调度与沙箱)",
+        "dir": PROJECT_ROOT / "AegisAgent",
+        "script": PROJECT_ROOT / "AegisAgent" / "start",
+        "port": 8000,
+        "health_url": "http://127.0.0.1:8000/api/v1/health",
+    },
+    "rag": {
+        "name": "AegisRAG (代码语义检索)",
+        "dir": PROJECT_ROOT / "AegisRAG",
+        "script": PROJECT_ROOT / "AegisRAG" / "start",
+        "port": 8001,
+        "health_url": "http://127.0.0.1:8001/api/v1/health",
+    },
+    "frontend": {
+        "name": "AegisFrontend (Web 控制台)",
+        "dir": PROJECT_ROOT / "AegisFrontend",
+        "script": PROJECT_ROOT / "AegisFrontend" / "start",
+        "port": 5173,
+        "health_url": "http://127.0.0.1:5173",
+    },
+}
+
+SIDECARS = {
+    "bash_shell": {"name": "Bash Shell 沙箱", "port": 8002, "health_url": "http://127.0.0.1:8002/health"},
+    "web_search": {"name": "Web Search 检索", "port": 8003, "health_url": "http://127.0.0.1:8003/health"},
+}
+
+
+class ProcessSupervisor:
+    """受控进程组管理器与日志分发引擎。"""
+
+    def __init__(self, targets: List[str]) -> None:
+        self.targets = targets
+        self.processes: Dict[str, subprocess.Popen] = {}
+        self.threads: List[threading.Thread] = []
+        self._is_shutting_down = False
+        self._lock = threading.Lock()
+
+    def start(self) -> None:
+        """启动所有指定的目标服务。"""
+        print(f"\n{BOLD}{CYAN}================================================================={RESET}")
+        print(f"{BOLD}{GREEN}                 AEGIS 统一进程管理与日志路由中心                 {RESET}")
+        print(f"{BOLD}{CYAN}================================================================={RESET}")
+        print(f"{TAGS['system']}准备启动服务: {', '.join(self.targets)}")
+        print(f"{TAGS['system']}进程组 PGID 硬隔离已就绪，按 {BOLD}[Ctrl+C]{RESET} 可一键优雅安全退出。\n")
+
+        # 注册退出信号捕获
+        signal.signal(signal.SIGINT, self._handle_signal)
+        signal.signal(signal.SIGTERM, self._handle_signal)
+
+        # 环境变量增强：禁止 Python 输出缓冲，强制保留终端彩色
+        env = os.environ.copy()
+        env["PYTHONUNBUFFERED"] = "1"
+        env["FORCE_COLOR"] = "1"
+        env["NODE_ENV"] = "development"
+
+        for key in self.targets:
+            svc = SERVICES.get(key)
+            if not svc:
+                continue
+
+            script_path = svc["script"]
+            if not script_path.exists():
+                print(f"{TAGS['system']}{RED}错误：找不到启动脚本 {script_path}{RESET}")
+                continue
+
+            try:
+                # 核心：使用 start_new_session=True 赋予独立 PGID 进程组
+                proc = subprocess.Popen(
+                    [str(script_path)],
+                    cwd=str(svc["dir"]),
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    text=True,
+                    bufsize=1,  # 行缓冲
+                    start_new_session=True,
+                )
+                self.processes[key] = proc
+                print(f"{TAGS['system']}已派生服务 {svc['name']} (PID: {proc.pid}, PGID: {os.getpgid(proc.pid)})")
+
+                # 为每个服务开启专用流式日志读取线程
+                t = threading.Thread(
+                    target=self._stream_logger,
+                    args=(key, proc),
+                    name=f"Logger-{key}",
+                    daemon=True,
+                )
+                t.start()
+                self.threads.append(t)
+
+                # 间隔 0.3 秒，避免并发启动时的终端信息踩踏
+                time.sleep(0.3)
+            except Exception as exc:
+                print(f"{TAGS['system']}{RED}启动服务 {key} 失败: {exc}{RESET}")
+
+        print(f"\n{TAGS['system']}{GREEN}所有目标服务进程已启动，开始聚合实时日志流：{RESET}\n")
+
+        # 主线程等待
+        self._watch()
+
+    def _stream_logger(self, key: str, proc: subprocess.Popen) -> None:
+        """逐行流式读取 stdout 并打印带标签的格式化日志。"""
+        prefix = TAGS.get(key, f"[{key}]: ")
+        try:
+            assert proc.stdout is not None
+            for line in iter(proc.stdout.readline, ""):
+                if not line:
+                    break
+                stripped = line.rstrip("\r\n")
+                if stripped:
+                    print(f"{prefix}{stripped}", flush=True)
+        except Exception:
+            pass
+
+    def _watch(self) -> None:
+        """主循环监听进程生命周期。"""
+        try:
+            while not self._is_shutting_down:
+                time.sleep(0.5)
+                # 检查是否有服务异常退出
+                with self._lock:
+                    if self._is_shutting_down:
+                        break
+                    for key, proc in list(self.processes.items()):
+                        ret = proc.poll()
+                        if ret is not None:
+                            status_text = f"{GREEN}正常退出 (Code 0){RESET}" if ret == 0 else f"{RED}异常退出 (Code {ret}){RESET}"
+                            print(f"\n{TAGS['system']}服务 {SERVICES[key]['name']} 已停止: {status_text}")
+                            del self.processes[key]
+
+                    # 若所有托管进程均已结束，则自动退出
+                    if not self.processes:
+                        print(f"{TAGS['system']}所有托管进程已结束，监督器退出。")
+                        break
+        except KeyboardInterrupt:
+            self._shutdown()
+
+    def _handle_signal(self, signum: int, frame) -> None:
+        """捕获系统信号。"""
+        self._shutdown()
+
+    def _shutdown(self) -> None:
+        """两段式级联优雅停机 (SIGTERM -> SIGKILL)。"""
+        with self._lock:
+            if self._is_shutting_down:
+                return
+            self._is_shutting_down = True
+
+        print(f"\n\n{TAGS['system']}{YELLOW}接收到终止信号，正在级联关闭所有托管进程组...{RESET}")
+
+        # 第一阶段：向每个进程组发送 SIGTERM 优雅退出信号
+        for key, proc in self.processes.items():
+            try:
+                pgid = os.getpgid(proc.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                print(f"{TAGS['system']}已向 {SERVICES[key]['name']} (PGID {pgid}) 发送 SIGTERM")
+            except (ProcessLookupError, OSError):
+                pass
+
+        # 等待最多 3 秒
+        deadline = time.time() + 3.0
+        while time.time() < deadline:
+            alive = [p for p in self.processes.values() if p.poll() is None]
+            if not alive:
+                break
+            time.sleep(0.2)
+
+        # 第二阶段：对仍未退出的进程组发送 SIGKILL 硬杀
+        for key, proc in self.processes.items():
+            if proc.poll() is None:
+                try:
+                    pgid = os.getpgid(proc.pid)
+                    os.killpg(pgid, signal.SIGKILL)
+                    print(f"{TAGS['system']}{RED}强制终止超时进程: {SERVICES[key]['name']} (PGID {pgid}){RESET}")
+                except (ProcessLookupError, OSError):
+                    pass
+
+        print(f"{TAGS['system']}{GREEN}全系统所有托管进程与网络端口已安全释放。退出完成。{RESET}\n")
+        sys.exit(0)
+
+
+def check_endpoint(url: str, timeout: float = 1.0) -> bool:
+    """检测 HTTP 端点是否存活。"""
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "Aegis-CLI/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status in (200, 204, 301, 302)
+    except Exception:
+        return False
+
+
+def cmd_status() -> None:
+    """输出系统各服务与 Sidecar 的运行状态。"""
+    print(f"\n{BOLD}{CYAN}================================================================={RESET}")
+    print(f"{BOLD}                    AEGIS 运行状态监测看板                       {RESET}")
+    print(f"{BOLD}{CYAN}================================================================={RESET}")
+    print(f"{'组件名称':<30} {'端口':<8} {'健康状态':<15}")
+    print("-" * 65)
+
+    all_items = {**SERVICES, **SIDECARS}
+    for key, info in all_items.items():
+        name = info["name"]
+        port = info["port"]
+        url = info["health_url"]
+
+        is_alive = check_endpoint(url)
+        status_str = f"{GREEN}RUNNING (在线){RESET}" if is_alive else f"{GRAY}STOPPED (未启动){RESET}"
+        print(f"{name:<30} {port:<8} {status_str}")
+
+    print("-" * 65)
+    print(f"提示: 使用 {BOLD}aegis start{RESET} 启动全部服务，{BOLD}aegis stop{RESET} 清理所有进程。\n")
+
+
+def cmd_stop() -> None:
+    """强制清理并释放所有 Aegis 占用的进程。"""
+    print(f"\n{TAGS['system']}{YELLOW}正在检测并释放 Aegis 各服务端口与残留进程...{RESET}")
+    killed_count = 0
+
+    # 针对关键端口进行清理
+    target_ports = [8000, 8001, 8002, 8003, 5173]
+    for port in target_ports:
+        try:
+            out = subprocess.check_output(f"fuser {port}/tcp 2>/dev/null || true", shell=True, text=True).strip()
+            if out:
+                pids = out.split()
+                for pid in pids:
+                    try:
+                        os.kill(int(pid), signal.SIGTERM)
+                        killed_count += 1
+                    except OSError:
+                        pass
+        except Exception:
+            pass
+
+    # 针对进程名模式兜底清理
+    patterns = ["agent_runtime.api", "AegisRAG", "vite"]
+    for pat in patterns:
+        try:
+            subprocess.run(f"pkill -f '{pat}' 2>/dev/null || true", shell=True, check=False)
+        except Exception:
+            pass
+
+    time.sleep(0.5)
+    print(f"{TAGS['system']}{GREEN}清理完成！端口 {target_ports} 已全部释放。{RESET}\n")
+
+
+def print_help() -> None:
+    """打印命令行帮助信息。"""
+    print(f"""
+{BOLD}Aegis 统一进程管理器 (Aegis CLI){RESET}
+
+{BOLD}用法:{RESET}
+  aegis start [target]      启动指定组件或全部服务，聚合流式标签日志
+  aegis stop                安全停止并清理所有 Aegis 后台进程与端口
+  aegis status              查看所有服务及 Sidecar 的 HTTP 存活状态
+  aegis help                显示此帮助信息
+
+{BOLD}可用的启动目标 [target]:{RESET}
+  all (默认)                同时启动 agent, rag, frontend 三大进程并聚合日志
+  agent                     仅启动 AegisAgent 核心服务 (:8000, 联动 8002/8003)
+  rag                       仅启动 AegisRAG 语义检索微服务 (:8001)
+  frontend                  仅启动 AegisFrontend Web 控制台 (:5173)
+
+{BOLD}示例:{RESET}
+  aegis start               # 启动全系统并在终端聚合输出 【agent】/【rag】/【frontend】 日志
+  aegis status              # 检测各端口与微服务健康度
+  aegis stop                # 一键关停所有服务释放端口
+""")
+
+
+def main() -> None:
+    args = sys.argv[1:]
+    if args and args[0] in ("-h", "--help", "help"):
+        print_help()
+        return
+
+    subcmd = args[0] if args else "all"
+
+    if subcmd == "status":
+        cmd_status()
+    elif subcmd == "stop":
+        cmd_stop()
+    elif subcmd in ("start", "run"):
+        target = args[1] if len(args) > 1 else "all"
+        if target in ("all", "full"):
+            supervisor = ProcessSupervisor(["agent", "rag", "frontend"])
+            supervisor.start()
+        elif target in SERVICES:
+            supervisor = ProcessSupervisor([target])
+            supervisor.start()
+        else:
+            print(f"{TAGS['system']}{RED}未知启动目标: {target}{RESET}")
+            print_help()
+            sys.exit(1)
+    elif subcmd in SERVICES:
+        # 支持简写例如 `aegis agent` / `aegis rag`
+        supervisor = ProcessSupervisor([subcmd])
+        supervisor.start()
+    elif subcmd == "all":
+        supervisor = ProcessSupervisor(["agent", "rag", "frontend"])
+        supervisor.start()
+    else:
+        print(f"{TAGS['system']}{RED}未知命令: {subcmd}{RESET}")
+        print_help()
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

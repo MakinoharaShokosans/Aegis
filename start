@@ -4,34 +4,4 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-TARGET="${1:-all}"
-
-case "$TARGET" in
-    agent|service)
-        exec "$SCRIPT_DIR/AegisAgent/start" "${@:2}"
-        ;;
-    rag)
-        exec "$SCRIPT_DIR/AegisRAG/start" "${@:2}"
-        ;;
-    frontend|ui)
-        exec "$SCRIPT_DIR/AegisFrontend/start" "${@:2}"
-        ;;
-    all)
-        echo -e "\033[1;34m=================================================================\033[0m"
-        echo -e "\033[1;32m                    🛡️  AEGIS SYSTEM LAUNCHER                    \033[0m"
-        echo -e "\033[1;34m=================================================================\033[0m"
-        echo "可用启动方式："
-        echo "  1) ./start agent     (或 ./start service) - 启动 Agent 主服务 (连带拉起 Bash & Search)"
-        echo "  2) ./start rag                            - 启动 RAG 向量检索微服务 (:8001)"
-        echo "  3) ./start frontend  (或 ./start ui)      - 启动前端 UI (:5173)"
-        echo "================================================================="
-        echo "💡 提示："
-        echo "   在对应子目录中亦可直接执行 './start' 或 './start service' 启动服务！"
-        echo "   Agent 服务支持在终端直接按 [Q] 键优雅退出全部托管进程。"
-        ;;
-    *)
-        echo "未知组件: $TARGET"
-        echo "用法: ./start [agent|rag|frontend|service|all]"
-        exit 1
-        ;;
-esac
+exec "$SCRIPT_DIR/aegis" "$@"
